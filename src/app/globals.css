@@ -1,26 +1,182 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Japanese font stack */
+  --font-sans-fallback: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-serif-fallback: "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif;
+
+  --font-sans-pref: var(--font-noto-sans-sc), "Noto Sans SC", var(--font-noto-sans-jp), "Noto Sans JP", var(--font-sans-fallback);
+  --font-serif-pref: var(--font-noto-serif-sc), "Noto Serif SC", var(--font-noto-serif-jp), "Noto Serif JP", var(--font-serif-fallback);
+
+  /* POS Colors */
+  --color-noun: #3b82f6;
+  --color-verb: #ef4444;
+  --color-adjective: #f59e0b;
+  --color-particle: #ec4899;
+  --color-auxiliary: #8b5cf6;
+  --color-adverb: #10b981;
+  --color-conjunction: #64748b;
+
+  /* Pitch accent */
+  --color-pitch: #f43f5e;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Base styles */
+body {
+  font-family: var(--font-sans-pref);
+  /* Default */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Standard Inheritance Fix: Explicitly tell form elements to inherit font */
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Global Font Switching */
+body[data-font="serif"] {
+  font-family: var(--font-serif-pref) !important;
+}
+
+body[data-font="sans"] {
+  font-family: var(--font-sans-pref) !important;
+}
+
+.font-japanese {
+  /* Default fallback */
+  font-family: var(--font-sans-pref);
+}
+
+body[data-font="sans"] .font-japanese {
+  font-family: var(--font-noto-sans-jp), "Noto Sans JP", var(--font-sans-fallback);
+}
+
+body[data-font="serif"] .font-japanese {
+  font-family: var(--font-noto-serif-jp), "Noto Serif JP", var(--font-serif-fallback);
+}
+
+/* Explicit utility classes for preview buttons */
+.font-sans {
+  font-family: var(--font-sans-pref) !important;
+}
+
+.font-serif {
+  font-family: var(--font-serif-pref) !important;
+}
+
+/* Ruby text for furigana */
+ruby {
+  ruby-align: center;
+}
+
+ruby rt {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* Custom animations */
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-in {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: forwards;
+}
+
+.slide-in-from-bottom-5 {
+  animation-name: slide-in-from-bottom;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Pitch accent SVG lines */
+.pitch-line {
+  stroke: var(--color-pitch);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* Word token hover effect */
+.word-token {
+  transition: all 0.2s ease;
+}
+
+.word-token:hover {
+  transform: translateY(-2px);
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
