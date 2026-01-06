@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, Type, Eye, EyeOff, Music, Mic, Monitor, Server, Globe, BookOpen, Palette, Speaker, Languages, Layout, Sparkles } from 'lucide-react';
+import { X, Type, Eye, EyeOff, Music, Server, Globe, BookOpen, Palette, Speaker, Languages, Layout, Sparkles } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
 import { PartOfSpeech } from '@/types';
