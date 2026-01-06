@@ -2,7 +2,7 @@ import { TtsProvider } from './types';
 import { NativeTtsProvider } from './native';
 import { VoicevoxProvider } from './voicevox';
 import { OnlineTtsProvider } from './online';
-import { AppSettings } from '@/store/useAppStore';
+import { AppSettings } from '@/types';
 
 class TtsManager {
     private native: NativeTtsProvider;
@@ -54,6 +54,18 @@ class TtsManager {
         this.voicevox.stop();
         this.online.stop();
         this.activeProvider = null;
+    }
+
+    pause() {
+        if (this.activeProvider) {
+            this.activeProvider.pause();
+        }
+    }
+
+    resume() {
+        if (this.activeProvider) {
+            this.activeProvider.resume();
+        }
     }
 
     async getVoices(providerType: 'native' | 'voicevox' | 'online') {

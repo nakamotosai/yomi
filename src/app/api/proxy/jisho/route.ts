@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.json(response.data);
-    } catch (error: any) {
-        console.error('Jisho API Proxy Error:', error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Jisho API Proxy Error:', errorMessage);
         return NextResponse.json(
             { error: 'Failed to fetch from dictionary API' },
             { status: 502 }

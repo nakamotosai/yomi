@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, Type, Eye, EyeOff, Music, Mic, Monitor, Server, Globe, BookOpen, Palette, Speaker, Languages, Layout } from 'lucide-react';
+import { X, Type, Eye, EyeOff, Music, Mic, Monitor, Server, Globe, BookOpen, Palette, Speaker, Languages, Layout, Sparkles } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
 import { PartOfSpeech } from '@/types';
+import { COLOR_THEMES, ThemeId } from '@/lib/colorThemes';
 import clsx from 'clsx';
 
 interface SettingsModalProps {
@@ -114,6 +115,22 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         checked={settings.hideParticles}
                                         onChange={() => toggleSetting('hideParticles')}
                                     />
+                                    <Divider />
+                                    <SettingToggle
+                                        icon={<Sparkles className="w-4 h-4 text-amber-500" />}
+                                        label="卡拉OK高亮"
+                                        description="朗读时高亮当前单词"
+                                        checked={settings.karaokeMode}
+                                        onChange={() => toggleSetting('karaokeMode')}
+                                    />
+                                    <Divider />
+                                    <SettingToggle
+                                        icon={<Languages className="w-4 h-4 text-green-500" />}
+                                        label="显示中文翻译"
+                                        description="在每个句子下方显示翻译"
+                                        checked={settings.showTranslation}
+                                        onChange={() => toggleSetting('showTranslation')}
+                                    />
                                 </div>
                             </section>
 
@@ -121,24 +138,53 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">字体风格</h3>
                                 <div className="bg-white p-1 rounded-xl border border-gray-100 shadow-sm flex gap-1">
                                     {[
-                                        { id: 'sans', label: '黑体 (Sans)', font: 'font-sans' },
-                                        { id: 'serif', label: '宋体 (Serif)', font: 'font-serif' }
+                                        { id: 'sans', label: '思源黑体', previewClass: 'font-preview-sans' },
+                                        { id: 'serif', label: '思源宋体', previewClass: 'font-preview-serif' }
                                     ].map((font) => (
                                         <button
                                             key={font.id}
-                                            onClick={() => updateSettings({ fontFamily: font.id as any })}
+                                            onClick={() => updateSettings({ fontFamily: font.id as 'sans' | 'serif' })}
                                             className={clsx(
                                                 "flex-1 py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
                                                 settings.fontFamily === font.id
                                                     ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-200"
-                                                    : "text-gray-500 hover:bg-gray-50",
-                                                font.font
+                                                    : "text-gray-500 hover:bg-gray-50"
                                             )}
                                         >
-                                            <span className="text-lg">あA</span>
+                                            <span className={clsx("text-lg", font.previewClass)}>あ文</span>
                                             <span>{font.label}</span>
                                         </button>
                                     ))}
+                                </div>
+                            </section>
+
+                            <section className="space-y-4">
+                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">配色风格</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {(Object.keys(COLOR_THEMES) as ThemeId[]).map((themeKey) => {
+                                        const theme = COLOR_THEMES[themeKey];
+                                        return (
+                                            <button
+                                                key={themeKey}
+                                                onClick={() => updateSettings({ colorTheme: themeKey })}
+                                                className={clsx(
+                                                    "flex items-center gap-3 p-3 rounded-xl border transition-all text-left group",
+                                                    settings.colorTheme === themeKey
+                                                        ? "bg-blue-50 border-blue-300 ring-1 ring-blue-300"
+                                                        : "bg-white border-gray-100 hover:border-gray-200"
+                                                )}
+                                            >
+                                                <div className="flex gap-0.5">
+                                                    <div className={clsx("w-3 h-3 rounded-full", theme.colors[PartOfSpeech.NOUN].bg, theme.colors[PartOfSpeech.NOUN].border, "border")} />
+                                                    <div className={clsx("w-3 h-3 rounded-full", theme.colors[PartOfSpeech.VERB].bg, theme.colors[PartOfSpeech.VERB].border, "border")} />
+                                                    <div className={clsx("w-3 h-3 rounded-full", theme.colors[PartOfSpeech.ADJECTIVE].bg, theme.colors[PartOfSpeech.ADJECTIVE].border, "border")} />
+                                                </div>
+                                                <div className="text-sm font-medium text-gray-700">
+                                                    {theme.name}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </section>
 

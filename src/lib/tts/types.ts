@@ -13,6 +13,8 @@ export interface TtsProvider {
     ): void;
 
     stop(): void;
+    pause(): void;
+    resume(): void;
 
     getVoices(): Promise<{ id: string; name: string }[]>;
 }

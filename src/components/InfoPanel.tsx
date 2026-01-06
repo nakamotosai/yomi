@@ -23,17 +23,27 @@ export default function InfoPanel({ token, onClose }: InfoPanelProps) {
     const { addVocab, isWordSaved, removeVocab, vocabList } = useVocabStore();
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [dictEntry, setDictEntry] = useState<DictionaryEntry | null>(null);
+    const [dictLang, setDictLang] = useState<'en' | 'jp' | 'zh'>('jp');
+    const [isLoadingDict, setIsLoadingDict] = useState(false);
 
     React.useEffect(() => {
         if (token) {
+            setIsLoadingDict(true);
             const base = getDeinflectedForm(token);
-            searchDictionary(base, settings.dictionaryProvider).then(entry => {
+            // Map lang to provider
+            let provider: 'jisho' | 'weblio_jj' | 'weblio_cj' = 'weblio_jj';
+            if (dictLang === 'en') provider = 'jisho';
+            if (dictLang === 'zh') provider = 'weblio_cj';
+
+            searchDictionary(base, provider).then(entry => {
                 setDictEntry(entry);
+            }).finally(() => {
+                setIsLoadingDict(false);
             });
         } else {
             setDictEntry(null);
         }
-    }, [token, settings.dictionaryProvider]);
+    }, [token, dictLang]);
 
     if (!token) return null;
 
@@ -46,7 +56,7 @@ export default function InfoPanel({ token, onClose }: InfoPanelProps) {
         setIsSpeaking(true);
         ttsManager.speak(
             token.surface,
-            settings, // Use global settings, but we might want to override speed?
+            settings,
             {
                 onStart: () => setIsSpeaking(true),
                 onEnd: () => setIsSpeaking(false)
@@ -59,7 +69,6 @@ export default function InfoPanel({ token, onClose }: InfoPanelProps) {
             const item = vocabList.find(v => v.word === token.surface && v.reading === token.reading);
             if (item) removeVocab(item.id);
         } else {
-            // Use dictionary meaning if available, otherwise fallback
             const meaning = dictEntry
                 ? dictEntry.meanings.map(m => m.glosses.join(', ')).join('; ')
                 : '(意味が見つかりませんでした)';
@@ -77,144 +86,188 @@ export default function InfoPanel({ token, onClose }: InfoPanelProps) {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-50 animate-in slide-in-from-bottom-5 duration-300">
-            <div className="max-w-4xl mx-auto p-4 md:p-6 pb-8">
+        <>
+            {/* Backdrop for explicit click-outside dismissal */}
+            <div
+                className="fixed inset-0 z-40 bg-transparent"
+                onClick={onClose}
+            />
 
-                {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                        <span className={clsx(
-                            "px-2 py-1 text-xs font-bold rounded uppercase tracking-wider",
-                            colorScheme.bg, colorScheme.text
-                        )}>
-                            {token.pos}
-                        </span>
-                        {token.posDetail && (
-                            <span className="text-xs text-gray-400">{token.posDetail}</span>
-                        )}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+            <div
+                className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-200 shadow-2xl z-50 animate-in slide-in-from-bottom-5 duration-300 flex flex-col h-[40vh] md:h-[35vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Global Close Button (Top Right) */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 p-1.5 hover:bg-gray-200 rounded-full text-gray-500 transition-colors z-[60]"
+                    title="閉じる"
+                >
+                    <X className="w-5 h-5" />
+                </button>
 
-                <div className="flex gap-6 items-start">
-                    {/* Main Word Display */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-4 flex-wrap">
-                            <div className="relative">
-                                {/* Pitch accent on the word */}
+                <div className="max-w-4xl mx-auto w-full flex flex-row h-full">
+
+                    {/* Left Column: Word Info */}
+                    <div className="p-5 md:w-1/3 flex flex-col gap-3 border-r border-gray-100 bg-gray-50/80 shrink-0">
+                        {/* Header: POS */}
+                        <div className="flex justify-between items-start">
+                            <span className={clsx(
+                                "px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider shadow-sm",
+                                colorScheme.bg, colorScheme.text
+                            )}>
+                                {token.pos}
+                            </span>
+                        </div>
+
+                        {/* Word Display */}
+                        <div className="flex flex-col flex-1 justify-center items-center -mt-2">
+                            <div className="relative pt-3 w-fit">
                                 {token.pitch && token.pitch.length > 0 && (
-                                    <div className="absolute -top-5 left-0">
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 opacity-80 scale-90">
                                         <PitchAccent pattern={token.pitch} />
                                     </div>
                                 )}
-                                <h2 className="text-3xl font-bold text-gray-900">{token.surface}</h2>
+                                <h2 className="text-3xl font-black text-gray-800 tracking-tight leading-none text-center">
+                                    {token.surface}
+                                </h2>
                             </div>
-                            <span className="text-xl text-gray-500">{token.reading || token.surface}</span>
-                            <span className="text-sm text-gray-400 font-mono">{token.romaji}</span>
+                            <div className="flex flex-col items-center mt-1">
+                                <span className="text-base text-indigo-600 font-medium leading-tight">
+                                    {token.reading || token.surface}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-mono tracking-wide uppercase mt-0.5">
+                                    {token.romaji}
+                                </span>
+                            </div>
                         </div>
 
-                        {/* De-inflection Info */}
-                        {isInflected && (
-                            <div className="flex items-center gap-2 mt-3 text-sm text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg w-fit">
-                                <ArrowRight className="w-3.5 h-3.5" />
-                                <span>辞書形: <span className="font-bold">{baseForm}</span></span>
-                                {token.conjugation && (
-                                    <span className="text-amber-500 ml-2">({token.conjugation})</span>
+                        {/* Actions */}
+                        <div className="flex gap-2 justify-center mb-1">
+                            <button
+                                onClick={handleSpeak}
+                                disabled={isSpeaking}
+                                className={clsx(
+                                    "flex items-center justify-center w-8 h-8 rounded-full transition-all shadow-sm border",
+                                    isSpeaking
+                                        ? "bg-indigo-100 text-indigo-600 border-indigo-200"
+                                        : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
                                 )}
-                            </div>
-                        )}
+                                title="発音"
+                            >
+                                <Volume2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={handleSaveVocab}
+                                className={clsx(
+                                    "flex items-center justify-center w-8 h-8 rounded-full transition-all shadow-sm border",
+                                    isSaved
+                                        ? "bg-amber-100 text-amber-600 border-amber-200"
+                                        : "bg-white text-gray-600 border-gray-200 hover:border-amber-300 hover:text-amber-600"
+                                )}
+                                title="保存"
+                            >
+                                {isSaved ? <Star className="w-4 h-4 fill-current" /> : <Star className="w-4 h-4" />}
+                            </button>
+                            <a
+                                href={`https://jisho.org/search/${baseForm}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center w-8 h-8 rounded-full bg-white text-gray-600 border border-gray-200 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm"
+                                title="Jisho.org"
+                            >
+                                <BookOpen className="w-4 h-4" />
+                            </a>
+                        </div>
+                    </div>
 
-                        {/* Dictionary Definition */}
-                        <div className="mt-4 space-y-3">
-                            {dictEntry ? (
-                                <>
-                                    <div className="flex gap-2">
-                                        <span className="text-gray-400 font-medium text-sm border border-gray-200 px-1.5 rounded">{dictEntry.kana.join(', ')}</span>
-                                    </div>
-                                    {dictEntry.meanings.map((sense, idx) => (
-                                        <div key={idx} className="flex gap-3 text-sm">
-                                            <span className="font-bold text-gray-400 select-none shrink-0">{idx + 1}.</span>
-                                            <div className="text-gray-700">
-                                                <span className="text-xs text-gray-400 mr-2 bg-gray-100 px-1 rounded">{sense.pos.join(', ')}</span>
-                                                <span>{sense.glosses.join('; ')}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <div className="mt-2 text-xs text-right">
-                                        <a
-                                            href={`https://jisho.org/search/${baseForm}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-500 hover:underline flex items-center justify-end gap-1"
-                                        >
-                                            Jisho.org でもっと見る <BookOpen className="w-3 h-3" />
-                                        </a>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-center py-4">
-                                    <p className="text-gray-500 text-sm mb-2">辞書に一致する項目が見つかりませんでした</p>
-                                    <a
-                                        href={`https://jisho.org/search/${baseForm}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-500 hover:underline text-sm inline-flex items-center gap-1"
+                    {/* Right Column: Definitions */}
+                    <div className="flex-1 flex flex-col min-h-0 bg-white relative">
+                        {/* Header: Tabs */}
+                        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 pr-12">
+                            <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                                {[
+                                    { id: 'en', label: 'EN' },
+                                    { id: 'jp', label: 'JP' },
+                                    { id: 'zh', label: 'ZH' }
+                                ].map((lang) => (
+                                    <button
+                                        key={lang.id}
+                                        onClick={() => setDictLang(lang.id as any)}
+                                        className={clsx(
+                                            "px-2.5 py-1 text-[10px] font-bold rounded-md transition-all",
+                                            dictLang === lang.id
+                                                ? "bg-white text-gray-900 shadow-sm"
+                                                : "text-gray-400 hover:text-gray-700"
+                                        )}
                                     >
-                                        Jisho.org で検索 <ArrowRight className="w-3 h-3" />
-                                    </a>
+                                        {lang.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {isInflected && (
+                                <div className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                                    <ArrowRight className="w-3 h-3" />
+                                    <span className="font-bold">{baseForm}</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* Pitch Accent Label */}
-                        {token.accentMora !== undefined && (
-                            <div className="mt-3 text-xs text-gray-400">
-                                アクセント: {token.accentMora === 0 ? '平板型' : `第${token.accentMora}拍`}
-                            </div>
-                        )}
-                    </div>
+                        {/* Content Scroll Area */}
+                        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                            {isLoadingDict ? (
+                                <div className="space-y-3 animate-pulse">
+                                    <div className="h-3 bg-gray-100 rounded w-2/3"></div>
+                                    <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                                    <div className="h-3 bg-gray-100 rounded w-5/6"></div>
+                                </div>
+                            ) : dictEntry ? (
+                                <div className="space-y-4">
+                                    {/* Meanings */}
+                                    <div className="space-y-3">
+                                        {dictEntry.meanings.map((sense, idx) => (
+                                            <div key={idx} className="flex gap-3 group">
+                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 shrink-0 mt-0.5">
+                                                    {idx + 1}
+                                                </span>
+                                                <div className="flex-1">
+                                                    <p className="text-gray-700 leading-snug text-sm">
+                                                        {sense.glosses.join('; ')}
+                                                    </p>
+                                                    {sense.pos.length > 0 && (
+                                                        <div className="mt-1 flex flex-wrap gap-1 opacity-60 hover:opacity-100 transition-opacity">
+                                                            {sense.pos.map((p, pi) => (
+                                                                <span key={pi} className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-100">
+                                                                    {p}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-24 text-gray-300">
+                                    <p className="text-xs">
+                                        {dictLang === 'en' ? 'No definitions found.' :
+                                            dictLang === 'jp' ? '定義なし' :
+                                                '无定义'}
+                                    </p>
+                                </div>
+                            )}
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col gap-2 shrink-0">
-                        <button
-                            onClick={handleSpeak}
-                            disabled={isSpeaking}
-                            className={clsx(
-                                "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
-                                isSpeaking
-                                    ? "bg-indigo-100 text-indigo-600 animate-pulse"
-                                    : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                            {/* Pitch Footer */}
+                            {token.accentMora !== undefined && (
+                                <div className="mt-4 pt-4 border-t border-gray-50 text-[10px] text-gray-300 text-right">
+                                    Accent: {token.accentMora === 0 ? 'Heiban' : `${token.accentMora}`}
+                                </div>
                             )}
-                            title="発音を聞く"
-                        >
-                            <Volume2 className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={handleSaveVocab}
-                            className={clsx(
-                                "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
-                                isSaved
-                                    ? "bg-yellow-100 text-yellow-600"
-                                    : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                            )}
-                            title={isSaved ? "単語帳から削除" : "単語帳に保存"}
-                        >
-                            {isSaved ? <StarOff className="w-5 h-5" /> : <Star className="w-5 h-5" />}
-                        </button>
-                        <button
-                            className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
-                            title="辞書で調べる"
-                        >
-                            <BookOpen className="w-5 h-5" />
-                        </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }

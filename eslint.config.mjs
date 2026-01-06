@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Custom rule overrides for this project
+  {
+    rules: {
+      // Allow 'any' type in specific scenarios (NLP libraries, API responses, etc.)
+      "@typescript-eslint/no-explicit-any": "warn",
+      // Allow unused expressions for short-circuit calls like: callback && callback()
+      "@typescript-eslint/no-unused-expressions": "off",
+    }
+  }
 ]);
 
 export default eslintConfig;

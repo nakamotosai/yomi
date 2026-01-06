@@ -1,13 +1,6 @@
 @import "tailwindcss";
 
 :root {
-  /* Japanese font stack */
-  --font-sans-fallback: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
-  --font-serif-fallback: "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif;
-
-  --font-sans-pref: var(--font-noto-sans-sc), "Noto Sans SC", var(--font-noto-sans-jp), "Noto Sans JP", var(--font-sans-fallback);
-  --font-serif-pref: var(--font-noto-serif-sc), "Noto Serif SC", var(--font-noto-serif-jp), "Noto Serif JP", var(--font-serif-fallback);
-
   /* POS Colors */
   --color-noun: #3b82f6;
   --color-verb: #ef4444;
@@ -21,55 +14,30 @@
   --color-pitch: #f43f5e;
 }
 
-/* Base styles */
+/* ========================================
+   全局基础样式（字体由 FontProvider 动态注入）
+   ======================================== */
+
+html,
 body {
-  font-family: var(--font-sans-pref);
-  /* Default */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Standard Inheritance Fix: Explicitly tell form elements to inherit font */
-button,
-input,
-optgroup,
-select,
-textarea {
-  font-family: inherit;
+/* ========================================
+   预览按钮字体
+   ======================================== */
+.font-preview-sans {
+  font-family: "Noto Sans SC", "Noto Sans JP", sans-serif !important;
 }
 
-/* Global Font Switching */
-body[data-font="serif"] {
-  font-family: var(--font-serif-pref) !important;
+.font-preview-serif {
+  font-family: "Noto Serif SC", "Noto Serif JP", serif !important;
 }
 
-body[data-font="sans"] {
-  font-family: var(--font-sans-pref) !important;
-}
-
-.font-japanese {
-  /* Default fallback */
-  font-family: var(--font-sans-pref);
-}
-
-body[data-font="sans"] .font-japanese {
-  font-family: var(--font-noto-sans-jp), "Noto Sans JP", var(--font-sans-fallback);
-}
-
-body[data-font="serif"] .font-japanese {
-  font-family: var(--font-noto-serif-jp), "Noto Serif JP", var(--font-serif-fallback);
-}
-
-/* Explicit utility classes for preview buttons */
-.font-sans {
-  font-family: var(--font-sans-pref) !important;
-}
-
-.font-serif {
-  font-family: var(--font-serif-pref) !important;
-}
-
-/* Ruby text for furigana */
+/* ========================================
+   Ruby / Furigana
+   ======================================== */
 ruby {
   ruby-align: center;
 }
@@ -80,7 +48,9 @@ ruby rt {
   color: #6b7280;
 }
 
-/* Custom animations */
+/* ========================================
+   动画
+   ======================================== */
 @keyframes slide-in-from-bottom {
   from {
     transform: translateY(100%);
@@ -103,7 +73,9 @@ ruby rt {
   animation-name: slide-in-from-bottom;
 }
 
-/* Scrollbar styling */
+/* ========================================
+   滚动条
+   ======================================== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -123,19 +95,22 @@ ruby rt {
   background: #94a3b8;
 }
 
-/* Focus styles */
+/* ========================================
+   焦点和选择
+   ======================================== */
 *:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }
 
-/* Selection */
 ::selection {
   background-color: #dbeafe;
   color: #1e40af;
 }
 
-/* Pitch accent SVG lines */
+/* ========================================
+   Pitch Accent
+   ======================================== */
 .pitch-line {
   stroke: var(--color-pitch);
   stroke-width: 2;
@@ -144,7 +119,9 @@ ruby rt {
   fill: none;
 }
 
-/* Word token hover effect */
+/* ========================================
+   Word Token
+   ======================================== */
 .word-token {
   transition: all 0.2s ease;
 }
@@ -153,7 +130,9 @@ ruby rt {
   transform: translateY(-2px);
 }
 
-/* Loading spinner */
+/* ========================================
+   加载动画
+   ======================================== */
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -164,7 +143,6 @@ ruby rt {
   animation: spin 1s linear infinite;
 }
 
-/* Pulse animation */
 @keyframes pulse {
 
   0%,

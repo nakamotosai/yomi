@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 interface DictResult {
     source: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any;
 }
 
@@ -17,6 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let result: any = null;
 
         if (provider === 'jisho') {
@@ -97,6 +100,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json(result);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error(`Dictionary Proxy Error (${provider}):`, error.message);
         return NextResponse.json({ error: 'Failed to fetch' }, { status: 502 });

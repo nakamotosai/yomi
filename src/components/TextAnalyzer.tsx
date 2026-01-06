@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnalysisResult, WordToken } from '@/types';
 import { ttsManager } from '@/lib/tts/manager';
 import { analyzeJapaneseText } from '@/lib/nlp/analyzer';
+import { translateText } from '@/lib/translate';
 import { useAppStore } from '@/store/useAppStore';
 import WordTokenComponent from './WordToken';
 import InfoPanel from './InfoPanel';
@@ -17,7 +18,13 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [translations, setTranslations] = useState<Map<string, string>>(new Map());
     const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId } = useAppStore();
+
+    // Track if we initiated the TTS to avoid double-triggering
+    const ttsInitiatedRef = useRef(false);
+    // Store token map for boundary events
+    const tokenMapRef = useRef<{ start: number, end: number, id: string }[]>([]);
 
     const analyze = useCallback(async () => {
         if (!text.trim()) return;
@@ -26,68 +33,108 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         setError(null);
         setSelectedToken(null);
         setSpeakingTokenId(null);
+        setTranslations(new Map());
 
         try {
             const analysis = await analyzeJapaneseText(text);
             setResult(analysis);
-        } catch (err: any) {
+
+            // Start translating sentences in background
+            analysis.sentences.forEach(async (sentence) => {
+                const translation = await translateText(sentence.original);
+                setTranslations(prev => new Map(prev).set(sentence.id, translation));
+            });
+        } catch (err: unknown) {
             console.error('Analysis error:', err);
-            setError(err.message || '分析中にエラーが発生しました');
+            const errorMessage = err instanceof Error ? err.message : '分析中にエラーが発生しました';
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
     }, [text, setSelectedToken, setSpeakingTokenId]);
 
-    // Sync audio with PlayAll button in parent
-    React.useEffect(() => {
-        if (isSpeaking && result) {
-            // Calculate token offsets for matching
-            // This is a simplified approach. A more robust way would be to store start/end indices during analysis.
-            // Here we assume linear progression.
-            let charCount = 0;
-            const tokenMap: { start: number, end: number, id: string }[] = [];
+    // Build token map when result changes
+    useEffect(() => {
+        if (!result) {
+            tokenMapRef.current = [];
+            return;
+        }
 
-            result.sentences.forEach(s => {
-                s.tokens.forEach(t => {
+        let cursor = 0;
+        const tokenMap: { start: number, end: number, id: string }[] = [];
+
+        result.sentences.forEach(s => {
+            s.tokens.forEach(t => {
+                const start = text.indexOf(t.surface, cursor);
+                if (start !== -1) {
                     const len = t.surface.length;
-                    tokenMap.push({ start: charCount, end: charCount + len, id: t.id });
-                    charCount += len;
-                });
-                // Add sentence punctuation/spacing if needed, but analyzeJapaneseText splits by punctuation
-                // and includes them as tokens or separate parts.
-                // Our analyzer puts punctuation in tokens usually if they are separate.
-                // Actually, split by `([。！？\n]+)` might result in some gaps if not careful,
-                // but `analyzeSentence` logic handles the parts.
-                // Let's rely on the fact that `tokens` cover the sentence.
+                    tokenMap.push({ start, end: start + len, id: t.id });
+                    cursor = start + len;
+                } else {
+                    cursor += t.surface.length;
+                }
             });
+        });
+
+        tokenMapRef.current = tokenMap;
+    }, [result, text]);
+
+    // Handle TTS playback when isSpeaking changes
+    useEffect(() => {
+        // If isSpeaking becomes true and we haven't initiated TTS yet
+        if (isSpeaking && result && !ttsInitiatedRef.current) {
+            ttsInitiatedRef.current = true;
+
+            console.log('[Karaoke] Starting TTS, tokenMap size:', tokenMapRef.current.length);
 
             ttsManager.speak(
                 text,
-                settings, // Pass current settings
+                settings,
                 {
-                    onStart: () => setIsSpeaking(true),
+                    onStart: () => {
+                        console.log('[Karaoke] TTS onStart');
+                        // Don't call setIsSpeaking here as it's already true
+                    },
                     onEnd: () => {
+                        console.log('[Karaoke] TTS onEnd');
+                        ttsInitiatedRef.current = false;
                         setIsSpeaking(false);
                         setSpeakingTokenId(null);
                     },
                     onBoundary: (charIndex) => {
                         // Find token at this char index
-                        const match = tokenMap.find(t => charIndex >= t.start && charIndex < t.end);
+                        console.log('[Karaoke] onBoundary charIndex:', charIndex);
+                        const match = tokenMapRef.current.find(t => charIndex >= t.start && charIndex < t.end);
                         if (match) {
+                            console.log('[Karaoke] Highlighting token:', match.id);
                             setSpeakingTokenId(match.id);
                         }
                     }
                 }
             );
-        } else {
-            // If stopped externally or initially
+        }
+
+        // If isSpeaking becomes false, stop TTS
+        if (!isSpeaking && ttsInitiatedRef.current) {
+            console.log('[Karaoke] Stopping TTS');
+            ttsInitiatedRef.current = false;
             ttsManager.stop();
             setSpeakingTokenId(null);
         }
-    }, [isSpeaking, result, setIsSpeaking, setSpeakingTokenId, text, settings]);
+    }, [isSpeaking, result, text, settings, setIsSpeaking, setSpeakingTokenId]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (ttsInitiatedRef.current) {
+                ttsManager.stop();
+                ttsInitiatedRef.current = false;
+            }
+        };
+    }, []);
 
     // Auto-analyze on mount
-    React.useEffect(() => {
+    useEffect(() => {
         analyze();
     }, [analyze]);
 
@@ -138,30 +185,44 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         return null;
     }
 
+    // Map fontSize setting to CSS class
+    const fontSizeClass = {
+        'small': 'text-sm',
+        'medium': 'text-base',
+        'large': 'text-xl'
+    }[settings.fontSize] || 'text-base';
+
     return (
         <div onClick={handleContainerClick}>
             {/* Reading View */}
             <div className={clsx(
                 "bg-white rounded-xl shadow-sm border border-gray-100 min-h-[40vh] p-6 md:p-8 font-japanese",
-                settings.fontSize === 'sm' && 'text-sm',
-                settings.fontSize === 'lg' && 'text-xl'
+                fontSizeClass
             )}>
                 {/* Sentences */}
-                <div className="space-y-8 leading-relaxed">
+                <div className="space-y-6 leading-relaxed">
                     {result.sentences.map((sentence) => (
-                        <div
-                            key={sentence.id}
-                            className="flex flex-wrap items-end gap-y-4 pt-4"
-                        >
-                            {sentence.tokens.map((token) => (
-                                <WordTokenComponent
-                                    key={token.id}
-                                    token={token}
-                                    onSelect={(t) => handleTokenSelect(t, sentence.original)}
-                                    isSelected={selectedToken?.id === token.id}
-                                    isSpeaking={speakingTokenId === token.id}
-                                />
-                            ))}
+                        <div key={sentence.id} className="space-y-2">
+                            {/* Japanese tokens */}
+                            <div className="flex flex-wrap items-end gap-y-4 pt-4">
+                                {sentence.tokens.map((token) => (
+                                    <WordTokenComponent
+                                        key={token.id}
+                                        token={token}
+                                        onSelect={(t) => handleTokenSelect(t, sentence.original)}
+                                        isSelected={selectedToken?.id === token.id}
+                                        isSpeaking={speakingTokenId === token.id}
+                                    />
+                                ))}
+                            </div>
+                            {/* Chinese translation */}
+                            {settings.showTranslation !== false && (
+                                <div className="pl-1 text-sm text-gray-500 border-l-2 border-blue-200 ml-1">
+                                    {translations.get(sentence.id) || (
+                                        <span className="text-gray-300 animate-pulse">翻译中...</span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

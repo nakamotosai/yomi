@@ -96,6 +96,18 @@ export class VoicevoxProvider implements TtsProvider {
         }
     }
 
+    pause() {
+        if (this.audio) {
+            this.audio.pause();
+        }
+    }
+
+    resume() {
+        if (this.audio) {
+            this.audio.play();
+        }
+    }
+
     async getVoices(): Promise<{ id: string; name: string }[]> {
         // This connects to local VOICEVOX to get text speakers
         try {

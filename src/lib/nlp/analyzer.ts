@@ -242,7 +242,7 @@ function postProcessTokens(tokens: WordToken[], sentenceIndex: number): WordToke
         // Checks if current is number (numeric string) and next is "日"
         if (next && curr.pos === PartOfSpeech.OTHER && /^[0-9０-９]+$/.test(curr.surface) && next.surface === '日') {
             const combinedSurface = curr.surface + next.surface;
-            let combinedReading = DATE_READINGS[combinedSurface];
+            const combinedReading = DATE_READINGS[combinedSurface];
 
             // If not in irregular map, perform rough heuristic (Number reading + nichi)
             if (!combinedReading) {

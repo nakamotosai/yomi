@@ -29,7 +29,7 @@ export default function PitchAccent({ pattern }: PitchAccentProps) {
         <svg
             width={width}
             height={height}
-            className="absolute -top-4 left-1/2 -translate-x-1/2 pointer-events-none"
+            className="pointer-events-none overflow-visible"
             viewBox={`0 0 ${width} ${height}`}
         >
             {/* Draw the pitch line */}

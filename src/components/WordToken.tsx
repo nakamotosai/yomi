@@ -4,6 +4,7 @@ import React from 'react';
 import clsx from 'clsx';
 import { WordToken, PartOfSpeech, POS_COLORS } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
+import { COLOR_THEMES } from '@/lib/colorThemes';
 import PitchAccent from './PitchAccent';
 
 interface WordTokenProps {
@@ -21,7 +22,13 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     // If POS is NOT in activeColorPOS list, force it to 'default' (black/transparent)
     // Use optional chaining and default to empty array to handle initial state mismatch
     const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
-    const colorScheme = isColorEnabled ? (POS_COLORS[token.pos] || POS_COLORS[PartOfSpeech.OTHER]) : {
+
+    // Resolve theme colors
+    // Default to 'standard' if theme not found
+    const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
+    const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
+
+    const colorScheme = isColorEnabled ? themeColors : {
         bg: 'bg-transparent',
         text: 'text-gray-800',
         border: 'border-b border-transparent'
@@ -69,7 +76,7 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
                         : [colorScheme.bg, colorScheme.text, colorScheme.border],
                     isSelected
                         ? "ring-2 ring-offset-1 ring-blue-400 shadow-md"
-                        : isSpeaking
+                        : isSpeaking && settings.karaokeMode
                             ? "bg-amber-100 ring-2 ring-offset-1 ring-amber-400"
                             : "border-transparent hover:brightness-95 hover:shadow-sm"
                 )}

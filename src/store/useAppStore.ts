@@ -9,7 +9,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     hideCommonFurigana: true,
     showPitchAccent: true,
     hideParticles: false,
-    fontSize: 'base',
+    karaokeMode: true,
+    fontSize: 'medium',
     fontFamily: 'sans',
     theme: 'light',
     ttsProvider: 'native',
@@ -19,6 +20,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     playbackSpeed: 1.0,
     dictionaryProvider: 'jisho',
     activeColorPOS: Object.values(PartOfSpeech), // Default: all enabled
+    colorTheme: 'standard',
+    showTranslation: true,
 };
 
 interface AppState {
@@ -46,6 +49,8 @@ interface AppState {
     // Audio state
     isSpeaking: boolean;
     setIsSpeaking: (speaking: boolean) => void;
+    isPaused: boolean;
+    setIsPaused: (paused: boolean) => void;
     speakingTokenId: string | null;
     setSpeakingTokenId: (id: string | null) => void;
 }
@@ -81,7 +86,9 @@ export const useAppStore = create<AppState>()(
             setCurrentSentence: (sentence) => set({ currentSentence: sentence }),
 
             isSpeaking: false,
-            setIsSpeaking: (speaking) => set({ isSpeaking: speaking }),
+            setIsSpeaking: (speaking) => set({ isSpeaking: speaking, isPaused: false }), // Reset pause when speaking state changes
+            isPaused: false,
+            setIsPaused: (paused) => set({ isPaused: paused }),
             speakingTokenId: null,
             setSpeakingTokenId: (id) => set({ speakingTokenId: id }),
         }),
@@ -90,6 +97,14 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
                 settings: state.settings,
                 inputText: state.inputText,
+            }),
+            merge: (persistedState: unknown, currentState: AppState) => ({
+                ...currentState,
+                ...(persistedState as Partial<AppState>),
+                settings: {
+                    ...DEFAULT_SETTINGS,
+                    ...((persistedState as Partial<AppState>).settings || {}),
+                }
             }),
         }
     )

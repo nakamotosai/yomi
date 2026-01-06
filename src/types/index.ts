@@ -1,4 +1,5 @@
 // Core type definitions for YOMI
+import { ThemeId } from '@/lib/colorThemes';
 
 export enum PartOfSpeech {
   NOUN = 'Noun',
@@ -69,6 +70,7 @@ export interface AppSettings {
   hideCommonFurigana: boolean;
   showPitchAccent: boolean;
   hideParticles: boolean;
+  karaokeMode: boolean;
   fontSize: 'small' | 'medium' | 'large';
   fontFamily: 'sans' | 'serif';
   theme: 'light' | 'dark';
@@ -84,6 +86,10 @@ export interface AppSettings {
 
   // Visual Settings
   activeColorPOS: PartOfSpeech[];
+  colorTheme: ThemeId;
+
+  // Translation Settings
+  showTranslation: boolean;
 }
 
 // POS color mapping

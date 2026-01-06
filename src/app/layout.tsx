@@ -1,35 +1,7 @@
 import type { Metadata } from "next";
-import { Noto_Sans_JP, Noto_Sans_SC, Noto_Serif_JP, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
-
-const notoSansJP = Noto_Sans_JP({
-  variable: "--font-noto-sans-jp",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
-
-const notoSansSC = Noto_Sans_SC({
-  variable: "--font-noto-sans-sc",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
-
-const notoSerifJP = Noto_Serif_JP({
-  variable: "--font-noto-serif-jp",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
-
-const notoSerifSC = Noto_Serif_SC({
-  variable: "--font-noto-serif-sc",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
+import FontProvider from "@/components/FontProvider";
 
 export const metadata: Metadata = {
   title: "YOMI 読み | 日本語リーダー",
@@ -44,10 +16,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" suppressHydrationWarning>
-      <body className={`${notoSansJP.variable} ${notoSansSC.variable} ${notoSerifJP.variable} ${notoSerifSC.variable} antialiased bg-slate-50 text-slate-900`}>
-        <GlobalErrorBoundary>
-          {children}
-        </GlobalErrorBoundary>
+      <head>
+        {/* 直接从 Google Fonts 加载思源字体 */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+JP:wght@400;500;700&family=Noto+Serif+SC:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="antialiased bg-slate-50 text-slate-900">
+        <FontProvider>
+          <GlobalErrorBoundary>
+            {children}
+          </GlobalErrorBoundary>
+        </FontProvider>
       </body>
     </html>
   );
