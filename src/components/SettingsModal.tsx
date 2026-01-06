@@ -217,9 +217,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">TTS 引擎</h3>
                                 <div className="grid grid-cols-3 gap-2">
                                     {[
-                                        { id: 'native', label: '浏览器', icon: Monitor },
+                                        { id: 'native', label: '微软 Edge', icon: Globe },
                                         { id: 'voicevox', label: 'VOICEVOX', icon: Server },
-                                        { id: 'online', label: 'Online', icon: Globe },
                                     ].map((opt) => (
                                         <button
                                             key={opt.id}
@@ -240,7 +239,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                             {settings.ttsProvider === 'native' && (
                                 <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                                    <label className="text-sm font-medium text-gray-700">选择声音</label>
+                                    <label className="text-sm font-medium text-gray-700">选择声音 (Edge)</label>
                                     <select
                                         className="w-full p-2 rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                         value={settings.nativeVoiceURI || ''}
@@ -257,13 +256,19 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             {settings.ttsProvider === 'voicevox' && (
                                 <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm animate-in fade-in">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">Speaker ID</label>
-                                        <input
-                                            type="number"
-                                            value={settings.voicevoxSpeakerId}
-                                            onChange={(e) => updateSettings({ voicevoxSpeakerId: parseInt(e.target.value) || 0 })}
-                                            className="w-full p-2 border border-gray-200 rounded-lg"
-                                        />
+                                        <label className="text-sm font-medium text-gray-700">选择角色 (Speaker)</label>
+                                        <select
+                                            className="w-full p-2 rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            value={settings.voicevoxSpeakerId || 3}
+                                            onChange={(e) => updateSettings({ voicevoxSpeakerId: parseInt(e.target.value) || 3 })}
+                                        >
+                                            {availableVoices.length === 0 && (
+                                                <option value={settings.voicevoxSpeakerId}>{settings.voicevoxSpeakerId || 3} (Loading...)</option>
+                                            )}
+                                            {availableVoices.map(v => (
+                                                <option key={v.id} value={v.id}>{v.name}</option>
+                                            ))}
+                                        </select>
                                         <p className="text-xs text-gray-400">请确保本地 VOICEVOX 应用已启动 (端口 50021)</p>
                                     </div>
                                 </div>
@@ -295,38 +300,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     {/* --- DICTIONARY TAB --- */}
                     {activeTab === 'dictionary' && (
                         <div className="space-y-6">
-                            <section className="space-y-4">
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">查词来源</h3>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {[
-                                        { id: 'jisho', label: 'English (Jisho.org)', desc: '英语释义，最权威，支持详细词性' },
-                                        { id: 'weblio_cj', label: '中文 (Weblio中日)', desc: '中文释义，适合初级学习' },
-                                        { id: 'weblio_jj', label: '日本語 (Weblio国語)', desc: '日文释义，沉浸式学习' },
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.id}
-                                            onClick={() => updateSettings({ dictionaryProvider: opt.id as any })}
-                                            className={clsx(
-                                                "flex items-center gap-4 p-4 rounded-xl text-left transition-all border group",
-                                                settings.dictionaryProvider === opt.id
-                                                    ? "bg-blue-50 border-blue-200 shadow-sm"
-                                                    : "bg-white border-gray-100 hover:border-blue-200 hover:shadow-sm"
-                                            )}
-                                        >
-                                            <div className={clsx(
-                                                "w-4 h-4 rounded-full border-2 flex items-center justify-center flex-none",
-                                                settings.dictionaryProvider === opt.id ? "border-blue-500" : "border-gray-300"
-                                            )}>
-                                                {settings.dictionaryProvider === opt.id && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                                            </div>
-                                            <div>
-                                                <div className={clsx("font-medium", settings.dictionaryProvider === opt.id ? "text-blue-900" : "text-gray-900")}>{opt.label}</div>
-                                                <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
+
 
                             <section className="space-y-4">
                                 <div className="flex items-center justify-between mb-3">
@@ -375,7 +349,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                 {/* Footer (Optional, currently empty but good for extensibility) */}
                 <div className="flex-none p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
-                    YOMI Early Access • v0.1.0
+                    読み | YOMI Early Access • v0.1.0
                 </div>
             </div>
         </div>

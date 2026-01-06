@@ -7,7 +7,7 @@ import { AppSettings, WordToken, PartOfSpeech } from '@/types';
 const DEFAULT_SETTINGS: AppSettings = {
     showFurigana: true,
     hideCommonFurigana: true,
-    showPitchAccent: true,
+    showPitchAccent: false,
     hideParticles: false,
     karaokeMode: true,
     fontSize: 'medium',
@@ -19,7 +19,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     voicevoxUrl: 'http://localhost:50021',
     playbackSpeed: 1.0,
     dictionaryProvider: 'jisho',
-    activeColorPOS: Object.values(PartOfSpeech), // Default: all enabled
+    activeColorPOS: [PartOfSpeech.VERB, PartOfSpeech.ADJECTIVE, PartOfSpeech.PARTICLE, PartOfSpeech.AUXILIARY, PartOfSpeech.ADVERB], // Default: important POS only, no nouns
     colorTheme: 'standard',
     showTranslation: true,
 };

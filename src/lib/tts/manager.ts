@@ -1,29 +1,24 @@
 import { TtsProvider } from './types';
-import { NativeTtsProvider } from './native';
+import { EdgeTtsProvider } from './edge';
 import { VoicevoxProvider } from './voicevox';
-import { OnlineTtsProvider } from './online';
 import { AppSettings } from '@/types';
 
 class TtsManager {
-    private native: NativeTtsProvider;
+    private edge: EdgeTtsProvider;
     private voicevox: VoicevoxProvider;
-    private online: OnlineTtsProvider;
     private activeProvider: TtsProvider | null = null;
 
     constructor() {
-        this.native = new NativeTtsProvider();
+        this.edge = new EdgeTtsProvider();
         this.voicevox = new VoicevoxProvider();
-        this.online = new OnlineTtsProvider();
     }
 
     getProvider(settings: AppSettings): TtsProvider {
-        switch (settings.ttsProvider) {
-            case 'voicevox': return this.voicevox;
-            case 'online': return this.online;
-            case 'native':
-            default:
-                return this.native;
+        // Voicevox is explicit, everything else falls back to Edge
+        if (settings.ttsProvider === 'voicevox') {
+            return this.voicevox;
         }
+        return this.edge;
     }
 
     speak(text: string, settings: AppSettings, callbacks: {
@@ -34,15 +29,17 @@ class TtsManager {
         const provider = this.getProvider(settings);
 
         // Stop any previous playback from any provider
-        this.native.stop();
+        this.edge.stop();
         this.voicevox.stop();
-        this.online.stop();
 
         this.activeProvider = provider;
 
+        // Map settings to options
+        // For Edge: use nativeVoiceURI as voiceURI
+        // For Voicevox: use voicevoxSpeakerId
         provider.speak(text, {
             ...callbacks,
-            voiceURI: settings.nativeVoiceURI,
+            voiceURI: settings.nativeVoiceURI, // We use this field for Edge Voice ID
             speakerId: settings.voicevoxSpeakerId,
             serverUrl: settings.voicevoxUrl,
             speed: settings.playbackSpeed,
@@ -50,9 +47,8 @@ class TtsManager {
     }
 
     stop() {
-        this.native.stop();
+        this.edge.stop();
         this.voicevox.stop();
-        this.online.stop();
         this.activeProvider = null;
     }
 
@@ -68,12 +64,13 @@ class TtsManager {
         }
     }
 
-    async getVoices(providerType: 'native' | 'voicevox' | 'online') {
-        switch (providerType) {
-            case 'voicevox': return this.voicevox.getVoices();
-            case 'online': return this.online.getVoices();
-            case 'native': return this.native.getVoices();
+    async getVoices(providerType: 'native' | 'voicevox' | 'online'): Promise<{ id: string; name: string }[]> {
+        // Map 'native' or 'online' request to Edge voices for compatibility
+        if (providerType === 'voicevox') {
+            return this.voicevox.getVoices();
         }
+        // Default to Edge
+        return this.edge.getVoices();
     }
 }
 

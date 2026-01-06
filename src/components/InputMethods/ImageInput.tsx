@@ -27,6 +27,7 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
         setImagePreview(previewUrl);
 
         try {
+            // Use Japanese language for OCR
             const worker = await createWorker('jpn', 1, {
                 logger: m => {
                     if (m.status === 'recognizing text') {
@@ -38,21 +39,51 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
                 }
             });
 
+            // Set parameters to improve Japanese OCR
+            // preserve_interword_spaces=0 removes extra spaces for CJK languages
+            await worker.setParameters({
+                preserve_interword_spaces: '0',
+            });
+
             const { data: { text } } = await worker.recognize(file);
             await worker.terminate();
 
             if (text.trim()) {
-                onTextExtracted(text);
+                // Post-process: Remove spaces between CJK characters
+                const cleanedText = cleanJapaneseOCRText(text);
+                onTextExtracted(cleanedText);
             }
         } catch (err) {
             console.error('OCR Error:', err);
             alert('文字認識に失敗しました。もう一度お試しください。');
         } finally {
             setIsProcessing(false);
-            // Clean up preview URL only if we are clearing the image, 
-            // but we might want to keep it visible for a moment.
-            // For now, let's keep it until user clears or uploads new one.
         }
+    };
+
+    // Clean OCR output for Japanese text
+    // Removes extra spaces that Tesseract inserts between CJK characters
+    const cleanJapaneseOCRText = (text: string): string => {
+        // 1. Replace multiple spaces/newlines with single space
+        let cleaned = text.replace(/\s+/g, ' ');
+
+        // 2. Remove spaces between CJK characters (Japanese/Chinese)
+        // CJK Unicode ranges: \u3000-\u9FFF covers most Japanese/Chinese characters
+        // This regex removes spaces between two CJK characters
+        cleaned = cleaned.replace(/([\u3000-\u9FFF\uFF00-\uFFEF])[\s]+([\u3000-\u9FFF\uFF00-\uFFEF])/g, '$1$2');
+
+        // Apply multiple times to catch all cases
+        cleaned = cleaned.replace(/([\u3000-\u9FFF\uFF00-\uFFEF])[\s]+([\u3000-\u9FFF\uFF00-\uFFEF])/g, '$1$2');
+        cleaned = cleaned.replace(/([\u3000-\u9FFF\uFF00-\uFFEF])[\s]+([\u3000-\u9FFF\uFF00-\uFFEF])/g, '$1$2');
+
+        // 3. Remove spaces before Japanese punctuation
+        cleaned = cleaned.replace(/\s+([。、！？」』）])/g, '$1');
+
+        // 4. Remove spaces after opening brackets
+        cleaned = cleaned.replace(/([「『（])\s+/g, '$1');
+
+        // 5. Trim and return
+        return cleaned.trim();
     };
 
     const onDrop = useCallback((acceptedFiles: File[]) => {

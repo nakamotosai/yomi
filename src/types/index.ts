@@ -2,18 +2,18 @@
 import { ThemeId } from '@/lib/colorThemes';
 
 export enum PartOfSpeech {
-  NOUN = 'Noun',
-  VERB = 'Verb',
-  ADJECTIVE = 'Adjective',
-  PARTICLE = 'Particle',
-  AUXILIARY = 'Auxiliary',
-  ADVERB = 'Adverb',
-  CONJUNCTION = 'Conjunction',
-  INTERJECTION = 'Interjection',
-  PREFIX = 'Prefix',
-  SUFFIX = 'Suffix',
-  SYMBOL = 'Symbol',
-  OTHER = 'Other'
+  NOUN = '名词',
+  VERB = '动词',
+  ADJECTIVE = '形容词',
+  PARTICLE = '助词',
+  AUXILIARY = '助动词',
+  ADVERB = '副词',
+  CONJUNCTION = '连词',
+  INTERJECTION = '感叹词',
+  PREFIX = '前缀',
+  SUFFIX = '后缀',
+  SYMBOL = '符号',
+  OTHER = '其他'
 }
 
 // Pitch accent pattern: 0 = Low, 1 = High

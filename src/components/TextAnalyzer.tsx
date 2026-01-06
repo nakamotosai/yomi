@@ -79,49 +79,148 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         tokenMapRef.current = tokenMap;
     }, [result, text]);
 
-    // Handle TTS playback when isSpeaking changes
+    // Track currently highlighted tokens locally to support multiple highlighting (e.g. "6日")
+    const [highlightedTokenIds, setHighlightedTokenIds] = useState<Set<string>>(new Set());
+
+    // Track current sentence index for sequential playback
+    const currentSentenceIndexRef = useRef(0);
+    const isPlayingRef = useRef(false);
+
+    // Calculate start offsets for all sentences once when result changes
+    const sentenceOffsetsRef = useRef<number[]>([]);
     useEffect(() => {
-        // If isSpeaking becomes true and we haven't initiated TTS yet
-        if (isSpeaking && result && !ttsInitiatedRef.current) {
-            ttsInitiatedRef.current = true;
+        if (!result) return;
+        let offset = 0;
+        sentenceOffsetsRef.current = result.sentences.map(s => {
+            const current = offset;
+            offset += s.original.length;
+            // Add +1 or +length of separation logic if original text had separators?
+            // Analyzer splits by [。！？\n]+ and keeps them in specific logic?
+            // Wait, analyzer.ts: split(/([。！？\n]+)/).
+            // It pushes parts.
+            // TextAnalyzer just renders result.sentences.
+            // We assume result.sentences covers the text accurately or we need to respect potential gaps?
+            // Let's rely on tokenMap's coverage. 
+            // Better strategy: Use tokenMap to find the start of the first token of the sentence?
+            // But sentences might not have tokens?
+            return current;
+        });
+    }, [result]);
 
-            console.log('[Karaoke] Starting TTS, tokenMap size:', tokenMapRef.current.length);
+    const playSentence = useCallback((index: number) => {
+        if (!result || !isSpeaking || index >= result.sentences.length || !isPlayingRef.current) {
+            setIsSpeaking(false);
+            setSpeakingTokenId(null);
+            setHighlightedTokenIds(new Set());
+            ttsInitiatedRef.current = false;
+            isPlayingRef.current = false;
+            return;
+        }
 
-            ttsManager.speak(
-                text,
-                settings,
-                {
-                    onStart: () => {
-                        console.log('[Karaoke] TTS onStart');
-                        // Don't call setIsSpeaking here as it's already true
-                    },
-                    onEnd: () => {
-                        console.log('[Karaoke] TTS onEnd');
-                        ttsInitiatedRef.current = false;
-                        setIsSpeaking(false);
-                        setSpeakingTokenId(null);
-                    },
-                    onBoundary: (charIndex) => {
-                        // Find token at this char index
-                        console.log('[Karaoke] onBoundary charIndex:', charIndex);
-                        const match = tokenMapRef.current.find(t => charIndex >= t.start && charIndex < t.end);
+        const sentence = result.sentences[index];
+        // Analyzer might produce empty sentences if just newline?
+        // IMPORTANT: Do NOT trim textToSpeak, otherwise charIndex will be off by the number of leading spaces!
+        const textToSpeak = sentence.original;
+
+        if (!textToSpeak.trim()) {
+            playSentence(index + 1);
+            return;
+        }
+
+        // Calculate global offset using the first token's actual position in the text
+        // Anchor: Find where the first token of the sentence is in the global text, 
+        // then subtract its relative position in the sentence.
+        let sentenceStartOffset = sentenceOffsetsRef.current[index] || 0;
+
+        const firstToken = sentence.tokens[0];
+        if (firstToken) {
+            const tokenEntry = tokenMapRef.current.find(t => t.id === firstToken.id);
+            if (tokenEntry) {
+                // relativeStart checks where the token appears in the sentence string
+                // e.g. sentence="  Hello", token="Hello" -> relativeStart=2
+                const relativeStart = sentence.original.indexOf(firstToken.surface);
+                if (relativeStart !== -1) {
+                    sentenceStartOffset = tokenEntry.start - relativeStart;
+                } else {
+                    // Safe fallback: assume it is at the start if indexOf fails (unlikely)
+                    sentenceStartOffset = tokenEntry.start;
+                }
+            }
+        }
+
+        ttsManager.speak(
+            textToSpeak,
+            settings,
+            {
+                onStart: () => {
+                    // Optional: Scroll to sentence?
+                },
+                onEnd: () => {
+                    // Clean up for this sentence
+                    setHighlightedTokenIds(new Set());
+                    // Play next
+                    currentSentenceIndexRef.current = index + 1;
+                    playSentence(index + 1);
+                },
+                onBoundary: (charIndex, charLength = 1) => {
+                    // Explicit clear signal
+                    if (charIndex === -1) {
+                        setHighlightedTokenIds(new Set());
+                        return;
+                    }
+
+                    // Adjust charIndex to global scope
+                    const globalIndex = sentenceStartOffset + charIndex;
+
+                    // Find tokens overlapping with [globalIndex, globalIndex + charLength)
+                    const boundaryEnd = globalIndex + charLength;
+
+                    const matchedTokens = tokenMapRef.current.filter(t => {
+                        return t.start < boundaryEnd && t.end > globalIndex;
+                    });
+
+                    if (matchedTokens.length > 0) {
+                        const newSet = new Set(matchedTokens.map(t => t.id));
+                        setHighlightedTokenIds(newSet);
+                        setSpeakingTokenId(matchedTokens[0].id);
+                    } else {
+                        // Fallback logic
+                        let match = tokenMapRef.current.find(t => globalIndex >= t.start && globalIndex < t.end);
+                        if (!match) match = tokenMapRef.current.find(t => t.start >= globalIndex);
+
                         if (match) {
-                            console.log('[Karaoke] Highlighting token:', match.id);
+                            setHighlightedTokenIds(new Set([match.id]));
                             setSpeakingTokenId(match.id);
                         }
                     }
                 }
-            );
+            }
+        );
+    }, [result, isSpeaking, settings, setIsSpeaking, setSpeakingTokenId]); // Dependencies
+
+    // Handle TTS playback when isSpeaking changes
+    useEffect(() => {
+        // Start Playback
+        if (isSpeaking && result && !ttsInitiatedRef.current) {
+            ttsInitiatedRef.current = true;
+            isPlayingRef.current = true;
+            currentSentenceIndexRef.current = 0; // Reset to start or continue? For now start.
+
+            console.log('[Karaoke] Starting Sequential TTS');
+            playSentence(0);
         }
 
-        // If isSpeaking becomes false, stop TTS
+        // Stop Playback
         if (!isSpeaking && ttsInitiatedRef.current) {
             console.log('[Karaoke] Stopping TTS');
             ttsInitiatedRef.current = false;
+            isPlayingRef.current = false;
             ttsManager.stop();
             setSpeakingTokenId(null);
+            setHighlightedTokenIds(new Set());
         }
-    }, [isSpeaking, result, text, settings, setIsSpeaking, setSpeakingTokenId]);
+    }, [isSpeaking, result, playSentence]); // Simplified dependency list
+
 
     // Cleanup on unmount
     useEffect(() => {
@@ -193,39 +292,77 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     }[settings.fontSize] || 'text-base';
 
     return (
-        <div onClick={handleContainerClick}>
-            {/* Reading View */}
-            <div className={clsx(
-                "bg-white rounded-xl shadow-sm border border-gray-100 min-h-[40vh] p-6 md:p-8 font-japanese",
-                fontSizeClass
-            )}>
-                {/* Sentences */}
-                <div className="space-y-6 leading-relaxed">
-                    {result.sentences.map((sentence) => (
-                        <div key={sentence.id} className="space-y-2">
-                            {/* Japanese tokens */}
-                            <div className="flex flex-wrap items-end gap-y-4 pt-4">
-                                {sentence.tokens.map((token) => (
+        <div onClick={handleContainerClick} className={clsx("pt-2 pb-6 px-6 md:px-8 font-japanese", fontSizeClass)}>
+            {/* Sentences */}
+            <div className="divide-y divide-gray-100">
+                {result.sentences.map((sentence, sentenceIndex) => {
+                    // Filter out space-only tokens
+                    const filteredTokens = sentence.tokens.filter(token =>
+                        token.surface.trim().length > 0
+                    );
+
+                    // Skip empty sentences
+                    if (filteredTokens.length === 0) return null;
+
+                    return (
+                        <div key={sentence.id} className="py-4 first:pt-0 relative">
+                            {/* Sentence number - flush left edge of card */}
+                            <div
+                                className="absolute -left-6 md:-left-8 top-2 bg-gray-100 text-gray-500 text-xs font-bold px-2 py-1 rounded-r-lg border border-l-0 border-gray-200"
+                                style={{ minWidth: '24px', textAlign: 'center' }}
+                            >
+                                {sentenceIndex + 1}
+                            </div>
+
+                            {/* 1. Interlinear tokens */}
+                            <div className={clsx(
+                                "flex flex-wrap items-end",
+                                settings.showPitchAccent ? "gap-y-4" : "gap-y-1"
+                            )}>
+                                {filteredTokens.map((token) => (
                                     <WordTokenComponent
                                         key={token.id}
                                         token={token}
                                         onSelect={(t) => handleTokenSelect(t, sentence.original)}
                                         isSelected={selectedToken?.id === token.id}
-                                        isSpeaking={speakingTokenId === token.id}
+                                        isSpeaking={highlightedTokenIds.has(token.id)}
                                     />
                                 ))}
                             </div>
-                            {/* Chinese translation */}
+
+                            {/* 2. Original Japanese sentence with play button - inline */}
+                            <div className="flex items-center gap-1 mt-2">
+                                <span className="text-sm text-gray-600 leading-relaxed">
+                                    {sentence.original.trim()}
+                                </span>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        ttsManager.speak(sentence.original, settings, {
+                                            onStart: () => { },
+                                            onEnd: () => { }
+                                        });
+                                    }}
+                                    className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                    title="朗读此句"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* 3. Chinese translation */}
                             {settings.showTranslation !== false && (
-                                <div className="pl-1 text-sm text-gray-500 border-l-2 border-blue-200 ml-1">
+                                <div className="text-sm text-gray-400 mt-1">
                                     {translations.get(sentence.id) || (
                                         <span className="text-gray-300 animate-pulse">翻译中...</span>
                                     )}
                                 </div>
                             )}
                         </div>
-                    ))}
-                </div>
+                    );
+                })}
             </div>
 
             {/* Info Panel */}

@@ -113,7 +113,7 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
                             location={location}
                             locationChanged={(loc: string) => setLocation(loc)}
                             getRendition={(r: Rendition) => setRendition(r)}
-                            title="YOMI Reader"
+                            title="読み | YOMI"
                         />
                     </div>
                 </div>

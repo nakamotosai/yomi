@@ -4,9 +4,13 @@ import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import FontProvider from "@/components/FontProvider";
 
 export const metadata: Metadata = {
-  title: "YOMI 読み | 日本語リーダー",
+  title: "読み | YOMI",
   description: "日本語泛読辅助工具 - 分词、注音、词性着色、音调可视化",
   keywords: ["日本語", "学習", "リーダー", "NLP", "分析"],
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

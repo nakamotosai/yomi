@@ -121,11 +121,25 @@ export class NativeTtsProvider implements TtsProvider {
                 console.log('[NativeTTS] Using voice:', voice.name);
             } else {
                 console.warn('[NativeTTS] Voice not found:', this.currentOptions.voiceURI);
-                // Try to find any Japanese voice as fallback
-                const jaVoice = this.cachedVoices.find(v => v.lang.includes('ja') || v.lang.includes('JP'));
+                // Try to find any Japanese voice as fallback, prioritizing Microsoft and local voices
+                const jaVoices = this.cachedVoices.filter(v => v.lang.includes('ja') || v.lang.includes('JP'));
+
+                // Priority 1: Microsoft voices (best support on Windows)
+                let jaVoice = jaVoices.find(v => v.name.includes('Microsoft'));
+
+                // Priority 2: Local services (usually better event support)
+                if (!jaVoice) {
+                    jaVoice = jaVoices.find(v => v.localService);
+                }
+
+                // Priority 3: Any Japanese voice
+                if (!jaVoice) {
+                    jaVoice = jaVoices[0];
+                }
+
                 if (jaVoice) {
                     u.voice = jaVoice;
-                    console.log('[NativeTTS] Using fallback Japanese voice:', jaVoice.name);
+                    console.log('[NativeTTS] Using fallback Japanese voice:', jaVoice.name, 'local:', jaVoice.localService);
                 }
             }
         } else {
@@ -160,16 +174,30 @@ export class NativeTtsProvider implements TtsProvider {
         };
 
         // Boundary event mapping - accept all boundary events
-        u.onboundary = (event) => {
-            console.log('[NativeTTS] Boundary event:', event.name, 'charIndex:', event.charIndex);
+        // Boundary event mapping - use addEventListener for better reliability
+        u.addEventListener('boundary', (event: SpeechSynthesisEvent) => {
+            console.log('[NativeTTS] Boundary event:', event.name, 'charIndex:', event.charIndex, 'elapsed:', event.elapsedTime);
 
             if (this.currentOptions.onBoundary) {
                 // Map local chunk index to global text index
                 this.currentOptions.onBoundary(this.charOffset + event.charIndex);
             }
-        };
+        });
+
+        // Fallback: 如果浏览器不支持 boundary 事件，使用基于时间的高亮
+        // 在开始播放时立即触发一次 onBoundary，确保至少有初始高亮
+        if (this.currentOptions.onBoundary) {
+            // 立即触发当前 chunk 开始位置的高亮
+            this.currentOptions.onBoundary(this.charOffset);
+        }
 
         this.utterance = u;
+
+        // CRITICAL FIX: Prevent garbage collection
+        // Chrome and other browsers may garbage collect the utterance object if it's not globally referenced,
+        // causing events to stop firing mid-speech.
+        (window as any)._speechSynthesisUtterance = u;
+
         window.speechSynthesis.speak(u);
     }
 

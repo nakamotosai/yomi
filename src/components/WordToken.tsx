@@ -2,7 +2,7 @@
 
 import React from 'react';
 import clsx from 'clsx';
-import { WordToken, PartOfSpeech, POS_COLORS } from '@/types';
+import { WordToken, PartOfSpeech } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { COLOR_THEMES } from '@/lib/colorThemes';
 import PitchAccent from './PitchAccent';
@@ -20,18 +20,19 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
 
     // Determine color scheme
     // If POS is NOT in activeColorPOS list, force it to 'default' (black/transparent)
-    // Use optional chaining and default to empty array to handle initial state mismatch
     const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
 
     // Resolve theme colors
-    // Default to 'standard' if theme not found
     const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
     const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
 
-    const colorScheme = isColorEnabled ? themeColors : {
+    // Only use bg and text colors, no border
+    const colorScheme = isColorEnabled ? {
+        bg: themeColors.bg,
+        text: themeColors.text
+    } : {
         bg: 'bg-transparent',
-        text: 'text-gray-800',
-        border: 'border-b border-transparent'
+        text: 'text-gray-800'
     };
 
     // Logic: Show Furigana?
@@ -46,7 +47,7 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     return (
         <div
             className={clsx(
-                "relative inline-flex flex-col items-center mx-0.5 mb-2 group cursor-pointer select-none transition-all duration-200",
+                "relative inline-flex flex-col items-center mx-0.5 mb-1 group cursor-pointer select-none transition-all duration-200",
                 isSelected && "scale-105 z-10"
             )}
             onClick={(e) => {
@@ -67,18 +68,18 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
                 {token.reading || '\u00A0'}
             </div>
 
-            {/* Main Surface Text */}
+            {/* Main Surface Text - Simple style, only bg and text color differ */}
             <div
                 className={clsx(
-                    "px-1.5 py-0.5 rounded text-lg font-medium transition-all duration-200 border-b-2",
+                    "px-1.5 py-0.5 rounded text-lg font-medium transition-all duration-200",
                     isHiddenParticle
-                        ? "text-transparent border-gray-300 bg-gray-100 min-w-[1em] hover:text-gray-400"
-                        : [colorScheme.bg, colorScheme.text, colorScheme.border],
+                        ? "text-transparent bg-gray-100 min-w-[1em] hover:text-gray-400"
+                        : [colorScheme.bg, colorScheme.text],
                     isSelected
-                        ? "ring-2 ring-offset-1 ring-blue-400 shadow-md"
+                        ? "ring-2 ring-offset-1 ring-blue-400"
                         : isSpeaking && settings.karaokeMode
                             ? "bg-amber-100 ring-2 ring-offset-1 ring-amber-400"
-                            : "border-transparent hover:brightness-95 hover:shadow-sm"
+                            : "hover:brightness-95"
                 )}
             >
                 {token.surface}
