@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cloudflare
+.wrangler
+.dev.vars
+
+# eslint output
+eslint-output.json
+eslint-result.json

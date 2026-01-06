@@ -1,0 +1,12 @@
+name = "yomi"
+compatibility_date = "2024-01-01"
+
+[build]
+command = "npm run build"
+
+[site]
+bucket = ".next/static"
+
+# Cloudflare Pages specific settings
+# Note: When using GitHub integration, most settings are auto-detected
+# This file is primarily for local wrangler development/testing
