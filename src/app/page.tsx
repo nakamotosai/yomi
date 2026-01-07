@@ -32,8 +32,13 @@ const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
   ),
 });
 
+const KanaGrid = dynamic(() => import('@/components/KanaGrid'), {
+  loading: () => <div className="h-96 flex items-center justify-center text-gray-400">Loading Grid...</div>,
+});
+
 export default function Home() {
   const {
+    appMode, setAppMode,
     inputText, setInputText,
     isSpeaking, setIsSpeaking,
     isPaused, setIsPaused,
@@ -236,6 +241,26 @@ export default function Home() {
             <h1 className="text-lg font-bold tracking-tight text-gray-900">
               読み | YOMI
             </h1>
+            <div className="flex bg-gray-100 rounded-lg p-1 ml-6 shadow-inner">
+              <button
+                onClick={() => setAppMode('reader')}
+                className={clsx(
+                  "px-3 py-1 rounded-md text-sm font-medium transition-all duration-200",
+                  appMode === 'reader' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                文 Reader
+              </button>
+              <button
+                onClick={() => setAppMode('kana')}
+                className={clsx(
+                  "px-3 py-1 rounded-md text-sm font-medium transition-all duration-200",
+                  appMode === 'kana' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                あ Kana
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-1">
@@ -262,117 +287,125 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 mt-6">
-        {/* Unified Input Area */}
-        <div
-          ref={containerRef}
-          className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-1 mb-8 focus-within:ring-2 focus-within:ring-blue-100 transition-all"
-        >
-          <textarea
-            ref={textareaRef}
-            className="w-full p-4 rounded-lg resize-none outline-none text-base text-gray-700 placeholder-gray-300 bg-transparent transition-all"
-            style={{ height: isInputFocused ? 'auto' : '80px', minHeight: '80px' }}
-            placeholder="日本語テキストを入力、または画像を貼り付け (Ctrl+V)..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onFocus={() => setIsInputFocused(true)}
-          />
 
-          {/* Bottom bar with buttons */}
-          <div className="flex items-center justify-between px-3 pb-2">
-            <div className="text-xs text-gray-300 font-mono">
-              {inputText.length} 文字
-            </div>
-            <div className="flex gap-1 items-center">
-              {/* Upload Image Button */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
+
+      {
+        appMode === 'reader' ? (
+          <main className="max-w-4xl mx-auto px-4 mt-6">
+            {/* Unified Input Area */}
+            <div
+              ref={containerRef}
+              className="group relative bg-white rounded-xl shadow-sm border border-gray-200 p-1 mb-8 focus-within:ring-2 focus-within:ring-blue-100 transition-all"
+            >
+              <textarea
+                ref={textareaRef}
+                className="w-full p-4 rounded-lg resize-none outline-none text-base text-gray-700 placeholder-gray-300 bg-transparent transition-all"
+                style={{ height: isInputFocused ? 'auto' : '80px', minHeight: '80px' }}
+                placeholder="日本語テキストを入力、または画像を貼り付け (Ctrl+V)..."
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onFocus={() => setIsInputFocused(true)}
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-300 hover:text-gray-500 transition-colors"
-                title="画像をアップロード"
-              >
-                <ImagePlus className="w-4 h-4" />
-              </button>
-              {/* Voice Input */}
-              <VoiceInput onResult={(text) => setInputText(inputText + text)} />
-              {/* Clear Button */}
-              <button
-                onClick={handleClear}
-                className="p-2 text-gray-300 hover:text-gray-500 transition-colors"
-                title="クリア"
-              >
-                <Eraser className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {/* Reading View */}
-        {inputText.trim() && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[40vh] relative">
-            {/* Play all button - left edge tab style, above sentence 1 */}
-            <div className="pt-2 pl-6 md:pl-8">
-              <div className="relative flex items-center gap-2 h-6">
-                <button
-                  onClick={handlePlayAll}
-                  className={clsx(
-                    "absolute -left-6 md:-left-8 top-0 flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-r-lg border border-l-0 transition-colors",
-                    isSpeaking && !isPaused
-                      ? "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200"
-                      : "bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100"
-                  )}
-                >
-                  {isSpeaking && !isPaused ? (
-                    <>
-                      <PauseCircle className="w-3.5 h-3.5" />
-                      一時停止
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      {isPaused ? '再開' : '全文再生'}
-                    </>
-                  )}
-                </button>
-                {/* Stop button - inline pill style, vertically aligned */}
-                {isSpeaking && (
+              {/* Bottom bar with buttons */}
+              <div className="flex items-center justify-between px-3 pb-2">
+                <div className="text-xs text-gray-300 font-mono">
+                  {inputText.length} 文字
+                </div>
+                <div className="flex gap-1 items-center">
+                  {/* Upload Image Button */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
                   <button
-                    onClick={handleStop}
-                    className="ml-14 flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-gray-300 hover:text-gray-500 transition-colors"
+                    title="画像をアップロード"
                   >
-                    <StopCircle className="w-3 h-3" />
-                    停止
+                    <ImagePlus className="w-4 h-4" />
                   </button>
-                )}
+                  {/* Voice Input */}
+                  <VoiceInput onResult={(text) => setInputText(inputText + text)} />
+                  {/* Clear Button */}
+                  <button
+                    onClick={handleClear}
+                    className="p-2 text-gray-300 hover:text-gray-500 transition-colors"
+                    title="クリア"
+                  >
+                    <Eraser className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Text Analyzer - auto-triggered */}
-            <TextAnalyzer key={inputText} text={inputText} />
-          </div>
-        )}
+            {/* Reading View */}
+            {inputText.trim() && (
+              <div className="min-h-[40vh] relative">
+                {/* Play all button - left edge tab style, above sentence 1 */}
+                <div className="pt-2 pl-6 md:pl-8 mb-4">
+                  <div className="relative flex items-center gap-2 h-6">
+                    <button
+                      onClick={handlePlayAll}
+                      className={clsx(
+                        "flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors",
+                        isSpeaking && !isPaused
+                          ? "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200"
+                          : "bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100"
+                      )}
+                    >
+                      {isSpeaking && !isPaused ? (
+                        <>
+                          <PauseCircle className="w-3.5 h-3.5" />
+                          一時停止
+                        </>
+                      ) : (
+                        <>
+                          <PlayCircle className="w-3.5 h-3.5" />
+                          {isPaused ? '再開' : '全文再生'}
+                        </>
+                      )}
+                    </button>
+                    {/* Stop button - inline pill style */}
+                    {isSpeaking && (
+                      <button
+                        onClick={handleStop}
+                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200 transition-colors"
+                      >
+                        <StopCircle className="w-3 h-3" />
+                        停止
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-        {!inputText.trim() && (
-          <div className="text-center py-16 text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
-            <p className="text-lg mb-2">日本語テキストを入力してください</p>
-            <p className="text-sm text-gray-300">
-              テキストを入力すると自動的に分析されます
-            </p>
-          </div>
-        )}
+                {/* Text Analyzer - auto-triggered */}
+                <TextAnalyzer key={inputText} text={inputText} />
+              </div>
+            )}
 
-        <div className="h-20" /> {/* Spacer for bottom panel */}
-      </main>
+            {!inputText.trim() && (
+              <div className="text-center py-16 text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
+                <p className="text-lg mb-2">日本語テキストを入力してください</p>
+                <p className="text-sm text-gray-300">
+                  テキストを入力すると自動的に分析されます
+                </p>
+              </div>
+            )}
+
+            <div className="h-20" /> {/* Spacer for bottom panel */}
+          </main>
+        ) : (
+          <KanaGrid />
+        )
+      }
 
       {/* Modals */}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
       <VocabExport isOpen={showVocab} onClose={() => setShowVocab(false)} />
-    </main>
+    </main >
   );
 }

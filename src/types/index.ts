@@ -90,6 +90,21 @@ export interface AppSettings {
 
   // Translation Settings
   showTranslation: boolean;
+
+  // Kana Instrument Settings
+  showRomaji: boolean;
+  kanaCharType: 'hiragana' | 'katakana';
+}
+
+export type AppMode = 'reader' | 'kana';
+
+export interface KanaChar {
+  id: string;        // e.g., 'a', 'ka'
+  hiragana: string;  // 'あ'
+  katakana: string;  // 'ア'
+  romaji: string;    // 'a'
+  type: 'seion' | 'dakuon' | 'yoon'; // 清音/浊音/拗音
+  svgPath?: string;  // SVG Path data
 }
 
 // POS color mapping

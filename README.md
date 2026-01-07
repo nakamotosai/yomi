@@ -17,7 +17,14 @@
 - **词性颜色标记**：动词、形容词、助词等词性用不同颜色区分，可自定义
 - **句子翻译**：可选的句子级中文翻译显示
 
-### 🎤 多种输入方式
+### � 五十音图乐器 (Kana Instrument)
+- **交互式假名网格**：视觉化探索平假名与片假名，支持清音/浊音/拗音过滤
+- **键盘演奏模式**：像弹钢琴一样通过键盘按键（A, I, U, E, O...）触发假名发音
+- **权威笔顺动画**：基于 `KanjiVG` 数据的 SVG 遮罩动画，完美呈现毛笔书写质感
+- **互动描红练习**：带引导的高精度书写验证，纠正书写习惯
+- **听音辨位游戏**：通过趣味练习强化假名听力与位置记忆
+
+### �🎤 多种输入方式
 | 输入方式 | 说明 |
 |---------|------|
 | **文本输入** | 直接粘贴或输入日语文本 |
@@ -63,6 +70,7 @@
 |------|------|
 | **框架** | [Next.js 16](https://nextjs.org/) (App Router) |
 | **前端** | [React 19](https://react.dev/) |
+| **动画** | [Framer Motion](https://www.framer.com/motion/) |
 | **样式** | [Tailwind CSS 4](https://tailwindcss.com/) |
 | **状态管理** | [Zustand](https://github.com/pmndrs/zustand) |
 | **本地存储** | [IndexedDB (idb)](https://github.com/jakearchibald/idb) |
@@ -115,42 +123,23 @@ npm run dev
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API 路由
-│   │   ├── dictionary/    # 词典代理 API
-│   │   ├── tts/           # TTS 相关 API
-│   │   ├── translate/     # 翻译 API
-│   │   ├── news/          # NHK 新闻 API
-│   │   └── proxy/         # 外部服务代理
-│   ├── page.tsx           # 主页面
-│   ├── layout.tsx         # 应用布局
-│   └── globals.css        # 全局样式
+│   ├── page.tsx           # 主页面 (Mode 切换、Reader 主体)
+│   └── layout.tsx         # 应用布局
 ├── components/            # React 组件
-│   ├── TextAnalyzer.tsx   # 核心：文本分析与渲染
-│   ├── InfoPanel.tsx      # 词典信息面板
+│   ├── KanaGrid.tsx       # 五十音图组件
+│   ├── KanaModal.tsx      # 假名详情、笔顺、描红
+│   ├── KanaGame.tsx       # 假名听音游戏
+│   ├── TextAnalyzer.tsx   # 核心：文本分析与阅读层
 │   ├── WordToken.tsx      # 单词标记组件
-│   ├── SettingsModal.tsx  # 设置弹窗
-│   ├── VocabExport.tsx    # 单词本导出
-│   ├── PitchAccent.tsx    # 音调显示组件
-│   └── InputMethods/      # 输入方式组件
-│       ├── ImageInput.tsx # 图片 OCR 输入
-│       ├── EpubReader.tsx # EPUB 阅读器
-│       └── VoiceInput.tsx # 语音输入
+│   └── ...
+├── data/                  # 静态数据
+│   ├── kanaData.ts        # 假名列表与映射
+│   └── kanaStrokes.ts     # 假名笔顺 SVG 路径数据
 ├── lib/                   # 工具库
-│   ├── nlp/               # 自然语言处理
-│   │   └── analyzer.ts    # 形态素分析器
-│   ├── tts/               # 语音合成
-│   │   ├── manager.ts     # TTS 管理器
-│   │   ├── native.ts      # 浏览器原生 TTS
-│   │   ├── voicevox.ts    # VOICEVOX 集成
-│   │   └── edge.ts        # Edge TTS
-│   ├── dictionary.ts      # 词典查询
-│   ├── yomitan.ts         # Yomitan 本地词典
-│   ├── translate.ts       # 翻译服务
-│   └── colorThemes.ts     # 颜色主题配置
+│   ├── tts/               # 自定义 TTS 引擎 (VOICEVOX, Edge)
+│   └── ...
 ├── store/                 # Zustand 状态管理
-│   ├── useAppStore.ts     # 应用设置状态
-│   └── useVocabStore.ts   # 单词本状态
-└── types/                 # TypeScript 类型定义
-    └── index.ts           # 核心类型
+└── ...
 ```
 
 ---
@@ -180,3 +169,4 @@ MIT License
 - [Kuroshiro](https://github.com/hexenq/kuroshiro) - 日语假名转换
 - [Jisho.org](https://jisho.org/) - 开源日英词典
 - [VOICEVOX](https://voicevox.hiroshiba.jp/) - 高质量日语 AI 语音合成
+- [kana-svg-data](https://github.com/MistOfv/kana-svg-data) - 高质量假名 SVG 数据

@@ -22,10 +22,16 @@ const DEFAULT_SETTINGS: AppSettings = {
     activeColorPOS: [PartOfSpeech.VERB, PartOfSpeech.ADJECTIVE, PartOfSpeech.PARTICLE, PartOfSpeech.AUXILIARY, PartOfSpeech.ADVERB], // Default: important POS only, no nouns
     colorTheme: 'standard',
     showTranslation: true,
+
+    // Kana Instrument Defaults
+    showRomaji: false,
+    kanaCharType: 'hiragana',
 };
 
 interface AppState {
     // Content
+    appMode: 'reader' | 'kana';
+    setAppMode: (mode: 'reader' | 'kana') => void;
     inputText: string;
     setInputText: (text: string) => void;
 
@@ -58,6 +64,8 @@ interface AppState {
 export const useAppStore = create<AppState>()(
     persist(
         (set) => ({
+            appMode: 'reader',
+            setAppMode: (mode) => set({ appMode: mode }),
             inputText: '私は日本語を勉強しています。この文章を分析して、単語ごとに分解してください。',
             setInputText: (text) => set({ inputText: text }),
 

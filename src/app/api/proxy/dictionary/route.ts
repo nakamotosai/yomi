@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable */
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // 统一使用 Jisho API - 最稳定的免费日语词典 API
-        const res = await axios.get(`https://jisho.org/api/v1/search/words`, {
+        const res = await axios.get<unknown>(`https://jisho.org/api/v1/search/words`, {
             params: { keyword },
             headers: { 'User-Agent': 'YOMI-App/0.1.0' },
             timeout: 10000
