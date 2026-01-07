@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RefreshCw, CheckCircle2, RotateCcw, Pencil, PlayCircle } from 'lucide-react';
 import { KanaChar } from '@/types';
@@ -54,24 +54,24 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-slate-50/50">
+                            <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)] bg-[var(--bg-subtle)]">
                                 <div className="flex items-center gap-4">
                                     <div className="flex flex-col">
                                         <div className="flex gap-2 items-baseline">
-                                            <h2 className="text-4xl font-black text-slate-800 font-serif">
+                                            <h2 className="text-4xl font-black text-[var(--text-primary)] font-serif">
                                                 {viewType === 'hiragana' ? char.hiragana : char.katakana}
                                             </h2>
-                                            <span className="text-xl text-slate-400 font-mono">/ {char.romaji} /</span>
+                                            <span className="text-xl text-[var(--text-muted)] font-mono">/ {char.romaji} /</span>
                                         </div>
                                     </div>
 
                                     {/* Type Toggle */}
-                                    <div className="flex bg-slate-200 rounded-lg p-0.5">
+                                    <div className="flex bg-[var(--bg-muted)] rounded-lg p-0.5">
                                         <button
                                             onClick={() => setViewType('hiragana')}
                                             className={clsx(
                                                 "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                                                viewType === 'hiragana' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                                viewType === 'hiragana' ? "bg-[var(--bg-elevated)] text-[var(--accent-primary)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                             )}
                                         >
                                             あ
@@ -80,7 +80,7 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
                                             onClick={() => setViewType('katakana')}
                                             className={clsx(
                                                 "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                                                viewType === 'katakana' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                                viewType === 'katakana' ? "bg-[var(--bg-elevated)] text-[var(--accent-primary)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                             )}
                                         >
                                             ア
@@ -97,24 +97,24 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
                             </div>
 
                             {/* Tabs */}
-                            <div className="flex border-b border-gray-100">
+                            <div className="flex border-b border-[var(--border-default)]">
                                 <button
                                     className={clsx(
                                         "flex-1 py-3 text-sm font-medium transition-colors relative flex items-center justify-center gap-2",
-                                        activeTab === 'stroke' ? "text-blue-600" : "text-gray-500 hover:bg-gray-50"
+                                        activeTab === 'stroke' ? "text-[var(--accent-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]"
                                     )}
                                     onClick={() => setActiveTab('stroke')}
                                 >
                                     <PlayCircle className="w-4 h-4" />
                                     笔顺演示
                                     {activeTab === 'stroke' && (
-                                        <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+                                        <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
                                     )}
                                 </button>
                                 <button
                                     className={clsx(
                                         "flex-1 py-3 text-sm font-medium transition-colors relative flex items-center justify-center gap-2",
-                                        activeTab === 'trace' ? "text-blue-600" : "text-gray-500 hover:bg-gray-50"
+                                        activeTab === 'trace' ? "text-[var(--accent-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]"
                                     )}
                                     onClick={() => {
                                         setActiveTab('trace');
@@ -124,13 +124,13 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
                                     <Pencil className="w-4 h-4" />
                                     描红练习
                                     {activeTab === 'trace' && (
-                                        <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+                                        <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
                                     )}
                                 </button>
                             </div>
 
                             {/* Content Area */}
-                            <div className="flex-1 p-6 flex flex-col items-center justify-center bg-slate-50 relative min-h-[360px]">
+                            <div className="flex-1 p-6 flex flex-col items-center justify-center bg-[var(--bg-base)] relative min-h-[360px]">
                                 {activeTab === 'stroke' ? (
                                     <StrokeOrderView
                                         strokeData={strokeData}
@@ -158,10 +158,6 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
 // Stroke Order View
 // ----------------------------------------------------------------------
 
-// ----------------------------------------------------------------------
-// Stroke Order View
-// ----------------------------------------------------------------------
-
 function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData | undefined, onReplay: () => void }) {
     if (!strokeData) {
         return (
@@ -172,10 +168,10 @@ function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData 
     }
 
     return (
-        <div className="relative w-72 h-72 flex items-center justify-center bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="relative w-72 h-72 flex items-center justify-center bg-[var(--bg-elevated)] rounded-xl shadow-sm border border-[var(--border-default)]">
             <button
                 onClick={onReplay}
-                className="absolute top-2 right-2 p-2 text-gray-300 hover:text-blue-500 transition-colors z-10"
+                className="absolute top-2 right-2 p-2 text-[var(--text-faint)] hover:text-[var(--accent-primary)] transition-colors z-10"
                 title="重播"
             >
                 <RefreshCw className="w-5 h-5" />
@@ -191,15 +187,15 @@ function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData 
                 </defs>
 
                 {/* Grid Lines (1024 scale) */}
-                <line x1="512" y1="0" x2="512" y2="1024" stroke="#f1f5f9" strokeWidth="4" strokeDasharray="20 20" />
-                <line x1="0" y1="512" x2="1024" y2="512" stroke="#f1f5f9" strokeWidth="4" strokeDasharray="20 20" />
+                <line x1="512" y1="0" x2="512" y2="1024" stroke="var(--border-muted)" strokeWidth="4" strokeDasharray="20 20" />
+                <line x1="0" y1="512" x2="1024" y2="512" stroke="var(--border-muted)" strokeWidth="4" strokeDasharray="20 20" />
 
                 {/* Background Outlines (Gray) */}
                 {strokeData.outlines.map((d, i) => (
                     <path
                         key={`bg-${i}`}
                         d={d}
-                        fill="#e2e8f0" // slate-200
+                        fill="var(--border-default)" // slate-200 / border-default
                         stroke="none"
                     />
                 ))}
@@ -210,7 +206,7 @@ function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData 
                         <motion.path
                             d={d}
                             fill="none"
-                            stroke="#3b82f6"
+                            stroke="var(--accent-primary)"
                             strokeWidth="150" // Expanded width to cover the outline
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -249,10 +245,6 @@ function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData 
         </div>
     );
 }
-
-// ----------------------------------------------------------------------
-// Advanced Tracing Canvas
-// ----------------------------------------------------------------------
 
 // ----------------------------------------------------------------------
 // Advanced Tracing Canvas
@@ -356,15 +348,15 @@ function TracingCanvas({ strokeData, charDisplay }: { strokeData: KanaStrokeData
     return (
         <div className="relative w-72 h-72">
             {/* Base Layer: Guide Outlines 1024x1024 */}
-            <div className="absolute inset-0 bg-white rounded-xl shadow-sm border border-gray-200 pointer-events-none">
+            <div className="absolute inset-0 bg-[var(--bg-elevated)] rounded-xl shadow-sm border border-[var(--border-default)] pointer-events-none">
                 <svg viewBox="0 0 1024 1024" className="w-full h-full p-4 opacity-30">
-                    <line x1="512" y1="0" x2="512" y2="1024" stroke="#000" strokeWidth="4" strokeDasharray="20 20" />
-                    <line x1="0" y1="512" x2="1024" y2="512" stroke="#000" strokeWidth="4" strokeDasharray="20 20" />
+                    <line x1="512" y1="0" x2="512" y2="1024" stroke="var(--text-primary)" strokeWidth="4" strokeDasharray="20 20" />
+                    <line x1="0" y1="512" x2="1024" y2="512" stroke="var(--text-primary)" strokeWidth="4" strokeDasharray="20 20" />
                     {strokeData.outlines.map((d, i) => (
                         <path
                             key={i}
                             d={d}
-                            fill="#000"
+                            fill="var(--text-primary)"
                         />
                     ))}
                 </svg>
@@ -377,7 +369,7 @@ function TracingCanvas({ strokeData, charDisplay }: { strokeData: KanaStrokeData
                         <motion.path
                             d={strokeData.paths[currentStrokeIndex]}
                             fill="none"
-                            stroke="#3b82f6" // Blue hint
+                            stroke="var(--accent-primary)" // Blue hint
                             strokeWidth="150" // Match animation width
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -413,7 +405,7 @@ function TracingCanvas({ strokeData, charDisplay }: { strokeData: KanaStrokeData
                     <motion.div
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-xl z-20"
+                        className="absolute inset-0 flex items-center justify-center bg-[var(--bg-elevated)]/60 backdrop-blur-[2px] rounded-xl z-20"
                     >
                         <div className="flex flex-col items-center">
                             <CheckCircle2 className="w-16 h-16 text-green-500 drop-shadow-md mb-2" />

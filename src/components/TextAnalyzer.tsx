@@ -2,12 +2,10 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnalysisResult, WordToken } from '@/types';
-import { ttsManager } from '@/lib/tts/manager';
 import { analyzeJapaneseText } from '@/lib/nlp/analyzer';
 import { translateText } from '@/lib/translate';
 import { useAppStore } from '@/store/useAppStore';
 import WordTokenComponent from './WordToken';
-import InfoPanel from './InfoPanel';
 import VocabTip from './VocabTip';
 import GrammarTip from './GrammarTip';
 import TranslationTip from './TranslationTip';
@@ -22,12 +20,19 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [translations, setTranslations] = useState<Map<string, string>>(new Map());
-    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId } = useAppStore();
+    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist } = useAppStore();
 
     // Track if we initiated the TTS to avoid double-triggering
     const ttsInitiatedRef = useRef(false);
     // Store token map for boundary events
     const tokenMapRef = useRef<{ start: number, end: number, id: string }[]>([]);
+
+    // Track mount status
+    const isMountedRef = useRef(true);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
     const analyze = useCallback(async () => {
         if (!text.trim()) return;
@@ -40,19 +45,27 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
 
         try {
             const analysis = await analyzeJapaneseText(text);
+            if (!isMountedRef.current) return;
             setResult(analysis);
 
             // Start translating sentences in background
             analysis.sentences.forEach(async (sentence) => {
-                const translation = await translateText(sentence.original);
-                setTranslations(prev => new Map(prev).set(sentence.id, translation));
+                try {
+                    const translation = await translateText(sentence.original);
+                    if (isMountedRef.current) {
+                        setTranslations(prev => new Map(prev).set(sentence.id, translation));
+                    }
+                } catch (e) {
+                    console.warn('Translation failed', e);
+                }
             });
         } catch (err: unknown) {
+            if (!isMountedRef.current) return;
             console.error('Analysis error:', err);
             const errorMessage = err instanceof Error ? err.message : '分析中にエラーが発生しました';
             setError(errorMessage);
         } finally {
-            setIsLoading(false);
+            if (isMountedRef.current) setIsLoading(false);
         }
     }, [text, setSelectedToken, setSpeakingTokenId]);
 
@@ -82,158 +95,68 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         tokenMapRef.current = tokenMap;
     }, [result, text]);
 
-    // Track currently highlighted tokens locally to support multiple highlighting (e.g. "6日")
-    const [highlightedTokenIds, setHighlightedTokenIds] = useState<Set<string>>(new Set());
+    // Track currently highlighted tokens via store - derived from speakingTokenId
+    // const speakingTokenId is already from store
 
-    // Track current sentence index for sequential playback
-    const currentSentenceIndexRef = useRef(0);
-    const isPlayingRef = useRef(false);
+    // Effect to trigger playlist generation when isSpeaking becomes true (controlled by page header)
+    // Note: page.tsx header toggle sets isSpeaking=true.
+    // If we are NOT playing yet, we should generate playlist and start.
+    // BUT, isSpeaking is shared status.
+    // Better Approach: The Header Button should probably call a function handled here?
+    // OR: page.tsx handles "Play All" using store?
+    // Challenge: page.tsx doesn't know the Analysis Result content.
+    // Solution: When `result` is ready, TextAnalyzer can sync the playlist to the store?
+    // Or simpler: We listen to `isSpeaking` turning true. If playlist is empty or we force restart?
 
-    // Calculate start offsets for all sentences once when result changes
-    const sentenceOffsetsRef = useRef<number[]>([]);
+    // Let's look at page.tsx's handlePlayAll:
+    // It calls setIsSpeaking(true).
+    // TextAnalyzer sees isSpeaking=true.
+    // If playlist is not set, we set it.
+
+    // Sync playlist to store whenever result changes
+    // This ensures GlobalAudioPlayer has data ready BEFORE 'Play' is clicked.
     useEffect(() => {
-        if (!result) return;
-        let offset = 0;
-        sentenceOffsetsRef.current = result.sentences.map(s => {
-            const current = offset;
-            offset += s.original.length;
-            // Add +1 or +length of separation logic if original text had separators?
-            // Analyzer splits by [。！？\n]+ and keeps them in specific logic?
-            // Wait, analyzer.ts: split(/([。！？\n]+)/).
-            // It pushes parts.
-            // TextAnalyzer just renders result.sentences.
-            // We assume result.sentences covers the text accurately or we need to respect potential gaps?
-            // Let's rely on tokenMap's coverage. 
-            // Better strategy: Use tokenMap to find the start of the first token of the sentence?
-            // But sentences might not have tokens?
-            return current;
-        });
-    }, [result]);
+        if (result && result.sentences.length > 0) {
+            console.log('[TextAnalyzer] Syncing playlist to store...');
 
-    const playSentence = useCallback((index: number) => {
-        if (!result || !isSpeaking || index >= result.sentences.length || !isPlayingRef.current) {
-            setIsSpeaking(false);
-            setSpeakingTokenId(null);
-            setHighlightedTokenIds(new Set());
-            ttsInitiatedRef.current = false;
-            isPlayingRef.current = false;
-            return;
-        }
+            // transform sentences to playlist
+            const newPlaylist = result.sentences.map(s => {
+                const tokens = s.tokens.filter(t => t.surface.trim().length > 0);
 
-        const sentence = result.sentences[index];
-        // Analyzer might produce empty sentences if just newline?
-        // IMPORTANT: Do NOT trim textToSpeak, otherwise charIndex will be off by the number of leading spaces!
-        const textToSpeak = sentence.original;
+                // Generate local token map for this sentence
+                let cursor = 0;
+                const map: { start: number, end: number, id: string }[] = [];
 
-        if (!textToSpeak.trim()) {
-            playSentence(index + 1);
-            return;
-        }
-
-        // Calculate global offset using the first token's actual position in the text
-        // Anchor: Find where the first token of the sentence is in the global text, 
-        // then subtract its relative position in the sentence.
-        let sentenceStartOffset = sentenceOffsetsRef.current[index] || 0;
-
-        const firstToken = sentence.tokens[0];
-        if (firstToken) {
-            const tokenEntry = tokenMapRef.current.find(t => t.id === firstToken.id);
-            if (tokenEntry) {
-                // relativeStart checks where the token appears in the sentence string
-                // e.g. sentence="  Hello", token="Hello" -> relativeStart=2
-                const relativeStart = sentence.original.indexOf(firstToken.surface);
-                if (relativeStart !== -1) {
-                    sentenceStartOffset = tokenEntry.start - relativeStart;
-                } else {
-                    // Safe fallback: assume it is at the start if indexOf fails (unlikely)
-                    sentenceStartOffset = tokenEntry.start;
-                }
-            }
-        }
-
-        ttsManager.speak(
-            textToSpeak,
-            settings,
-            {
-                onStart: () => {
-                    // Optional: Scroll to sentence?
-                },
-                onEnd: () => {
-                    // Clean up for this sentence
-                    setHighlightedTokenIds(new Set());
-                    // Play next
-                    currentSentenceIndexRef.current = index + 1;
-                    playSentence(index + 1);
-                },
-                onBoundary: (charIndex, charLength = 1) => {
-                    // Explicit clear signal
-                    if (charIndex === -1) {
-                        setHighlightedTokenIds(new Set());
-                        return;
+                s.tokens.forEach(t => {
+                    const start = s.original.indexOf(t.surface, cursor);
+                    if (start !== -1) {
+                        const len = t.surface.length;
+                        map.push({ start, end: start + len, id: t.id });
+                        cursor = start + len;
                     }
+                });
 
-                    // Adjust charIndex to global scope
-                    const globalIndex = sentenceStartOffset + charIndex;
+                return {
+                    id: s.id,
+                    text: s.original,
+                    tokenMap: map
+                };
+            });
 
-                    // Find tokens overlapping with [globalIndex, globalIndex + charLength)
-                    const boundaryEnd = globalIndex + charLength;
-
-                    const matchedTokens = tokenMapRef.current.filter(t => {
-                        return t.start < boundaryEnd && t.end > globalIndex;
-                    });
-
-                    if (matchedTokens.length > 0) {
-                        const newSet = new Set(matchedTokens.map(t => t.id));
-                        setHighlightedTokenIds(newSet);
-                        setSpeakingTokenId(matchedTokens[0].id);
-                    } else {
-                        // Fallback logic
-                        let match = tokenMapRef.current.find(t => globalIndex >= t.start && globalIndex < t.end);
-                        if (!match) match = tokenMapRef.current.find(t => t.start >= globalIndex);
-
-                        if (match) {
-                            setHighlightedTokenIds(new Set([match.id]));
-                            setSpeakingTokenId(match.id);
-                        }
-                    }
-                }
-            }
-        );
-    }, [result, isSpeaking, settings, setIsSpeaking, setSpeakingTokenId]); // Dependencies
-
-    // Handle TTS playback when isSpeaking changes
-    useEffect(() => {
-        // Start Playback
-        if (isSpeaking && result && !ttsInitiatedRef.current) {
-            ttsInitiatedRef.current = true;
-            isPlayingRef.current = true;
-            currentSentenceIndexRef.current = 0; // Reset to start or continue? For now start.
-
-            console.log('[Karaoke] Starting Sequential TTS');
-            playSentence(0);
+            // Use setPlaylist (which resets index) instead of playPlaylist
+            // We do NOT want to auto-start, just prep the data.
+            // Note: playPlaylist from store handles "Smart Check", setPlaylist does not.
+            // But since IDs are deterministic now, even if we reset, it's consistent.
+            // We can use the exposed setter from store
+            setPlaylist(newPlaylist);
         }
+    }, [result, setPlaylist]);
 
-        // Stop Playback
-        if (!isSpeaking && ttsInitiatedRef.current) {
-            console.log('[Karaoke] Stopping TTS');
-            ttsInitiatedRef.current = false;
-            isPlayingRef.current = false;
-            ttsManager.stop();
-            setSpeakingTokenId(null);
-            setHighlightedTokenIds(new Set());
-        }
-    }, [isSpeaking, result, playSentence]); // Simplified dependency list
+    // We don't need isSpeakingRef anymore or the effect listening to isSpeaking
 
+    // Removed old TTS logic (playSentence, useEffects, etc.)
+    // Cleanup of internal state not needed anymore as store handles it.
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (ttsInitiatedRef.current) {
-                ttsManager.stop();
-                ttsInitiatedRef.current = false;
-            }
-        };
-    }, []);
 
     // Auto-analyze on mount
     useEffect(() => {
@@ -243,25 +166,25 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const handleTokenSelect = (token: WordToken, sentenceOriginal: string) => {
         setSelectedToken(token);
         setCurrentSentence(sentenceOriginal);
-    };
-
-    const handleClosePanel = () => {
-        setSelectedToken(null);
+        setIsMobileSheetOpen(true);
     };
 
     // Click outside to deselect
     const handleContainerClick = () => {
         if (selectedToken) {
-            setSelectedToken(null);
+            // We do NOT deselect here because layout is split; 
+            // user might click blank space in center panel but want to keep side panel info.
+            // If we want to deselect when clicking completely empty space, we can.
+            // setSelectedToken(null);
         }
     };
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4" />
-                <p className="text-sm">辞書を読み込み中...</p>
-                <p className="text-xs text-gray-300 mt-1">初回読み込みには数秒かかります</p>
+            <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-muted)' }}>
+                <div className="w-8 h-8 border-2 rounded-full animate-spin mb-4" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--accent-primary)' }} />
+                <p className="text-sm">解析中...</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>少々お待ちください</p>
             </div>
         );
     }
@@ -269,13 +192,14 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     if (error) {
         return (
             <div className="text-center py-12 px-4">
-                <div className="bg-red-50 text-red-600 rounded-lg p-4 inline-block">
+                <div className="rounded-lg p-4 inline-block" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
                     <p className="font-medium">エラー</p>
                     <p className="text-sm mt-1">{error}</p>
                 </div>
                 <button
                     onClick={analyze}
-                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                    className="mt-4 px-4 py-2 rounded-lg text-sm transition-colors"
+                    style={{ background: 'var(--accent-primary)', color: 'white' }}
                 >
                     再試行
                 </button>
@@ -295,7 +219,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     }[settings.fontSize] || 'text-base';
 
     return (
-        <div onClick={handleContainerClick} className={clsx("pt-2 pb-6 px-6 md:px-8 font-japanese", fontSizeClass)}>
+        <div className={clsx("pb-20 font-japanese", fontSizeClass)}>
             {/* Sentences */}
             <div className="space-y-4">
                 {result.sentences.map((sentence, sentenceIndex) => {
@@ -308,11 +232,24 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     if (filteredTokens.length === 0) return null;
 
                     return (
-                        <div key={sentence.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 relative">
+                        <div
+                            key={sentence.id}
+                            className="rounded-xl shadow-sm p-4 relative transition-shadow glass-card"
+                            style={{
+                                background: 'var(--glass-bg)',
+                                border: '1px solid var(--border-default)',
+                                boxShadow: 'var(--shadow-sm)'
+                            }}
+                        >
                             {/* Sentence number */}
                             <div
-                                className="absolute -left-3 top-3 bg-gray-100 text-gray-500 text-xs font-bold px-2 py-1 rounded-r-lg border border-l-0 border-gray-200"
-                                style={{ minWidth: '20px', textAlign: 'center' }}
+                                className="absolute -left-3 top-4 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-lg shadow-sm"
+                                style={{
+                                    background: 'var(--bg-muted)',
+                                    color: 'var(--text-muted)',
+                                    border: '1px solid var(--border-default)',
+                                    backdropFilter: 'blur(4px)'
+                                }}
                             >
                                 {sentenceIndex + 1}
                             </div>
@@ -328,7 +265,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                         token={token}
                                         onSelect={(t) => handleTokenSelect(t, sentence.original)}
                                         isSelected={selectedToken?.id === token.id}
-                                        isSpeaking={highlightedTokenIds.has(token.id)}
+                                        isSpeaking={speakingTokenId === token.id}
                                     />
                                 ))}
                             </div>
@@ -350,9 +287,6 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     );
                 })}
             </div>
-
-            {/* Info Panel */}
-            <InfoPanel token={selectedToken} onClose={handleClosePanel} />
         </div>
     );
 }

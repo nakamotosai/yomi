@@ -36,7 +36,7 @@ export default function PitchAccent({ pattern }: PitchAccentProps) {
             <path
                 d={pathD}
                 fill="none"
-                stroke="#f43f5e"
+                stroke="#60a5fa"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -49,7 +49,7 @@ export default function PitchAccent({ pattern }: PitchAccentProps) {
                     cx={i * 12 + 6}
                     cy={level === 1 ? highY : lowY}
                     r="2.5"
-                    fill="#f43f5e"
+                    fill="#60a5fa"
                 />
             ))}
         </svg>

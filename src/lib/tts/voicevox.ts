@@ -39,6 +39,7 @@ export class VoicevoxProvider implements TtsProvider {
         speed?: number;
         onStart?: () => void;
         onEnd?: () => void;
+        onError?: (error: Error) => void;
         onBoundary?: (charIndex: number) => void;
     }) {
         // 1. Cancel previous playback immediately
@@ -199,7 +200,8 @@ export class VoicevoxProvider implements TtsProvider {
             this.audio.onerror = (e) => {
                 if (this.currentRequestId === requestId) {
                     console.error('Voicevox playback error', e);
-                    options.onEnd && options.onEnd();
+                    const err = new Error('Voicevox playback error');
+                    options.onError ? options.onError(err) : (options.onEnd && options.onEnd());
                 }
             };
 
@@ -208,7 +210,11 @@ export class VoicevoxProvider implements TtsProvider {
         } catch (err) {
             if (this.currentRequestId !== requestId) return;
             console.error('Voicevox Error:', err);
-            options.onEnd && options.onEnd();
+            if (options.onError) {
+                options.onError(err as Error);
+            } else {
+                // Do not fallback to onEnd loop for hard errors
+            }
         }
     }
 
@@ -247,6 +253,11 @@ export class VoicevoxProvider implements TtsProvider {
         this.currentRequestId++;
         this.stopBoundaryTracking();
         if (this.audio) {
+            // Nullify callbacks to prevent race conditions
+            this.audio.onended = null;
+            this.audio.onerror = null;
+            this.audio.onplay = null;
+
             this.audio.pause();
             this.audio.currentTime = 0;
             this.audio = null;

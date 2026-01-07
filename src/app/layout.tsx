@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import FontProvider from "@/components/FontProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "読み | YOMI",
@@ -44,12 +45,14 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased bg-slate-50 text-slate-900">
-        <FontProvider>
-          <GlobalErrorBoundary>
-            {children}
-          </GlobalErrorBoundary>
-        </FontProvider>
+      <body className="antialiased">
+        <ThemeProvider>
+          <FontProvider>
+            <GlobalErrorBoundary>
+              {children}
+            </GlobalErrorBoundary>
+          </FontProvider>
+        </ThemeProvider>
 
         {/* Service Worker Registration */}
         <script

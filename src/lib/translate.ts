@@ -6,9 +6,9 @@ interface TranslationCache {
 
 const translationCache: TranslationCache = {};
 
-export async function translateText(text: string, targetLang: string = 'zh-CN'): Promise<string> {
+export async function translateText(text: string, targetLang: string = 'zh-CN', sourceLang: string = 'ja'): Promise<string> {
     // Check cache first
-    const cacheKey = `${text}:${targetLang}`;
+    const cacheKey = `${text}:${sourceLang}:${targetLang}`;
     if (translationCache[cacheKey]) {
         return translationCache[cacheKey];
     }
@@ -19,7 +19,7 @@ export async function translateText(text: string, targetLang: string = 'zh-CN'):
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ text, targetLang }),
+            body: JSON.stringify({ text, targetLang, sourceLang }),
         });
 
         if (!response.ok) {

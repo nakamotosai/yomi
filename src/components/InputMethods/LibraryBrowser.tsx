@@ -59,7 +59,7 @@ export default function LibraryBrowser({ onTextLoaded }: LibraryBrowserProps) {
                 <input
                     type="text"
                     placeholder="作家名・作品名で検索..."
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-gray-50"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-[var(--border-default)] focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-[var(--bg-muted)] text-[var(--text-primary)]"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -67,9 +67,9 @@ export default function LibraryBrowser({ onTextLoaded }: LibraryBrowserProps) {
 
             {/* Loading Overlay */}
             {isLoading && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-xl">
+                <div className="absolute inset-0 bg-[var(--bg-elevated)]/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-xl">
                     <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
-                    <p className="text-sm text-gray-500 font-medium">
+                    <p className="text-sm text-[var(--text-muted)] font-medium">
                         {selectedBook?.title} を読み込み中...
                     </p>
                 </div>
@@ -81,20 +81,20 @@ export default function LibraryBrowser({ onTextLoaded }: LibraryBrowserProps) {
                     <button
                         key={book.id}
                         onClick={() => handleBookSelect(book)}
-                        className="group flex flex-col items-start text-left p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all bg-white relative overflow-hidden"
+                        className="group flex flex-col items-start text-left p-3 rounded-xl border border-[var(--border-default)] hover:border-blue-200 hover:shadow-md transition-all bg-[var(--bg-elevated)] relative overflow-hidden"
                     >
                         {/* Decorative Book Spine/Cover Placeholder */}
-                        <div className="w-full aspect-[2/3] bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden group-hover:from-indigo-100 group-hover:to-blue-100 transition-colors">
+                        <div className="w-full aspect-[2/3] bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden group-hover:from-indigo-100 group-hover:to-blue-100 dark:group-hover:from-indigo-900/40 dark:group-hover:to-blue-900/40 transition-colors">
                             <Book className="w-8 h-8 text-blue-200 group-hover:scale-110 transition-transform duration-500" />
-                            <div className="absolute bottom-0 left-0 right-0 p-2 bg-white/90 backdrop-blur text-[10px] text-center text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute bottom-0 left-0 right-0 p-2 bg-[var(--bg-elevated)]/90 backdrop-blur text-[10px] text-center text-[var(--text-muted)] font-mono opacity-0 group-hover:opacity-100 transition-opacity">
                                 Aozora Bunko
                             </div>
                         </div>
 
-                        <h3 className="font-bold text-gray-800 text-sm line-clamp-2 leading-tight mb-1 group-hover:text-blue-700 transition-colors">
+                        <h3 className="font-bold text-[var(--text-primary)] text-sm line-clamp-2 leading-tight mb-1 group-hover:text-blue-700 transition-colors">
                             {book.title}
                         </h3>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-muted)]">
                             {book.author}
                         </p>
                     </button>

@@ -8,6 +8,7 @@ export interface TtsProvider {
             serverUrl?: string;
             onStart?: () => void;
             onEnd?: () => void;
+            onError?: (error: Error) => void;
             onBoundary?: (charIndex: number) => void;
         }
     ): void;

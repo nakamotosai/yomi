@@ -5,7 +5,7 @@ const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/singl
 
 export async function POST(request: NextRequest) {
     try {
-        const { text, targetLang = 'zh-CN' } = await request.json();
+        const { text, sourceLang = 'ja', targetLang = 'zh-CN' } = await request.json();
 
         if (!text) {
             return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
         // Call Google Translate API
         const params = new URLSearchParams({
             client: 'gtx',
-            sl: 'ja',          // Source language: Japanese
-            tl: targetLang,    // Target language: Chinese (Simplified)
+            sl: sourceLang,    // Source language
+            tl: targetLang,    // Target language
             dt: 't',           // Return translation
             q: text
         });
@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             translation,
             sourceText: text,
-            targetLang
+            targetLang,
+            sourceLang
         });
 
     } catch (error) {

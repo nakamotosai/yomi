@@ -14,6 +14,8 @@ export default function TranslationTip({ original, translation }: TranslationTip
     const [isExpanded, setIsExpanded] = useState(false);
     const { settings } = useAppStore();
 
+    const isDark = settings.theme === 'dark'; // Explicit dark mode check
+
     const displayTranslation = translation || '翻译中...';
     const isLoading = !translation;
 
@@ -25,7 +27,10 @@ export default function TranslationTip({ original, translation }: TranslationTip
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 {/* 释义胶囊标签 */}
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium border border-blue-200">
+                <span className={clsx(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border transition-colors",
+                    "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)] shadow-sm"
+                )}>
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
                     </svg>
@@ -35,7 +40,7 @@ export default function TranslationTip({ original, translation }: TranslationTip
                 {/* Chinese translation inline */}
                 <span className={clsx(
                     "text-sm",
-                    isLoading ? "text-gray-300 animate-pulse" : "text-gray-500"
+                    isLoading ? "text-[var(--text-faint)] animate-pulse" : "text-[var(--text-secondary)]"
                 )}>
                     {displayTranslation}
                 </span>
@@ -56,8 +61,8 @@ export default function TranslationTip({ original, translation }: TranslationTip
 
             {/* Expanded: Japanese original with play button */}
             {isExpanded && (
-                <div className="mt-2 flex items-center gap-2 pl-2 border-l-2 border-blue-200">
-                    <span className="text-sm text-gray-600 leading-relaxed">
+                <div className="mt-2 flex items-center gap-2 pl-2 border-l-2 border-blue-200 dark:border-blue-800">
+                    <span className="text-sm text-[var(--text-primary)] leading-relaxed">
                         {original.trim()}
                     </span>
                     <button

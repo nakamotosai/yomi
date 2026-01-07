@@ -24,6 +24,7 @@ class TtsManager {
     speak(text: string, settings: AppSettings, callbacks: {
         onStart?: () => void;
         onEnd?: () => void;
+        onError?: (error: Error) => void;
         onBoundary?: (charIndex: number) => void;
     }) {
         const provider = this.getProvider(settings);

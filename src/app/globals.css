@@ -1,27 +1,234 @@
 @import "tailwindcss";
+@variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* ========================================
+   CSS 变量 - 主题系统
+   ======================================== */
 
 :root {
-  /* POS Colors */
+  /* 基础背景层级 - 极简霜白风格 */
+  --bg-base: #f1f5f9;
+  /* Slate-50 for contrast with white cards */
+  --bg-elevated: rgba(255, 255, 255, 0.85);
+  /* Frost White */
+  --bg-muted: rgba(241, 245, 249, 0.6);
+  /* Slate-100 equivalent */
+  --bg-subtle: rgba(226, 232, 240, 0.6);
+  /* Slate-200 equivalent */
+
+  /* 文字颜色层级 - 深岩灰 */
+  --text-primary: #334155;
+  /* Slate-700 */
+  --text-secondary: #475569;
+  /* Slate-600 */
+  --text-muted: #64748b;
+  /* Slate-500 */
+  --text-faint: #94a3b8;
+  /* Slate-400 */
+
+  /* 边框和分割线 */
+  --border-default: rgba(148, 163, 184, 0.2);
+  /* Subtle Slate border */
+  --border-muted: rgba(148, 163, 184, 0.1);
+
+  /* 交互状态 */
+  --hover-bg: rgba(0, 0, 0, 0.03);
+  --active-bg: rgba(0, 0, 0, 0.05);
+
+  /* 强调色 - 极简岩灰 (Strict Gray) */
+  --accent-primary: #334155;
+  /* Slate-700 (Dark Gray) */
+  --accent-primary-light: #e2e8f0;
+  /* Slate-200 (Light Gray for backgrounds) */
+
+  /* 毛玻璃效果 - 浅色模式专用 */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-blur: 16px;
+
+  /* 阴影 - 立体感增强 */
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.08);
+
+  /* 滚动条 */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
+  /* POS Colors (浅色模式 - 保持柔和但可见) */
   --color-noun: #3b82f6;
   --color-verb: #ef4444;
   --color-adjective: #f59e0b;
-  --color-particle: #ec4899;
-  --color-auxiliary: #8b5cf6;
-  --color-adverb: #10b981;
-  --color-conjunction: #64748b;
+  --color-particle: #db2777;
+  --color-auxiliary: #7c3aed;
+  --color-adverb: #059669;
+  --color-conjunction: #475569;
+  --color-pitch: #e11d48;
 
-  /* Pitch accent */
-  --color-pitch: #f43f5e;
+  /* 选择区域 */
+  --selection-bg: #e2e8f0;
+  --selection-text: #1e293b;
 }
 
 /* ========================================
-   全局基础样式（字体由 FontProvider 动态注入）
+   深色模式变量 - 彩虹光晕背景
+   ======================================== */
+
+[data-theme="dark"] {
+  /* 基础背景 - 彩虹光晕渐变 */
+  --bg-base:
+    /* 顶部中央 - 粉紫色光晕 */
+    radial-gradient(ellipse 100% 60% at 50% -10%, rgba(219, 39, 119, 0.25), transparent 50%),
+    /* 右上角 - 橙粉色光晕 */
+    radial-gradient(ellipse 50% 50% at 90% 10%, rgba(251, 113, 133, 0.2), transparent 50%),
+    /* 左上角 - 紫色光晕 */
+    radial-gradient(ellipse 60% 50% at 10% 15%, rgba(168, 85, 247, 0.18), transparent 50%),
+    /* 中间偏右 - 蓝紫色光晕 */
+    radial-gradient(ellipse 70% 50% at 75% 40%, rgba(99, 102, 241, 0.15), transparent 50%),
+    /* 中间偏左 - 青蓝色光晕 */
+    radial-gradient(ellipse 60% 50% at 25% 50%, rgba(56, 189, 248, 0.12), transparent 50%),
+    /* 底部左侧 - 绿色光晕 */
+    radial-gradient(ellipse 60% 50% at 20% 85%, rgba(52, 211, 153, 0.18), transparent 50%),
+    /* 底部右侧 - 青绿色光晕 */
+    radial-gradient(ellipse 50% 40% at 80% 90%, rgba(45, 212, 191, 0.15), transparent 50%),
+    /* 深色底色 */
+    linear-gradient(180deg, #0c0c14 0%, #0a0a12 50%, #080810 100%);
+
+  /* 组件背景 - 更透明，让彩虹光晕穿透 */
+  --bg-elevated: rgba(20, 20, 28, 0.45);
+  --bg-muted: rgba(30, 30, 40, 0.35);
+  --bg-subtle: rgba(45, 45, 58, 0.25);
+
+  /* 文字颜色层级 - 使用柔和的浅灰色，避免亮白 */
+  --text-primary: #a8a8b3;
+  --text-secondary: #8a8a96;
+  --text-muted: #6b6b75;
+  --text-faint: #52525b;
+
+  /* 边框和分割线 */
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-muted: rgba(255, 255, 255, 0.05);
+
+  /* 交互状态 - 使用微妙的彩虹渐变而非紫色 */
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --active-bg: rgba(255, 255, 255, 0.1);
+
+  /* 强调色 - 回归紫色系以匹配彩虹风格 */
+  --accent-primary: #8b5cf6;
+  --accent-primary-light: rgba(139, 92, 246, 0.12);
+
+  /* 毛玻璃效果 - 更透明 */
+  --glass-bg: rgba(15, 15, 22, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: 16px;
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.7);
+
+  /* 滚动条 */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(161, 161, 170, 0.2);
+  --scrollbar-thumb-hover: rgba(161, 161, 170, 0.35);
+
+  /* POS Colors (保持鲜艳) */
+  --color-noun: #60a5fa;
+  --color-verb: #f87171;
+  --color-adjective: #fbbf24;
+  --color-particle: #f472b6;
+  --color-auxiliary: #a78bfa;
+  --color-adverb: #34d399;
+  --color-conjunction: #94a3b8;
+  --color-pitch: #fb7185;
+
+  /* 选择区域 */
+  --selection-bg: rgba(255, 255, 255, 0.08);
+  --selection-text: #d4d4d8;
+
+  /* 彩虹边框渐变 */
+  --rainbow-border: linear-gradient(135deg,
+      rgba(251, 191, 36, 0.6) 0%,
+      rgba(245, 158, 11, 0.5) 12%,
+      rgba(239, 68, 68, 0.5) 24%,
+      rgba(236, 72, 153, 0.6) 36%,
+      rgba(168, 85, 247, 0.6) 48%,
+      rgba(99, 102, 241, 0.5) 60%,
+      rgba(59, 130, 246, 0.5) 72%,
+      rgba(34, 197, 94, 0.5) 84%,
+      rgba(251, 191, 36, 0.6) 100%);
+}
+
+/* ========================================
+   彩虹组件样式
+   ======================================== */
+.rainbow-input {
+  border: 1px solid transparent;
+  background-image:
+    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a1a1aa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"),
+    linear-gradient(#1e1e24, #1e1e24),
+    var(--rainbow-border);
+  background-origin: content-box, padding-box, border-box;
+  background-clip: content-box, padding-box, border-box;
+  background-position: right 0.5rem center, center, center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em, auto, auto;
+  transition: all 0.3s ease;
+  padding-right: 2.5rem !important;
+}
+
+.rainbow-input:focus {
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
+.rainbow-range {
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+.rainbow-range::-webkit-slider-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  height: 6px;
+}
+
+.rainbow-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  margin-top: -6px;
+  /* align center */
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.rainbow-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+/* 彩虹光晕效果 - 增强版 */
+[data-theme="dark"] {
+  --rainbow-glow: 0 0 8px rgba(251, 191, 36, 0.25),
+    0 0 16px rgba(236, 72, 153, 0.2),
+    0 0 24px rgba(99, 102, 241, 0.15),
+    0 0 32px rgba(34, 197, 94, 0.1);
+}
+
+/* ========================================
+   全局基础样式
    ======================================== */
 
 html,
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* ========================================
@@ -45,7 +252,53 @@ ruby {
 ruby rt {
   font-size: 0.5em;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-muted);
+}
+
+/* ========================================
+   毛玻璃卡片效果
+   ======================================== */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* ========================================
+   彩虹高亮选中效果（深色模式专用）
+   ======================================== */
+[data-theme="dark"] .rainbow-highlight {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--rainbow-glow);
+}
+
+[data-theme="dark"] .rainbow-highlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--rainbow-border);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 /* ========================================
@@ -82,30 +335,30 @@ ruby rt {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ========================================
    焦点和选择
    ======================================== */
 *:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 
 ::selection {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--selection-bg);
+  color: var(--selection-text);
 }
 
 /* ========================================
@@ -157,4 +410,40 @@ ruby rt {
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ========================================
+   深色模式特定样式覆盖
+   ======================================== */
+
+/* 深色模式输入框 */
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: var(--bg-muted);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* 深色模式按钮悬停 */
+[data-theme="dark"] button:hover {
+  background-color: var(--hover-bg);
+}
+
+/* 深色模式卡片阴影增强 */
+[data-theme="dark"] .shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .shadow-md {
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .shadow-lg {
+  box-shadow: var(--shadow-lg);
 }

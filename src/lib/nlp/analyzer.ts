@@ -215,8 +215,13 @@ async function analyzeSentence(sentence: string, index: number): Promise<Sentenc
 
             const baseForm = t.basic_form !== '*' ? t.basic_form : surface;
 
+            // Deterministic ID generation to ensure stability across strict mode re-renders
+            // Format: sentenceIndex-tokenIndex-hash(surface)
+            const simpleHash = surface.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const stableId = `${index}-${idx}-${simpleHash}`;
+
             return {
-                id: `${index}-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                id: stableId,
                 surface,
                 reading,
                 romaji: wanakana.toRomaji(readingHiragana),

@@ -18,22 +18,47 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     // Get settings
     const { settings } = useAppStore();
 
-    // Determine color scheme
-    // If POS is NOT in activeColorPOS list, force it to 'default' (black/transparent)
-    const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
+    // 判断是否为标点符号（包括括号等）
+    const isPunctuation = token.pos === PartOfSpeech.SYMBOL ||
+        /^[、。！？「」『』（）【】・…ー～〜：；,\.!\?""''()[\]{}:;]$/.test(token.surface);
 
-    // Resolve theme colors
+    // 标点符号特殊渲染 - 无背景，无假名
+    // 获取字体大小
+    const fontSizeClasses = {
+        'small': { main: 'text-base', furigana: 'text-[9px]', furiganaHeight: 'h-3' },
+        'medium': { main: 'text-lg', furigana: 'text-[10px]', furiganaHeight: 'h-4' },
+        'large': { main: 'text-xl', furigana: 'text-[12px]', furiganaHeight: 'h-5' }
+    }[settings.fontSize] || { main: 'text-lg', furigana: 'text-[10px]', furiganaHeight: 'h-4' };
+
+    if (isPunctuation) {
+        return (
+            <div
+                className="relative inline-flex flex-col items-center mx-0 group select-none"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* 标点符号上方不显示任何内容 */}
+                <div className={fontSizeClasses.furiganaHeight}></div>
+
+                {/* 标点符号本体 - 无背景，纯文字 */}
+                <div className={clsx("px-0 py-0.5 font-medium text-gray-600 dark:text-gray-400", fontSizeClasses.main)}>
+                    {token.surface}
+                </div>
+            </div>
+        );
+    }
+
+    // Resolve theme colors - 始终使用主题颜色
     const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
     const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
 
-    // Only use bg and text colors, no border
-    const colorScheme = isColorEnabled ? {
-        bg: themeColors.bg,
-        text: themeColors.text
-    } : {
-        bg: 'bg-transparent',
-        text: 'text-gray-800'
-    };
+    // 检查该词性是否启用了颜色高亮
+    const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
+
+    // 背景色：如果启用则使用主题色，否则透明
+    const bgClass = isColorEnabled ? themeColors.bg : 'bg-transparent';
+
+    // 文字颜色：始终使用主题颜色（即使背景透明）
+    const textClass = themeColors.text;
 
     // Logic: Show Furigana?
     const hasFurigana = token.reading && token.reading.length > 0;
@@ -60,25 +85,36 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
                 <PitchAccent pattern={token.pitch} />
             )}
 
-            {/* Furigana (Ruby text) */}
+            {/* Furigana (Ruby text) - 使用对应词性颜色 */}
             <div className={clsx(
-                "h-4 text-[10px] text-gray-500 font-medium whitespace-nowrap transition-opacity",
-                shouldShowFurigana ? "opacity-70" : "opacity-0 group-hover:opacity-50"
+                fontSizeClasses.furiganaHeight,
+                fontSizeClasses.furigana,
+                "font-medium whitespace-nowrap transition-opacity",
+                textClass,
+                shouldShowFurigana ? "opacity-60" : "opacity-0 group-hover:opacity-40"
             )}>
                 {token.reading || '\u00A0'}
             </div>
 
-            {/* Main Surface Text - Simple style, only bg and text color differ */}
+            {/* Main Surface Text */}
             <div
                 className={clsx(
-                    "px-1.5 py-0.5 rounded text-lg font-medium transition-all duration-200",
+                    "px-1.5 py-0.5 rounded font-medium transition-all duration-200",
+                    fontSizeClasses.main,
                     isHiddenParticle
                         ? "text-transparent bg-gray-100 min-w-[1em] hover:text-gray-400"
-                        : [colorScheme.bg, colorScheme.text],
+                        : currentTheme.type === 'underline'
+                            ? clsx(
+                                "border-b-[3px] border-solid rounded-none px-0.5 mx-0.5 pb-0.5",
+                                textClass,
+                                themeColors.border || 'border-transparent',
+                                "bg-transparent"
+                            )
+                            : clsx(bgClass, textClass),
                     isSelected
                         ? "ring-2 ring-offset-1 ring-blue-400"
                         : isSpeaking && settings.karaokeMode
-                            ? "bg-amber-100 ring-2 ring-offset-1 ring-amber-400"
+                            ? "bg-amber-100 ring-2 ring-offset-1 ring-amber-400 dark:bg-amber-900/50 dark:ring-amber-500"
                             : "hover:brightness-95"
                 )}
             >

@@ -66,25 +66,25 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
     return (
         <div className={clsx("w-full transition-all duration-300", className)}>
             {!showReader ? (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-gray-50 transition-colors cursor-pointer relative min-h-[160px] flex flex-col items-center justify-center gap-3">
+                <div className="border-2 border-dashed border-[var(--border-default)] rounded-xl p-8 text-center hover:border-blue-400 hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer relative min-h-[160px] flex flex-col items-center justify-center gap-3">
                     <input
                         type="file"
                         accept=".epub"
                         onChange={handleFileChange}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
-                    <div className="bg-orange-100 p-3 rounded-full text-orange-600">
+                    <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full text-orange-600 dark:text-orange-400">
                         <BookOpen className="w-6 h-6" />
                     </div>
                     <div>
-                        <p className="font-medium text-gray-700">EPUBファイルを選択</p>
-                        <p className="text-sm text-gray-400 mt-1">クリックして電子書籍を読み込み</p>
+                        <p className="font-medium text-[var(--text-primary)]">EPUBファイルを選択</p>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">クリックして電子書籍を読み込み</p>
                     </div>
                 </div>
             ) : (
                 <div className="flex flex-col gap-4">
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <span className="text-sm font-medium text-gray-600">
+                    <div className="flex justify-between items-center bg-[var(--bg-subtle)] p-3 rounded-lg border border-[var(--border-default)]">
+                        <span className="text-sm font-medium text-[var(--text-secondary)]">
                             電子書籍リーダー
                         </span>
                         <div className="flex gap-2">
@@ -100,14 +100,14 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
                                     setShowReader(false);
                                     setFileContent(null);
                                 }}
-                                className="text-xs text-gray-400 hover:text-gray-600 px-2"
+                                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2"
                             >
                                 閉じる
                             </button>
                         </div>
                     </div>
 
-                    <div className="h-[60vh] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner relative">
+                    <div className="h-[60vh] border border-[var(--border-default)] rounded-xl overflow-hidden bg-[var(--bg-elevated)] shadow-inner relative">
                         <ReactReader
                             url={fileContent as ArrayBuffer}
                             location={location}

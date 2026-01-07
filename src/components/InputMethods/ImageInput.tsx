@@ -139,20 +139,20 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
                     {...getRootProps()}
                     className={clsx(
                         "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-3 min-h-[160px]",
-                        isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-400 hover:bg-gray-50"
+                        isDragActive ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-[var(--border-default)] hover:border-blue-400 hover:bg-[var(--bg-subtle)]"
                     )}
                 >
                     <input {...getInputProps()} />
-                    <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+                    <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-600 dark:text-blue-400">
                         <Upload className="w-6 h-6" />
                     </div>
                     <div>
-                        <p className="font-medium text-gray-700">画像をクリック または ドラッグ＆ドロップ</p>
-                        <p className="text-sm text-gray-400 mt-1">または Ctrl+V で画像を貼り付け</p>
+                        <p className="font-medium text-[var(--text-primary)]">画像をクリック または ドラッグ＆ドロップ</p>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">または Ctrl+V で画像を貼り付け</p>
                     </div>
                 </div>
             ) : (
-                <div className="relative rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                <div className="relative rounded-xl border border-[var(--border-default)] overflow-hidden bg-[var(--bg-subtle)]">
                     <img
                         src={imagePreview}
                         alt="Preview"

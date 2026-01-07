@@ -14,37 +14,48 @@ interface EdgeTtsResponse {
 export class EdgeTtsProvider implements TtsProvider {
     private audio: HTMLAudioElement | null = null;
     private timer: number | null = null; // requestAnimationFrame ID
+    private isFetching: boolean = false; // Lock to prevent duplicate requests
+    private abortController: AbortController | null = null;
 
     async speak(text: string, options: {
         voiceURI?: string;
         speed?: number;
         onStart?: () => void;
         onEnd?: () => void;
+        onError?: (error: Error) => void;
         onBoundary?: (charIndex: number, charLength?: number) => void;
     }) {
+        // Stop any existing playback first
         this.stop();
 
-        try {
-            // Default to a good Japanese voice
-            const voice = options.voiceURI || 'ja-JP-NanamiNeural';
-            // Speed in Edge TTS: 0 is default. user speed 1.0 = 0. user speed 1.5 = +0.5?
-            // Let's assume options.speed is 1.0 for normal.
-            // Edge API takes 0.5, 1.0, 2.0 etc relative to normal?
-            // No, the API route expects rate as float. 0 is normal?
-            // Actually, my route implementation treats rate as percentage: rate * 100 %.
-            // If user passes 1.0 (normal), I should pass 0 to route.
-            // If user passes 1.5 (fast), I should pass 0.5.
+        // Skip if already fetching (prevents double-trigger from StrictMode)
+        if (this.isFetching) {
+            console.log('[EdgeTTS] Skipping duplicate request');
+            return;
+        }
 
+        this.isFetching = true;
+        this.abortController = new AbortController();
+
+        try {
+            const voice = options.voiceURI || 'ja-JP-NanamiNeural';
             const rate = (options.speed || 1.0) - 1.0;
 
             const res = await fetch('/api/tts/edge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice, rate })
+                body: JSON.stringify({ text, voice, rate }),
+                signal: this.abortController.signal
             });
 
+            // Check if we were stopped during fetch
+            if (!this.isFetching) {
+                console.log('[EdgeTTS] Request was cancelled');
+                return;
+            }
+
             if (!res.ok) {
-                throw new Error('Edge TTS API failed');
+                throw new Error('Edge TTS API failed with status ' + res.status);
             }
 
             const data: EdgeTtsResponse = await res.json();
@@ -55,7 +66,7 @@ export class EdgeTtsProvider implements TtsProvider {
 
             const audioUrl = `data:audio/mp3;base64,${data.audioBase64}`;
             this.audio = new Audio(audioUrl);
-            this.audio.playbackRate = 1.0; // Audio is already baked with speed, so play at 1x
+            this.audio.playbackRate = 1.0;
 
             this.audio.onplay = () => {
                 console.log('[EdgeTTS] Audio started. Alignment data length:', data.alignment?.length);
@@ -68,55 +79,68 @@ export class EdgeTtsProvider implements TtsProvider {
 
             this.audio.onended = () => {
                 this.stopBoundaryTracking();
+                this.isFetching = false;
                 options.onEnd && options.onEnd();
             };
 
             this.audio.onerror = (e) => {
                 console.error('Edge TTS Playback Error', e);
-                options.onEnd && options.onEnd();
+                this.isFetching = false;
+                const err = new Error('Playback error');
+                options.onError ? options.onError(err) : (options.onEnd && options.onEnd());
             };
 
             await this.audio.play();
 
         } catch (e) {
-            console.error('Edge TTS Error:', e);
-            options.onEnd && options.onEnd();
+            this.isFetching = false;
+
+            if ((e as Error).name === 'AbortError') {
+                console.log('[EdgeTTS] Request aborted');
+                // Abort is user action, do not call onEnd or onError to avoid side effects
+            } else {
+                console.error('Edge TTS Error:', e);
+                // Real error -> use onError if available, otherwise silence or fallback
+                if (options.onError) {
+                    options.onError(e as Error);
+                } else {
+                    // Legacy behavior fallback, but careful not to loop
+                    // options.onEnd && options.onEnd(); 
+                    // DISABLE fallback to onEnd for errors to prevent loops
+                }
+            }
         }
     }
 
     private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number) => void) {
-        // Use requestAnimationFrame for high precision tracking
-        let lastEmittedIndex = -2; // Start with invalid index
+        let lastEmittedIndex = -2;
 
         const track = () => {
             if (!this.audio || this.audio.paused) return;
 
             const currentTimeMs = this.audio.currentTime * 1000;
 
-            // Find the active word at current time
             let currentBoundaryIndex = -1;
             let currentBoundaryLength = 0;
 
             for (let i = 0; i < alignment.length; i++) {
                 const start = alignment[i].time;
-                // Calculate duration: explicit > next word start > default 1s
                 let duration = alignment[i].duration;
                 if (!duration) {
                     if (i < alignment.length - 1) {
                         duration = alignment[i + 1].time - start;
                     } else {
-                        duration = 1000; // Last word default
+                        duration = 1000;
                     }
                 }
 
                 if (currentTimeMs >= start && currentTimeMs < start + duration) {
                     currentBoundaryIndex = alignment[i].charIndex;
                     currentBoundaryLength = alignment[i].charLength;
-                    break; // Found the active word
+                    break;
                 }
             }
 
-            // Emit only if changed
             if (currentBoundaryIndex !== lastEmittedIndex) {
                 lastEmittedIndex = currentBoundaryIndex;
                 callback(currentBoundaryIndex, currentBoundaryLength);
@@ -128,7 +152,6 @@ export class EdgeTtsProvider implements TtsProvider {
         this.timer = requestAnimationFrame(track);
     }
 
-
     private stopBoundaryTracking() {
         if (this.timer) {
             cancelAnimationFrame(this.timer);
@@ -137,9 +160,23 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     stop() {
+        // Abort any pending fetch
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+
+        this.isFetching = false;
         this.stopBoundaryTracking();
+
         if (this.audio) {
+            // CRITICAL: Nullify callbacks FIRST to prevent any events during pause/cleanup
+            this.audio.onended = null;
+            this.audio.onerror = null;
+            this.audio.onplay = null;
+
             this.audio.pause();
+            this.audio.src = ''; // Release the audio resource
             this.audio = null;
         }
     }
@@ -157,7 +194,6 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     async getVoices(): Promise<{ id: string; name: string }[]> {
-        // Return a curated list of high quality Edge voices for Japanese
         return [
             { id: 'ja-JP-NanamiNeural', name: 'Nanami (Microsoft)' },
             { id: 'ja-JP-KeitaNeural', name: 'Keita (Microsoft)' }
