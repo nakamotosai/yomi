@@ -91,6 +91,9 @@ export interface AppSettings {
   // Translation Settings
   showTranslation: boolean;
 
+  // Interaction Settings
+  autoReadOnClick: boolean;
+
   // Kana Instrument Settings
   showRomaji: boolean;
   kanaCharType: 'hiragana' | 'katakana';

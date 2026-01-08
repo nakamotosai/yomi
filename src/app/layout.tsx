@@ -3,6 +3,7 @@ import "./globals.css";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import FontProvider from "@/components/FontProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ScrollManager } from "@/components/ScrollManager";
 
 export const metadata: Metadata = {
   title: "読み | YOMI",
@@ -48,6 +49,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider>
           <FontProvider>
+            <ScrollManager />
             <GlobalErrorBoundary>
               {children}
             </GlobalErrorBoundary>

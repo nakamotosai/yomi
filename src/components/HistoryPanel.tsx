@@ -4,11 +4,13 @@ import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { WordToken, PartOfSpeech } from '@/types';
 import { COLOR_THEMES } from '@/lib/colorThemes';
-import { Clock } from 'lucide-react';
+import { ttsManager } from '@/lib/tts/manager';
+import { Clock, Trash2 } from 'lucide-react';
 
 export default function HistoryPanel() {
     const history = useAppStore(state => state.history) || [];
     const setSelectedToken = useAppStore(state => state.setSelectedToken);
+    const clearHistory = useAppStore(state => state.clearHistory); // Get action
     const settings = useAppStore(state => state.settings);
     const isDark = settings.theme === 'dark';
 
@@ -29,22 +31,22 @@ export default function HistoryPanel() {
 
     return (
         <div
-            className="flex flex-col h-full"
+            className="flex flex-col h-full relative group/panel"
             style={{ background: 'var(--bg-elevated)' }}
         >
-            <div
-                className="px-4 py-2"
-                style={{
-                    borderBottom: `1px solid var(--border-default)`,
-                    background: 'var(--bg-muted)'
-                }}
+            {/* Floating Clear Button */}
+            <button
+                onClick={clearHistory}
+                className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-full transition-all bg-white/50 dark:bg-white/5 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 hover:text-rose-500 text-slate-400 dark:text-slate-500 backdrop-blur-sm"
+                title="履歴を削除"
             >
-                <h3 className="text-xs font-bold flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                    <Clock className="w-3 h-3" />
-                    閲覧履歴
-                </h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+                <Trash2 className="w-4 h-4" />
+            </button>
+
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                {/* Spacer for Floating Button (Float Right) */}
+                <div className="float-right w-8 h-8 mb-1 ml-1 pointer-events-none" />
+
                 <div className="hidden">
                     {/* Hack to ensure Tailwind classes for all POS colors are generated */}
                     <span className="text-rose-600 bg-rose-50 border-rose-100"></span>
@@ -52,46 +54,34 @@ export default function HistoryPanel() {
                     <span className="text-emerald-600 bg-emerald-50 border-emerald-100"></span>
                     <span className="text-amber-600 bg-amber-50 border-amber-100"></span>
                     <span className="text-purple-600 bg-purple-50 border-purple-100"></span>
-                    <span className="text-gray-600 bg-gray-50 border-gray-100"></span>
+                    <span className="text-slate-600 bg-slate-50 border-slate-100"></span>
                 </div>
-                <div className="space-y-1">
-                    {history.map((token: WordToken, index: number) => {
-                        const activeTheme = COLOR_THEMES[settings.colorTheme || 'standard'];
-                        const colorScheme = activeTheme.colors[token.pos as PartOfSpeech] || activeTheme.colors[PartOfSpeech.OTHER];
 
-                        return (
-                            <button
-                                key={`${token.id}-${index}`}
-                                onClick={() => setSelectedToken(token)}
-                                className="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between group"
-                                style={{
-                                    border: `1px solid transparent`,
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'var(--hover-bg)';
-                                    e.currentTarget.style.borderColor = 'var(--border-default)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'transparent';
-                                    e.currentTarget.style.borderColor = 'transparent';
-                                }}
-                            >
-                                <div className="flex items-center gap-2 overflow-hidden">
-                                    <span className={`text-xs px-1.5 py-0.5 rounded border ${colorScheme.bg} ${colorScheme.text} ${colorScheme.border}`}>
-                                        {token.pos}
-                                    </span>
-                                    <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                                        {token.surface}
-                                    </span>
-                                </div>
-                                <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-                                    {token.reading}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
+                {history.map((token: WordToken, index: number) => {
+                    const activeTheme = COLOR_THEMES[settings.colorTheme || 'standard'];
+                    const colorScheme = activeTheme.colors[token.pos as PartOfSpeech] || activeTheme.colors[PartOfSpeech.OTHER];
+                    return (
+                        <button
+                            key={`${token.id}-${index}`}
+                            onClick={() => {
+                                setSelectedToken(token);
+                                if (settings.autoReadOnClick) {
+                                    ttsManager.speak(token.surface, settings);
+                                }
+                            }}
+                            className={`inline-flex items-center px-3 py-1.5 mr-2 mb-2 rounded-lg transition-all text-base font-medium hover:scale-105 hover:brightness-95 ${colorScheme.bg} ${colorScheme.text}`}
+                            style={{
+                                border: '1px solid var(--border-default)',
+                            }}
+                            title={`${token.pos} - ${token.reading || token.surface}`}
+                        >
+                            {/* <span className="mr-1 opacity-50 text-[10px] uppercase">{token.pos.slice(0,1)}</span> */}
+                            {token.surface}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
 }
+

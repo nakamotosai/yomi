@@ -435,6 +435,15 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         onChange={() => toggleSetting('hideParticles')}
                                         isDark={isDark}
                                     />
+                                    <Divider isDark={isDark} />
+                                    <SettingToggle
+                                        icon={<Speaker className="w-4 h-4" style={{ color: 'var(--color-verb)' }} />}
+                                        label="点击自动朗读"
+                                        description="点击单词卡片时自动播放读音"
+                                        checked={settings.autoReadOnClick || false}
+                                        onChange={() => toggleSetting('autoReadOnClick')}
+                                        isDark={isDark}
+                                    />
                                 </div>
                             </section>
                         </div>

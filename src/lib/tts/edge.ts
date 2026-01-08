@@ -112,8 +112,9 @@ export class EdgeTtsProvider implements TtsProvider {
         }
     }
 
-    private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number) => void) {
+    private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number, boundaryIndex?: number) => void) {
         let lastEmittedIndex = -2;
+        let lastBoundaryArrayIndex = -1;
 
         const track = () => {
             if (!this.audio || this.audio.paused) return;
@@ -122,6 +123,7 @@ export class EdgeTtsProvider implements TtsProvider {
 
             let currentBoundaryIndex = -1;
             let currentBoundaryLength = 0;
+            let boundaryArrayIndex = -1;
 
             for (let i = 0; i < alignment.length; i++) {
                 const start = alignment[i].time;
@@ -137,13 +139,16 @@ export class EdgeTtsProvider implements TtsProvider {
                 if (currentTimeMs >= start && currentTimeMs < start + duration) {
                     currentBoundaryIndex = alignment[i].charIndex;
                     currentBoundaryLength = alignment[i].charLength;
+                    boundaryArrayIndex = i;
                     break;
                 }
             }
 
-            if (currentBoundaryIndex !== lastEmittedIndex) {
+            // Emit when boundary changes (either charIndex or array index)
+            if (boundaryArrayIndex !== lastBoundaryArrayIndex) {
                 lastEmittedIndex = currentBoundaryIndex;
-                callback(currentBoundaryIndex, currentBoundaryLength);
+                lastBoundaryArrayIndex = boundaryArrayIndex;
+                callback(currentBoundaryIndex, currentBoundaryLength, boundaryArrayIndex);
             }
 
             this.timer = requestAnimationFrame(track);

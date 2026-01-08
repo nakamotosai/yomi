@@ -20,10 +20,10 @@ const KanaCard = React.memo(({ char, isPressed, onClick }: { char: KanaChar, isP
         <motion.div
             layoutId={`card-${char.id}`}
             className={clsx(
-                "relative aspect-[4/5] rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors duration-200 select-none group",
+                "relative aspect-[4/5] rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors duration-200 select-none group backdrop-blur-sm",
                 isPressed
                     ? "bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.5)] border-transparent"
-                    : "bg-white hover:bg-white border border-transparent hover:border-gray-100 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)]"
+                    : "bg-white dark:bg-black/20 hover:bg-white dark:hover:bg-black/40 border border-transparent hover:border-gray-100 dark:border-white/5 dark:hover:border-white/10 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)]"
             )}
             whileHover={{ scale: 1.05, y: -5 }}
             whileTap={{ scale: 0.95 }}
@@ -35,7 +35,7 @@ const KanaCard = React.memo(({ char, isPressed, onClick }: { char: KanaChar, isP
             {/* Main Character */}
             <div className={clsx(
                 "text-4xl md:text-5xl font-medium transition-colors",
-                isPressed ? "text-white" : "text-gray-800"
+                isPressed ? "text-white" : "text-gray-800 dark:text-gray-400"
             )}>
                 {displayChar}
             </div>
@@ -44,7 +44,7 @@ const KanaCard = React.memo(({ char, isPressed, onClick }: { char: KanaChar, isP
             <div className={clsx(
                 "absolute bottom-2 left-3 text-sm font-bold opacity-0 transition-all duration-300",
                 settings.showRomaji ? "opacity-100" : "group-hover:opacity-100",
-                isPressed ? "text-blue-100" : "text-gray-300 group-hover:text-blue-400"
+                isPressed ? "text-blue-100" : "text-gray-300 dark:text-gray-600 group-hover:text-blue-400"
             )}>
                 {char.romaji}
             </div>
@@ -141,16 +141,16 @@ export default function KanaGrid() {
         <div className="w-full max-w-5xl mx-auto p-4 md:p-8">
             {/* Controls / Filter Tabs */}
             <div className="flex flex-col md:flex-row justify-center items-center mb-8 gap-4">
-                <div className="flex gap-2 p-1 bg-slate-100 rounded-full">
+                <div className="flex gap-2 p-1 bg-slate-100 dark:bg-white/5 rounded-full">
                     {(['seion', 'dakuon', 'yoon'] as const).map((type) => (
                         <button
                             key={type}
                             onClick={() => setFilterType(type)}
                             className={clsx(
-                                "px-6 py-2 rounded-full text-sm font-bold transition-all",
+                                "px-6 py-2 rounded-full text-sm font-bold transition-all relative",
                                 filterType === type
-                                    ? "bg-slate-900 text-white shadow-md"
-                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                                    ? "bg-white dark:bg-white/5 text-slate-700 dark:text-gray-400 shadow-sm rainbow-highlight"
+                                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10"
                             )}
                         >
                             {type === 'seion' ? '清音' : type === 'dakuon' ? '濁音/半濁音' : '拗音'}
@@ -161,7 +161,7 @@ export default function KanaGrid() {
                 {/* Game Button moved here */}
                 <button
                     onClick={() => setIsGameOpen(true)}
-                    className="px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+                    className="px-6 py-2 bg-white dark:bg-white/5 text-slate-700 dark:text-gray-400 rounded-full font-bold shadow-sm rainbow-highlight hover:shadow-md hover:scale-105 transition-all flex items-center gap-2"
                 >
                     <Gamepad2 className="w-4 h-4" />
                     <span>练习模式</span>

@@ -28,7 +28,7 @@ export function MobileHeader() {
 
             <div className="ml-3 flex items-center gap-2">
                 <img src="/logo.png" alt="Logo" className="w-6 h-6 object-contain" />
-                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                <span className="font-bold text-slate-500">
                     {appMode === 'reader' ? 'Reader' : 'Kana'}
                 </span>
             </div>

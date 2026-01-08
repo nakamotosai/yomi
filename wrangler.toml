@@ -7,6 +7,12 @@ command = "npm run build"
 [site]
 bucket = ".next/static"
 
+# Cloudflare D1 数据库绑定
+[[d1_databases]]
+binding = "DB"
+database_name = "yomi-db"
+database_id = "YOUR_DATABASE_ID_HERE"
+
 # Cloudflare Pages specific settings
 # Note: When using GitHub integration, most settings are auto-detected
 # This file is primarily for local wrangler development/testing

@@ -4,7 +4,8 @@ import React from 'react';
 import clsx from 'clsx';
 import { WordToken, PartOfSpeech } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { COLOR_THEMES } from '@/lib/colorThemes';
+import { COLOR_THEMES, POS_GLOW_COLORS } from '@/lib/colorThemes';
+import { ttsManager } from '@/lib/tts/manager';
 import PitchAccent from './PitchAccent';
 
 interface WordTokenProps {
@@ -25,10 +26,10 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     // 标点符号特殊渲染 - 无背景，无假名
     // 获取字体大小
     const fontSizeClasses = {
-        'small': { main: 'text-base', furigana: 'text-[9px]', furiganaHeight: 'h-3' },
-        'medium': { main: 'text-lg', furigana: 'text-[10px]', furiganaHeight: 'h-4' },
-        'large': { main: 'text-xl', furigana: 'text-[12px]', furiganaHeight: 'h-5' }
-    }[settings.fontSize] || { main: 'text-lg', furigana: 'text-[10px]', furiganaHeight: 'h-4' };
+        'small': { main: 'text-sm', furigana: 'text-[9px]', furiganaHeight: 'h-3' },
+        'medium': { main: 'text-base', furigana: 'text-[10px]', furiganaHeight: 'h-4' },
+        'large': { main: 'text-lg', furigana: 'text-[12px]', furiganaHeight: 'h-5' }
+    }[settings.fontSize] || { main: 'text-base', furigana: 'text-[10px]', furiganaHeight: 'h-4' };
 
     if (isPunctuation) {
         return (
@@ -40,7 +41,7 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
                 <div className={fontSizeClasses.furiganaHeight}></div>
 
                 {/* 标点符号本体 - 无背景，纯文字 */}
-                <div className={clsx("px-0 py-0.5 font-medium text-gray-600 dark:text-gray-400", fontSizeClasses.main)}>
+                <div className={clsx("px-0 py-0.5 font-medium text-[var(--text-muted)]", fontSizeClasses.main)}>
                     {token.surface}
                 </div>
             </div>
@@ -58,12 +59,13 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     const bgClass = isColorEnabled ? themeColors.bg : 'bg-transparent';
 
     // 文字颜色：始终使用主题颜色（即使背景透明）
-    const textClass = themeColors.text;
+    const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-muted)]';
 
     // Logic: Show Furigana?
+    const isEnglish = /^[a-zA-Z0-9\s.,!?'"()-]+$/.test(token.surface);
     const hasFurigana = token.reading && token.reading.length > 0;
     const shouldHideDueToCommon = settings.hideCommonFurigana && token.isCommon;
-    const shouldShowFurigana = settings.showFurigana && hasFurigana && !shouldHideDueToCommon;
+    const shouldShowFurigana = settings.showFurigana && hasFurigana && !shouldHideDueToCommon && !isEnglish;
 
     // Logic: Hide Particle for cloze practice?
     const isParticle = token.pos === PartOfSpeech.PARTICLE;
@@ -78,11 +80,18 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
             onClick={(e) => {
                 e.stopPropagation();
                 onSelect(token);
+
+                // Auto-read on click if enabled
+                if (settings.autoReadOnClick) {
+                    ttsManager.speak(token.surface, settings);
+                }
             }}
         >
             {/* Pitch Accent Visualization */}
             {settings.showPitchAccent && token.pitch && token.pitch.length > 0 && !isHiddenParticle && (
-                <PitchAccent pattern={token.pitch} />
+                <span style={{ color: '#AA5555' }}>
+                    <PitchAccent pattern={token.pitch} />
+                </span>
             )}
 
             {/* Furigana (Ruby text) - 使用对应词性颜色 */}
@@ -111,12 +120,16 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
                                 "bg-transparent"
                             )
                             : clsx(bgClass, textClass),
-                    isSelected
-                        ? "ring-2 ring-offset-1 ring-blue-400"
-                        : isSpeaking && settings.karaokeMode
-                            ? "bg-amber-100 ring-2 ring-offset-1 ring-amber-400 dark:bg-amber-900/50 dark:ring-amber-500"
-                            : "hover:brightness-95"
+                    !isSelected && !isSpeaking && "hover:brightness-95",
+                    isSpeaking && settings.karaokeMode && "scale-110 z-10"
                 )}
+                style={{
+                    boxShadow: isSelected
+                        ? `0 0 12px 4px ${POS_GLOW_COLORS[token.pos]}66, 0 0 4px 2px ${POS_GLOW_COLORS[token.pos]}44`
+                        : isSpeaking && settings.karaokeMode
+                            ? `0 0 18px 8px ${POS_GLOW_COLORS[token.pos]}55, 0 0 8px 4px ${POS_GLOW_COLORS[token.pos]}40`
+                            : undefined
+                }}
             >
                 {token.surface}
             </div>

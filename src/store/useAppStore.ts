@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AppSettings, WordToken, PartOfSpeech } from '@/types';
+import { GrammarEntry } from '@/types/grammar';
 
 const DEFAULT_SETTINGS: AppSettings = {
     showFurigana: true,
@@ -22,6 +23,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     activeColorPOS: [PartOfSpeech.VERB, PartOfSpeech.ADJECTIVE, PartOfSpeech.PARTICLE, PartOfSpeech.AUXILIARY, PartOfSpeech.ADVERB, PartOfSpeech.NOUN], // Default: Include nouns for full color
     colorTheme: 'google_dark',
     showTranslation: true,
+    autoReadOnClick: true,
 
     // Kana Instrument Defaults
     showRomaji: false,
@@ -32,6 +34,8 @@ interface AppState {
     // Content
     appMode: 'reader' | 'kana';
     setAppMode: (mode: 'reader' | 'kana') => void;
+    centerViewMode: 'reader' | 'vocab' | 'grammar';
+    setCenterViewMode: (mode: 'reader' | 'vocab' | 'grammar') => void;
     inputText: string;
     setInputText: (text: string) => void;
 
@@ -48,17 +52,24 @@ interface AppState {
     selectedToken: WordToken | null;
     setSelectedToken: (token: WordToken | null) => void;
     history: WordToken[]; // Word click history
+    clearHistory: () => void; // Clear history action
+
+    // Grammar selection
+    selectedGrammar: GrammarEntry | null;
+    setSelectedGrammar: (grammar: GrammarEntry | null) => void;
 
     // Layout
     layout: {
         leftSidebarWidth: number;
         rightSidebarWidth: number;
+        leftTopHeight: number; // Height of the top card (Logo + 機能) in left sidebar
         leftInputHeight: number; // Height of the bottom input area in left sidebar
         rightBottomHeight: number; // Height of the bottom panel (History) in right sidebar
     };
     setLayout: (layout: {
         leftSidebarWidth: number;
         rightSidebarWidth: number;
+        leftTopHeight: number;
         leftInputHeight: number;
         rightBottomHeight: number;
     }) => void;
@@ -108,7 +119,9 @@ export const useAppStore = create<AppState>()(
         (set) => ({
             appMode: 'reader', // 'reader' | 'kana'
             setAppMode: (mode) => set({ appMode: mode }),
-            inputText: '私は日本語を勉強しています。この文章を分析して、単語ごとに分解してください。',
+            centerViewMode: 'reader', // 'reader' | 'vocab' | 'grammar'
+            setCenterViewMode: (mode) => set({ centerViewMode: mode }),
+            inputText: '',
             setInputText: (text) => set({ inputText: text }),
 
             isAnalyzing: false,
@@ -121,21 +134,22 @@ export const useAppStore = create<AppState>()(
             })),
 
             toggleSetting: (key) => set((state) => ({
-                settings: {
-                    ...state.settings,
-                    [key]: typeof state.settings[key] === 'boolean'
-                        ? !state.settings[key]
-                        : state.settings[key]
-                }
+                settings: { ...state.settings, [key]: !state.settings[key] }
             })),
 
             selectedToken: null,
             history: [],
+            clearHistory: () => set({ history: [] }),
             setSelectedToken: (token) => set((state) => {
                 if (!token) return { selectedToken: null };
 
-                // Add to history (prepend, unique, limit 50)
-                const newHistory = [token, ...state.history.filter(t => t.id !== token.id)].slice(0, 50);
+                // Deduplicate: Compare surface, reading, and pos
+                const filteredHistory = state.history.filter(t =>
+                    !(t.surface === token.surface && t.reading === token.reading && t.pos === token.pos)
+                );
+
+                // Add to front (max 100 items for sanity)
+                const newHistory = [token, ...filteredHistory].slice(0, 100);
 
                 return {
                     selectedToken: token,
@@ -143,10 +157,14 @@ export const useAppStore = create<AppState>()(
                 };
             }),
 
+            selectedGrammar: null,
+            setSelectedGrammar: (grammar) => set({ selectedGrammar: grammar, selectedToken: null }),
+
             layout: {
                 leftSidebarWidth: 360, // ~25% of 1440px
                 rightSidebarWidth: 360, // ~25% of 1440px
-                leftInputHeight: 240, // symmetrical height
+                leftTopHeight: 200, // Height of top card
+                leftInputHeight: 180, // Height of input card
                 rightBottomHeight: 240, // symmetrical height
             },
             setLayout: (layout) => set({ layout }),
@@ -206,7 +224,7 @@ export const useAppStore = create<AppState>()(
                 isSpeaking: false,
                 isPaused: false,
                 speakingTokenId: null,
-                // Optional: clear playlist or keep it? Keeping it allows re-play.
+                currentSentenceIndex: 0, // Reset to beginning
             }),
 
             isMobileDrawerOpen: false,

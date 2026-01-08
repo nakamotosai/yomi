@@ -81,33 +81,43 @@ export default function GlobalAudioPlayer() {
                 console.error('[GlobalPlayer] Playback error:', err);
                 stopTTS();
             },
-            onBoundary: (charIndex) => {
+            onBoundary: (charIndex, _charLength, boundaryIndex) => {
                 // Ignore invalid boundary
-                if (charIndex === -1) {
+                if (charIndex === -1 || boundaryIndex === undefined || boundaryIndex === -1) {
                     setSpeakingTokenId(null);
                     return;
                 }
 
-                // Map charIndex (relative to sentence text) to Token ID
                 const map = currentSentence.tokenMap;
 
-                // Debug log for boundary
-                // console.log(`[GlobalPlayer] Boundary: ${charIndex} (Map size: ${map.length})`);
+                // Strategy 1: Use boundaryIndex to match token by sequence order
+                // This works when TTS word count roughly matches our token count
+                if (boundaryIndex < map.length) {
+                    setSpeakingTokenId(map[boundaryIndex].id);
+                    return;
+                }
 
-                // Find token that covers this charIndex
-                // Note: EdgeTTS boundary is "start of word".
-                // We find the token where (start <= charIndex < end)
-                // Or closest match.
-
-                const match = map.find(t => charIndex >= t.start && charIndex < t.end);
+                // Strategy 2: Fallback to charIndex matching for longer sentences
+                // where TTS may have different word segmentation
+                let match = map.find(t => charIndex >= t.start && charIndex < t.end);
 
                 if (match) {
                     setSpeakingTokenId(match.id);
                 } else {
-                    // Fallback: finding nearest start
-                    const startMatch = map.find(t => t.start === charIndex);
-                    if (startMatch) {
-                        setSpeakingTokenId(startMatch.id);
+                    // Fallback: find the closest token
+                    let closest = null;
+                    let minDist = Infinity;
+                    for (const t of map) {
+                        const distStart = Math.abs(t.start - charIndex);
+                        const distEnd = Math.abs(t.end - charIndex);
+                        const dist = Math.min(distStart, distEnd);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closest = t;
+                        }
+                    }
+                    if (closest && minDist <= 15) {
+                        setSpeakingTokenId(closest.id);
                     }
                 }
             }

@@ -112,3 +112,19 @@ export const COLOR_THEMES: Record<ThemeId, ColorScheme> = {
     standard: STANDARD_THEME,
     google_dark: GOOGLE_DARK_THEME,
 };
+
+// Glow colors for selection highlight (extracted from theme colors)
+export const POS_GLOW_COLORS: Record<PartOfSpeech, string> = {
+    [PartOfSpeech.NOUN]: '#498B74',          // 青灰绿
+    [PartOfSpeech.VERB]: '#C8733A',          // 橘红
+    [PartOfSpeech.ADJECTIVE]: '#B8956B',     // 暖棕
+    [PartOfSpeech.PARTICLE]: '#9B8AA5',      // 藤紫
+    [PartOfSpeech.AUXILIARY]: '#C8733A',     // 橘红
+    [PartOfSpeech.ADVERB]: '#B8956B',        // 暖棕
+    [PartOfSpeech.CONJUNCTION]: '#9B8AA5',   // 藤紫
+    [PartOfSpeech.INTERJECTION]: '#C8733A',  // 橘红
+    [PartOfSpeech.PREFIX]: '#498B74',        // 青灰绿
+    [PartOfSpeech.SUFFIX]: '#498B74',        // 青灰绿
+    [PartOfSpeech.SYMBOL]: '#8A8A7A',        // 灰色
+    [PartOfSpeech.OTHER]: '#7A7060',         // 奶油灰
+};

@@ -74,16 +74,17 @@ export default function ResizableLayout({ leftContent, centerContent, rightConte
             {/* Left Column */}
             <div
                 style={{ width: leftWidth }}
-                className="flex-shrink-0 flex flex-col bg-[var(--bg-elevated)] border-r border-[var(--border-default)] relative"
+                className="flex-shrink-0 flex flex-col relative"
             >
                 {leftContent}
 
                 {/* Drag Handle - Right Edge of Left Col */}
                 <div
-                    className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--text-secondary)] z-50 transition-colors opacity-0 hover:opacity-100 group-hover:opacity-100"
+                    className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-50 flex items-center justify-center group/handle -mr-2"
                     onMouseDown={() => setIsDraggingLeft(true)}
-                    style={{ right: '-2px' }} // Center on border
-                />
+                >
+                    <div className="w-1 h-16 rounded-full bg-[var(--border-default)] opacity-0 group-hover/handle:opacity-100 transition-opacity" />
+                </div>
             </div>
 
             {/* Center Column */}
@@ -94,14 +95,15 @@ export default function ResizableLayout({ leftContent, centerContent, rightConte
             {/* Right Column */}
             <div
                 style={{ width: rightWidth }}
-                className="flex-shrink-0 flex flex-col bg-[var(--bg-elevated)] border-l border-[var(--border-default)] relative"
+                className="flex-shrink-0 flex flex-col relative"
             >
                 {/* Drag Handle - Left Edge of Right Col */}
                 <div
-                    className="absolute top-0 left-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--text-secondary)] z-50 transition-colors opacity-0 hover:opacity-100 group-hover:opacity-100"
+                    className="absolute top-0 -left-0.5 bottom-0 w-4 cursor-col-resize z-50 flex items-center justify-center group/handle -ml-2"
                     onMouseDown={() => setIsDraggingRight(true)}
-                    style={{ left: '-2px' }} // Center on border
-                />
+                >
+                    <div className="w-1 h-16 rounded-full bg-[var(--border-default)] opacity-0 group-hover/handle:opacity-100 transition-opacity" />
+                </div>
 
                 {rightContent}
             </div>

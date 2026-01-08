@@ -20,7 +20,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [translations, setTranslations] = useState<Map<string, string>>(new Map());
-    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist } = useAppStore();
+    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist, isDark, playlist } = useAppStore();
 
     // Track if we initiated the TTS to avoid double-triggering
     const ttsInitiatedRef = useRef(false);
@@ -133,6 +133,12 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                         const len = t.surface.length;
                         map.push({ start, end: start + len, id: t.id });
                         cursor = start + len;
+                    } else {
+                        // Fallback: use cursor position even if exact match not found
+                        // This handles cases where tokenization differs from original text
+                        const len = t.surface.length;
+                        map.push({ start: cursor, end: cursor + len, id: t.id });
+                        cursor += len;
                     }
                 });
 
@@ -234,55 +240,110 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     return (
                         <div
                             key={sentence.id}
-                            className="rounded-xl shadow-sm p-4 relative transition-shadow glass-card"
+                            className="rounded-xl shadow-sm relative transition-shadow glass-card overflow-hidden"
                             style={{
-                                background: 'var(--glass-bg)',
+                                background: 'var(--bg-elevated)',
                                 border: '1px solid var(--border-default)',
                                 boxShadow: 'var(--shadow-sm)'
                             }}
                         >
-                            {/* Sentence number */}
+                            {/* Zone 1: Reading Area */}
+                            <div className="p-5 relative">
+                                {/* Sentence number (Watermark style) */}
+                                <div
+                                    className="absolute bottom-0 right-4 text-5xl font-black italic tracking-tighter leading-none select-none pointer-events-none"
+                                    style={{
+                                        color: 'var(--text-primary)',
+                                        opacity: isDark ? 0.08 : 0.04,
+                                        zIndex: 0
+                                    }}
+                                >
+                                    {sentenceIndex + 1}
+                                </div>
+
+                                {/* Interlinear tokens */}
+                                <div className={clsx(
+                                    "flex flex-wrap items-end relative z-10",
+                                    settings.showPitchAccent ? "gap-y-4" : "gap-y-1"
+                                )}>
+                                    {filteredTokens.map((token) => (
+                                        <WordTokenComponent
+                                            key={token.id}
+                                            token={token}
+                                            onSelect={(t) => handleTokenSelect(t, sentence.original)}
+                                            isSelected={selectedToken?.id === token.id}
+                                            isSpeaking={speakingTokenId === token.id}
+                                        />
+                                    ))}
+                                    {/* Single sentence play button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Toggle logic
+                                            if (isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id) {
+                                                setIsSpeaking(false);
+                                                return;
+                                            }
+
+                                            // Build playlist for just this sentence
+                                            let cursor = 0;
+                                            const map: { start: number, end: number, id: string }[] = [];
+                                            sentence.tokens.forEach(t => {
+                                                const start = sentence.original.indexOf(t.surface, cursor);
+                                                if (start !== -1) {
+                                                    const len = t.surface.length;
+                                                    map.push({ start, end: start + len, id: t.id });
+                                                    cursor = start + len;
+                                                }
+                                            });
+                                            const singlePlaylist = [{
+                                                id: sentence.id,
+                                                text: sentence.original,
+                                                tokenMap: map
+                                            }];
+                                            // Use playPlaylist from store
+                                            useAppStore.getState().setPlaylist(singlePlaylist);
+                                            useAppStore.getState().setIsSpeaking(true);
+                                        }}
+                                        className={clsx(
+                                            "ml-2 w-7 h-7 flex items-center justify-center rounded-full transition-all self-end mb-1",
+                                            isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id
+                                                ? "bg-emerald-100 text-emerald-600 scale-110 shadow-sm"
+                                                : "text-slate-300 hover:text-emerald-600 hover:bg-emerald-50"
+                                        )}
+                                        title="この文を再生"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            {isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id ? (
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                            ) : (
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                            )}
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Zone 2: Learning Panel */}
                             <div
-                                className="absolute -left-3 top-4 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-lg shadow-sm"
-                                style={{
-                                    background: 'var(--bg-muted)',
-                                    color: 'var(--text-muted)',
-                                    border: '1px solid var(--border-default)',
-                                    backdropFilter: 'blur(4px)'
-                                }}
+                                className="px-5 py-4 border-t border-[var(--border-muted)] bg-gray-50/50 dark:bg-black/20"
                             >
-                                {sentenceIndex + 1}
+                                <div className="space-y-4">
+                                    {/* Translation */}
+                                    {settings.showTranslation !== false && (
+                                        <TranslationTip
+                                            original={sentence.original}
+                                            translation={translations.get(sentence.id)}
+                                        />
+                                    )}
+
+                                    {/* Vocabulary */}
+                                    <VocabTip tokens={sentence.tokens} />
+
+                                    {/* Grammar */}
+                                    <GrammarTip sentence={sentence.original} />
+                                </div>
                             </div>
-
-                            {/* 1. Interlinear tokens */}
-                            <div className={clsx(
-                                "flex flex-wrap items-end",
-                                settings.showPitchAccent ? "gap-y-4" : "gap-y-1"
-                            )}>
-                                {filteredTokens.map((token) => (
-                                    <WordTokenComponent
-                                        key={token.id}
-                                        token={token}
-                                        onSelect={(t) => handleTokenSelect(t, sentence.original)}
-                                        isSelected={selectedToken?.id === token.id}
-                                        isSpeaking={speakingTokenId === token.id}
-                                    />
-                                ))}
-                            </div>
-
-                            {/* 2. Translation tip (collapsible) */}
-                            {settings.showTranslation !== false && (
-                                <TranslationTip
-                                    original={sentence.original}
-                                    translation={translations.get(sentence.id)}
-                                />
-                            )}
-
-                            {/* 4. Vocabulary tips */}
-                            <VocabTip tokens={sentence.tokens} />
-
-                            {/* 5. Grammar tips */}
-                            <GrammarTip sentence={sentence.original} />
                         </div>
                     );
                 })}

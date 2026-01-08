@@ -6,20 +6,22 @@
    ======================================== */
 
 :root {
-  /* 基础背景层级 - 极简霜白风格 */
-  --bg-base: #f1f5f9;
-  /* Slate-50 for contrast with white cards */
+  /* 基础背景层级 - 暖白风格 */
+  --bg-base: #faf9f6;
+  /* Warm White (Off White) */
   --bg-elevated: rgba(255, 255, 255, 0.85);
-  /* Frost White */
-  --bg-muted: rgba(241, 245, 249, 0.6);
-  /* Slate-100 equivalent */
-  --bg-subtle: rgba(226, 232, 240, 0.6);
-  /* Slate-200 equivalent */
+  /* Pure White for cards */
+  --bg-muted: rgba(250, 249, 246, 0.6);
+  /* Transparent Warm White */
+  --bg-subtle: rgba(245, 245, 244, 0.6);
+  /* Stone-100 equivalent (Warm Gray) */
 
   /* 文字颜色层级 - 深岩灰 */
   --text-primary: #334155;
   /* Slate-700 */
   --text-secondary: #475569;
+  /* Slate-600 */
+  --text-muted: #64748b;
   /* Slate-600 */
   --text-muted: #64748b;
   /* Slate-500 */
@@ -30,6 +32,11 @@
   --border-default: rgba(148, 163, 184, 0.2);
   /* Subtle Slate border */
   --border-muted: rgba(148, 163, 184, 0.1);
+
+  /* Scrollbar - Warm Beige (Matches bg-base tone) */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #E5E0D8 !important;
+  --scrollbar-thumb-hover: #D1C7B7 !important;
 
   /* 交互状态 */
   --hover-bg: rgba(0, 0, 0, 0.03);
@@ -212,10 +219,9 @@
 
 /* 彩虹光晕效果 - 增强版 */
 [data-theme="dark"] {
-  --rainbow-glow: 0 0 8px rgba(251, 191, 36, 0.25),
-    0 0 16px rgba(236, 72, 153, 0.2),
-    0 0 24px rgba(99, 102, 241, 0.15),
-    0 0 32px rgba(34, 197, 94, 0.1);
+  --rainbow-glow: 0 0 5px rgba(251, 191, 36, 0.4),
+    0 0 10px rgba(236, 72, 153, 0.3),
+    0 0 15px rgba(99, 102, 241, 0.2);
 }
 
 /* ========================================
@@ -259,17 +265,26 @@ ruby rt {
    毛玻璃卡片效果
    ======================================== */
 .glass-card {
+  position: relative;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
   border-radius: 16px;
+  overflow: hidden;
+  /* 裁剪 backdrop-filter 虚化效果 */
+  filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.04));
 }
 
 .glass-panel {
+  position: relative;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
+  overflow: hidden;
+  /* 裁剪 backdrop-filter 虚化效果 */
+  /* drop-shadow 应用在完整可见区域，不受 overflow 影响 */
+  filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.04));
 }
 
 /* ========================================
@@ -277,10 +292,11 @@ ruby rt {
    ======================================== */
 [data-theme="dark"] .rainbow-highlight {
   position: relative;
-  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
   border: none;
-  border-radius: 12px;
-  box-shadow: var(--rainbow-glow);
+  box-shadow:
+    var(--rainbow-glow),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
 }
 
 [data-theme="dark"] .rainbow-highlight::before {
@@ -299,6 +315,24 @@ ruby rt {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+  z-index: 10;
+}
+
+/* 纯彩虹边框（无背景渐变和光晕），用于输入框等 */
+[data-theme="dark"] .rainbow-border-only {
+  position: relative;
+  background: #0f0f17;
+  border: none;
+}
+
+[data-theme="dark"] .rainbow-border-only::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  /* 外圆角 = 内圆角(16px) + 边框宽度(1px) = 17px */
+  border-radius: 17px;
+  background: var(--rainbow-border);
+  z-index: -1;
 }
 
 /* ========================================
@@ -330,8 +364,8 @@ ruby rt {
    滚动条
    ======================================== */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -340,12 +374,17 @@ ruby rt {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 4px;
+  background: transparent;
+  border-radius: 10px;
+}
+
+/* Scroll active state (managed by ScrollManager) */
+.scroll-active::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb) !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: var(--scrollbar-thumb-hover) !important;
 }
 
 /* ========================================
@@ -446,4 +485,51 @@ ruby rt {
 
 [data-theme="dark"] .shadow-lg {
   box-shadow: var(--shadow-lg);
+}
+
+/* ========================================
+   悬浮自动隐藏滚动条
+   ======================================== */
+.floating-scrollbar {
+  overflow-y: auto;
+  overflow-y: overlay;
+}
+
+.floating-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  background: transparent;
+}
+
+.floating-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 12px;
+  /* Make it shorter */
+  border-radius: 10px;
+}
+
+.floating-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 10px;
+  transition: background-color 0.5s ease-in-out;
+}
+
+/* 状态控制显示 (JS Driven) */
+.floating-scrollbar[data-visible="true"]::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb) !important;
+  /* Use variable */
+}
+
+/* 滚动条悬停加深 (Active) */
+.floating-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover) !important;
+}
+
+/* 深色模式适配 */
+[data-theme="dark"] .floating-scrollbar[data-visible="true"]::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  /* Keep white for dark mode or use variable? */
+}
+
+[data-theme="dark"] .floating-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3) !important;
 }

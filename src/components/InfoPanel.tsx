@@ -3,8 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Volume2, Star, ArrowRight, BookOpen } from 'lucide-react';
 import { WordToken, DictionaryEntry, PartOfSpeech } from '@/types';
+import { GrammarEntry } from '@/types/grammar';
 import { useAppStore } from '@/store/useAppStore';
 import { useVocabStore } from '@/store/useVocabStore';
+import { useGrammarStore } from '@/store/useGrammarStore';
 import { getDeinflectedForm } from '@/lib/nlp/analyzer';
 import { ttsManager } from '@/lib/tts/manager';
 import { COLOR_THEMES } from '@/lib/colorThemes';
@@ -74,8 +76,136 @@ const translatePOS = (pos: string[], lang: 'en' | 'jp' | 'zh'): string[] => {
     });
 };
 
+// 渲染语法详情
+function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: ReturnType<typeof useAppStore>['settings'] }) {
+    const isDark = settings.theme === 'dark';
+    const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
+    const isSaved = isGrammarSaved(grammar.id);
+
+    const handleSpeak = (text: string) => {
+        ttsManager.speak(text, settings, {
+            onStart: () => { },
+            onEnd: () => { }
+        });
+    };
+
+    const handleSaveGrammar = () => {
+        if (isSaved) {
+            removeGrammar(grammar.id);
+        } else {
+            addGrammar(grammar);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full" style={{ background: 'var(--bg-elevated)' }}>
+            {/* Header */}
+            <div className="p-4" style={{ borderBottom: '1px solid var(--border-default)' }}>
+                <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0 pr-4">
+                        <h2 className="text-2xl font-black tracking-tight leading-none break-words" style={{ color: '#5F7387' }}>
+                            {grammar.title}
+                        </h2>
+                        {grammar.reading && (
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-sm font-medium text-[var(--text-muted)]">
+                                    {grammar.reading}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex flex-col items-end gap-3 shrink-0">
+                        {/* Actions */}
+                        <div className="flex gap-1">
+                            <button
+                                onClick={handleSaveGrammar}
+                                className={clsx(
+                                    "flex items-center justify-center w-7 h-7 rounded-md transition-all border",
+                                    isSaved
+                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                        : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)] hover:border-amber-500 hover:text-amber-500 shadow-sm"
+                                )}
+                                title={isSaved ? "取消收藏" : "收藏"}
+                            >
+                                <Star className={clsx("w-3.5 h-3.5", isSaved && "fill-current")} />
+                            </button>
+                        </div>
+                        <span className={clsx(
+                            "px-2 py-1 rounded-md text-sm font-bold tracking-wider border text-center min-w-[3em]",
+                            "bg-white/85 text-slate-500 border-slate-200/50",
+                            "dark:bg-black/20 dark:text-gray-400 dark:border-white/10"
+                        )}>
+                            文法
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar space-y-4">
+                {/* Meaning */}
+                {grammar.meaning && (
+                    <div>
+                        <div className="text-xs font-bold text-[var(--text-muted)] mb-1 uppercase tracking-wider">意味</div>
+                        <div className="text-base text-[var(--text-primary)] leading-relaxed">
+                            {grammar.meaning}
+                        </div>
+                    </div>
+                )}
+
+                {/* Example */}
+                {grammar.example && (
+                    <div>
+                        <div className="text-xs font-bold text-[var(--text-muted)] mb-1 uppercase tracking-wider">例文</div>
+                        <div className="flex items-start gap-2 p-3 rounded-lg" style={{
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                            border: '1px solid var(--border-default)'
+                        }}>
+                            <div className="flex-1 text-base text-[var(--text-primary)] leading-relaxed">
+                                {grammar.example}
+                            </div>
+                            <button
+                                onClick={() => handleSpeak(grammar.example)}
+                                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-[#5F7387] hover:bg-[#5F7387]/10 transition-colors"
+                                title="朗读例句"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Category */}
+                {grammar.category && (
+                    <div>
+                        <div className="text-xs font-bold text-[var(--text-muted)] mb-1 uppercase tracking-wider">出典</div>
+                        <div className="text-sm text-[var(--text-secondary)]">
+                            {grammar.category}
+                        </div>
+                    </div>
+                )}
+
+                {/* URL Link */}
+                {grammar.url && (
+                    <a
+                        href={grammar.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-[#5F7387] hover:underline"
+                    >
+                        <ArrowRight className="w-3 h-3" />
+                        詳細を見る
+                    </a>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function InfoPanel() {
-    const { selectedToken: token, currentSentence, settings } = useAppStore(); // Get token from store
+    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings } = useAppStore();
     const isDark = settings.theme === 'dark';
     const { addVocab, isWordSaved, removeVocab, vocabList } = useVocabStore();
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -191,6 +321,11 @@ export default function InfoPanel() {
         };
     }, [token, dictLang, fetchJishoDictionary, fetchYomitanDictionary]);
 
+    // 如果选中了语法，显示语法面板
+    if (grammar && !token) {
+        return <GrammarPanel grammar={grammar} settings={settings} />;
+    }
+
     if (!token) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-8" style={{ color: 'var(--text-faint)' }}>
@@ -205,7 +340,10 @@ export default function InfoPanel() {
 
     const baseForm = getDeinflectedForm(token);
     const isInflected = baseForm !== token.surface;
-    const isSaved = isWordSaved(token.surface, token.reading);
+
+    // Use effective reading (fallback to surface if empty) for consistent matching
+    const effectiveReading = token.reading || token.surface;
+    const isSaved = isWordSaved(token.surface, effectiveReading);
 
     // 获取当前词性的颜色配置
     const activeTheme = COLOR_THEMES[settings.colorTheme || 'standard'];
@@ -225,7 +363,8 @@ export default function InfoPanel() {
 
     const handleSaveVocab = () => {
         if (isSaved) {
-            const item = vocabList.find(v => v.word === token.surface && v.reading === token.reading);
+            // Find matched item using effective reading
+            const item = vocabList.find(v => v.word === token.surface && v.reading === effectiveReading);
             if (item) removeVocab(item.id);
         } else {
             let meaning = '(意味が見つかりませんでした)';
@@ -237,7 +376,7 @@ export default function InfoPanel() {
 
             addVocab({
                 word: token.surface,
-                reading: token.reading || token.surface,
+                reading: effectiveReading,
                 baseForm,
                 meaning,
                 pos: token.pos,
@@ -334,9 +473,10 @@ export default function InfoPanel() {
         const definitionCount = parsedLines.filter(p => p.type === 'definition').length;
         let defIndex = 0;
 
-        // 颜色常量（与 PitchAccent 一致）
-        // Updated to Blue to match theme
-        const ACCENT_COLOR = '#60a5fa';
+        // Resolve theme colors (Dynamic based on POS)
+        const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
+        const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
+        const accentTextClass = themeColors.text;
 
         // 渲染例句文本（内联高亮）
         const renderExampleWithHighlight = (text: string) => {
@@ -346,7 +486,7 @@ export default function InfoPanel() {
                 <React.Fragment key={i}>
                     {part}
                     {i < parts.length - 1 && (
-                        <span style={{ color: ACCENT_COLOR, fontWeight: 'bold', margin: '0 2px' }}>{baseForm}</span>
+                        <span className={clsx(accentTextClass, "font-bold")} style={{ margin: '0 2px' }}>{baseForm}</span>
                     )}
                 </React.Fragment>
             ));
@@ -381,7 +521,7 @@ export default function InfoPanel() {
                     borderRadius: '50%',
                     border: 'none',
                     backgroundColor: speakingLineIndex === lineIndex ? '#e0e7ff' : 'transparent',
-                    color: speakingLineIndex === lineIndex ? '#4f46e5' : '#9ca3af',
+                    color: speakingLineIndex === lineIndex ? '#437e6f' : '#9ca3af',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginLeft: '4px'
@@ -403,7 +543,7 @@ export default function InfoPanel() {
                             <div key={i} className="flex gap-3 mb-3">
                                 {/* 编号（多释义时显示）*/}
                                 {definitionCount > 1 && (
-                                    <span className="shrink-0 font-bold text-sm mt-[2px] font-mono select-none" style={{ color: 'var(--text-faint)' }}>
+                                    <span className={clsx("shrink-0 font-bold text-base mt-[2px] font-mono select-none", accentTextClass)}>
                                         {defIndex}.
                                     </span>
                                 )}
@@ -411,16 +551,16 @@ export default function InfoPanel() {
                                     {/* 中文翻译（在上，大/粗）*/}
                                     {item.translation ? (
                                         <>
-                                            <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                                            <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                                                 {item.translation}
                                             </div>
-                                            <div style={{ fontSize: '13px', fontWeight: 'normal', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.85, display: 'flex', alignItems: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: 'normal', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.85, display: 'flex', alignItems: 'center' }}>
                                                 <span>{item.primary}</span>
                                                 <PlayButton text={item.primary} lineIndex={i} />
                                             </div>
                                         </>
                                     ) : (
-                                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)', lineHeight: 1.4, display: 'flex', alignItems: 'center' }}>
+                                        <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-muted)', lineHeight: 1.4, display: 'flex', alignItems: 'center' }}>
                                             <span>{item.primary}</span>
                                             <PlayButton text={item.primary} lineIndex={i} />
                                         </div>
@@ -434,30 +574,22 @@ export default function InfoPanel() {
                         return (
                             <div key={i} style={{ marginLeft: definitionCount > 1 ? '24px' : '0', marginTop: '8px', marginBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                                 {/* 立体阴影白色毛玻璃胶囊 */}
-                                <span style={{
-                                    fontSize: '10px',
-                                    fontWeight: 600,
-                                    color: '#64748b',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    border: '1px solid rgba(148, 163, 184, 0.25)',
-                                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
-                                    backdropFilter: 'blur(8px)',
-                                    flexShrink: 0,
-                                    marginTop: '2px'
-                                }}>
+                                <span className={clsx(
+                                    "flex items-center justify-center w-5 h-5 text-[11px] font-bold rounded-[5px] border shadow-sm backdrop-blur-md mt-[2px] shrink-0",
+                                    "bg-white/85 text-slate-500 border-slate-200/50",
+                                    "dark:bg-black/20 dark:text-gray-400 dark:border-white/10"
+                                )}>
                                     例
                                 </span>
                                 <div style={{ flex: 1 }}>
                                     {/* Japanese example with play button */}
-                                    <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.6, display: 'flex', alignItems: 'center' }}>
+                                    <div style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', alignItems: 'center' }}>
                                         <span>{renderExampleWithHighlight(item.primary)}</span>
                                         <PlayButton text={item.primary} lineIndex={i} />
                                     </div>
                                     {/* Chinese translation on new line */}
                                     {item.translation && (
-                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
+                                        <div style={{ fontSize: '16px', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
                                             {item.translation}
                                         </div>
                                     )}
@@ -468,7 +600,7 @@ export default function InfoPanel() {
 
                     if (item.type === 'reference') {
                         return (
-                            <div key={i} style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px' }}>
+                            <div key={i} style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px' }}>
                                 ⇨ {item.primary}
                                 {item.translation && <span style={{ marginLeft: '4px', color: 'var(--text-faint)' }}>({item.translation})</span>}
                             </div>
@@ -477,7 +609,7 @@ export default function InfoPanel() {
 
                     if (item.type === 'etymology') {
                         return (
-                            <div key={i} style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px', lineHeight: 1.5 }}>
+                            <div key={i} style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px', lineHeight: 1.5 }}>
                                 ᐅ {item.content}
                             </div>
                         );
@@ -486,7 +618,7 @@ export default function InfoPanel() {
                     if (item.type === 'supplement') {
                         return (
                             <div key={i} className="mt-1"
-                                style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                style={{ fontSize: '16px', fontWeight: 'normal', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                                 {item.content}
                             </div>
                         );
@@ -519,7 +651,7 @@ export default function InfoPanel() {
                                 {idx + 1}
                             </span>
                             <div className="flex-1">
-                                <p className="text-[var(--text-primary)] leading-relaxed text-sm">
+                                <p className="text-[var(--text-muted)] leading-relaxed text-base">
                                     {sense.glosses.join('; ')}
                                 </p>
                                 {sense.pos.length > 0 && (
@@ -539,72 +671,82 @@ export default function InfoPanel() {
         );
     };
 
+    // Resolve theme colors (Header)
+    const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
+    const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
+    const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
+    const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-muted)]';
+
     return (
         <div className="flex flex-col h-full" style={{ background: 'var(--bg-elevated)' }}>
             {/* Header / Word Info - Compact Version for Right Column */}
-            <div className="p-4" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-muted)' }}>
-                <div className="flex justify-between items-start">
-                    <div>
-                        {/* Pitch Accent & Word */}
+            <div className="p-4" style={{ borderBottom: '1px solid var(--border-default)' }}>
+                <div className="flex justify-between items-start gap-4">
+                    {/* Left Content: Main Word Info */}
+                    <div className="flex-1 min-w-0">
                         {/* Pitch Accent & Word */}
                         <div className="flex flex-col items-start gap-1">
                             {token.pitch && token.pitch.length > 0 && (
-                                <div className="opacity-80 scale-[0.9] origin-left h-4">
+                                <div className="opacity-80 scale-[0.9] origin-left h-4" style={{ color: '#AA5555' }}>
                                     <PitchAccent pattern={token.pitch} />
                                 </div>
                             )}
-                            <h2 className="text-3xl font-black tracking-tight leading-none text-[var(--text-primary)]">
+                            <h2 className={clsx("text-3xl font-black tracking-tight leading-none break-words w-full", textClass)}>
                                 {token.surface}
                             </h2>
                         </div>
 
-                        {/* Reading & Meta */}
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm font-medium" style={{ color: '#60a5fa' }}>
+                        {/* Reading & Meta - Allow wrapping */}
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
+                            <span className="text-sm font-medium text-[var(--text-muted)] opacity-90 leading-snug">
                                 {token.reading || token.surface}
                             </span>
-                            <span className="text-[10px] font-mono tracking-wide uppercase" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
+                            <span className="text-sm font-mono tracking-wide uppercase" style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: '11px' }}>
                                 {token.romaji}
-                            </span>
-                            {/* 使用统一的颜色系统 */}
-                            <span className={clsx(
-                                "px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider border",
-                                colorScheme.bg,
-                                colorScheme.text,
-                                colorScheme.border
-                            )}>
-                                {translatePOS([token.pos], 'zh')[0]}
                             </span>
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-1">
-                        <button
-                            onClick={handleSpeak}
-                            disabled={isSpeaking}
-                            className={clsx(
-                                "flex items-center justify-center w-7 h-7 rounded-md transition-all border",
-                                isSpeaking
-                                    ? "bg-[var(--accent-primary-light)] text-[var(--accent-primary)] border-[var(--accent-primary)]"
-                                    : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] shadow-sm"
-                            )}
-                            title="発音"
-                        >
-                            <Volume2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            onClick={handleSaveVocab}
-                            className={clsx(
-                                "flex items-center justify-center w-7 h-7 rounded-md transition-all border",
-                                isSaved
-                                    ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                    : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)] hover:border-amber-500 hover:text-amber-500 shadow-sm"
-                            )}
-                            title="保存"
-                        >
-                            <Star className={clsx("w-3.5 h-3.5", isSaved && "fill-current")} />
-                        </button>
+                    {/* Right Content: Actions & POS */}
+                    <div className="flex flex-col items-end gap-3 shrink-0">
+                        {/* Actions */}
+                        <div className="flex gap-1">
+                            <button
+                                onClick={handleSpeak}
+                                disabled={isSpeaking}
+                                className={clsx(
+                                    "flex items-center justify-center w-7 h-7 rounded-md transition-all border",
+                                    isSpeaking
+                                        ? "bg-[var(--accent-primary-light)] text-[var(--accent-primary)] border-[var(--accent-primary)]"
+                                        : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] shadow-sm"
+                                )}
+                                title="発音"
+                            >
+                                <Volume2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={handleSaveVocab}
+                                className={clsx(
+                                    "flex items-center justify-center w-7 h-7 rounded-md transition-all border",
+                                    isSaved
+                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                        : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)] hover:border-amber-500 hover:text-amber-500 shadow-sm"
+                                )}
+                                title="保存"
+                            >
+                                <Star className={clsx("w-3.5 h-3.5", isSaved && "fill-current")} />
+                            </button>
+                        </div>
+
+                        {/* POS Tag - Fixed on the right */}
+                        <span className={clsx(
+                            "px-2 py-1 rounded-md text-sm font-bold tracking-wider border text-center min-w-[3em]",
+                            colorScheme.bg,
+                            colorScheme.text,
+                            colorScheme.border
+                        )}>
+                            {translatePOS([token.pos], 'zh')[0]}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -624,7 +766,7 @@ export default function InfoPanel() {
                             };
                             useAppStore.getState().setSelectedToken(baseToken);
                         }}
-                        className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 hover:bg-amber-100 transition-colors cursor-pointer w-full mb-4 justify-center"
+                        className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-500/15 dark:text-amber-400/90 px-2 py-1 rounded border border-amber-100 dark:border-amber-500/20 hover:bg-amber-100 dark:hover:bg-amber-500/25 transition-colors cursor-pointer w-full mb-4 justify-center"
                     >
                         <ArrowRight className="w-3 h-3" />
                         <span>辞書形: <span className="font-bold">{baseForm}</span> を見る</span>
@@ -641,12 +783,7 @@ export default function InfoPanel() {
                     renderYomitanDefinitions()
                 )}
 
-                {/* Pitch Footer */}
-                {token.accentMora !== undefined && (
-                    <div className="mt-4 pt-4 border-t border-gray-50 text-[10px] text-gray-300 text-center">
-                        声调: {token.accentMora === 0 ? '平板型' : `${token.accentMora}型`}
-                    </div>
-                )}
+                {/* Pitch Footer Removed */}
             </div>
         </div>
     );

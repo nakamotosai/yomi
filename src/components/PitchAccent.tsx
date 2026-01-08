@@ -5,9 +5,10 @@ import { PitchPattern } from '@/types';
 
 interface PitchAccentProps {
     pattern: PitchPattern;
+    className?: string;
 }
 
-export default function PitchAccent({ pattern }: PitchAccentProps) {
+export default function PitchAccent({ pattern, className = '' }: PitchAccentProps) {
     if (!pattern || pattern.length === 0) return null;
 
     const width = pattern.length * 12; // 12px per mora
@@ -29,14 +30,14 @@ export default function PitchAccent({ pattern }: PitchAccentProps) {
         <svg
             width={width}
             height={height}
-            className="pointer-events-none overflow-visible"
+            className={`pointer-events-none overflow-visible ${className}`}
             viewBox={`0 0 ${width} ${height}`}
         >
             {/* Draw the pitch line */}
             <path
                 d={pathD}
                 fill="none"
-                stroke="#60a5fa"
+                stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -49,7 +50,7 @@ export default function PitchAccent({ pattern }: PitchAccentProps) {
                     cx={i * 12 + 6}
                     cy={level === 1 ? highY : lowY}
                     r="2.5"
-                    fill="#60a5fa"
+                    fill="currentColor"
                 />
             ))}
         </svg>

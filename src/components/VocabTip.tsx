@@ -3,6 +3,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { WordToken, PartOfSpeech } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
+import { useVocabStore } from '@/store/useVocabStore';
+import { ttsManager } from '@/lib/tts/manager';
+import { Star } from 'lucide-react';
+import { COLOR_THEMES } from '@/lib/colorThemes';
 import clsx from 'clsx';
 
 interface VocabTipProps {
@@ -34,34 +38,58 @@ function filterWorthyVocab(tokens: WordToken[]): WordToken[] {
         if (seen.has(token.surface)) continue;
         seen.add(token.surface);
         if (/^[ぁ-ん]+$/.test(token.surface) && token.surface.length <= 2) continue;
+
+        // 跳过纯英文/ASCII词汇（如 iPhone, SNS 等）
+        if (/^[a-zA-Z0-9\s]+$/.test(token.surface)) continue;
+
+        // 跳过数字、日期、时间相关 (e.g., 11月, 14日, 2023年, 3回, 1つ)
+        if (/^[\d０-９一二三四五六七八九十百千万億兆]+(月|日|年|回|度|つ|個|本|枚|冊|台|歳|人|時間|分|秒|円|万|億)?$/.test(token.surface)) continue;
+
+        // 跳过纯数字
+        if (/^[\d０-９]+$/.test(token.surface)) continue;
+
+        // 跳过常见的非实词或过于基础的词 (可扩展)
+        if (['今回', '前回', '今日', '明日', '昨日', '去年', '今年', '来年'].includes(token.surface)) continue;
+
         worthy.push(token);
     }
 
-    return worthy.slice(0, 5);
+    // 优先级排序：动词/形容词 > 名词 > 其他
+    worthy.sort((a, b) => {
+        const priority = (pos: PartOfSpeech) => {
+            if (pos === PartOfSpeech.VERB) return 0;
+            if (pos === PartOfSpeech.ADJECTIVE) return 1;
+            if (pos === PartOfSpeech.NOUN) return 2;
+            return 3;
+        };
+        return priority(a.pos) - priority(b.pos);
+    });
+
+    // 根据句子长度动态调整生词数量
+    const totalLength = tokens.reduce((sum, t) => sum + t.surface.length, 0);
+    let limit = 6;
+    if (totalLength < 15) limit = 2;
+    else if (totalLength < 30) limit = 3;
+    else if (totalLength < 50) limit = 4;
+
+    return worthy.slice(0, limit);
 }
 
 // 从词典定义中提取中文释义
-// 格式是: "日文释义。/中文释义" - 中文在 。/ 之后
 function extractChineseMeaning(definitions: string[]): string {
     for (const def of definitions) {
         const lines = def.split('\n');
         for (const line of lines) {
             const trimmed = line.trim();
 
-            // 跳过空行
             if (!trimmed) continue;
-            // 跳过词头行（如【見込み】）
             if (/^【.*?】$/.test(trimmed)) continue;
-            // 跳过读音行（如 "みこみ [見込み]"）
             if (/^[ぁ-んァ-ン・ー\s-]+\[/.test(trimmed)) continue;
 
-            // 查找 "。/" 格式，取后面的中文部分
             if (trimmed.includes('。/')) {
                 const parts = trimmed.split('。/');
                 if (parts.length > 1) {
-                    // 取 。/ 之后的中文部分
                     let meaning = parts.slice(1).join('。/').trim();
-                    // 去掉编号
                     meaning = meaning.replace(/^[①-⑩◯\d.、]+/, '').trim();
                     if (meaning.length > 30) meaning = meaning.slice(0, 30) + '…';
                     if (meaning.length > 0) return meaning;
@@ -69,7 +97,7 @@ function extractChineseMeaning(definitions: string[]): string {
             }
         }
     }
-    return '暂无释义';
+    return '';
 }
 
 async function fetchShortMeaning(word: string): Promise<string> {
@@ -78,8 +106,21 @@ async function fetchShortMeaning(word: string): Promise<string> {
         const data = await res.json();
 
         if (data.success && data.results.length > 0) {
-            return extractChineseMeaning(data.results[0].definitions);
+            const meaning = extractChineseMeaning(data.results[0].definitions);
+            if (meaning) return meaning;
         }
+
+        // Fallback: Google Translate
+        const translateRes = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: word, targetLang: 'zh-CN', sourceLang: 'ja' }),
+        });
+        const translateData = await translateRes.json();
+        if (translateData.translation) {
+            return translateData.translation;
+        }
+
         return '暂无释义';
     } catch {
         return '暂无释义';
@@ -88,13 +129,15 @@ async function fetchShortMeaning(word: string): Promise<string> {
 
 export default function VocabTip({ tokens }: VocabTipProps) {
     const [vocabEntries, setVocabEntries] = useState<VocabEntry[]>([]);
-    const [isExpanded, setIsExpanded] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const { setSelectedToken, setCurrentSentence, settings } = useAppStore();
-    const isDark = settings.theme === 'dark';
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [speakingWord, setSpeakingWord] = useState<string | null>(null);
+    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar, setIsMobileSheetOpen } = useAppStore();
+    const { vocabList, addVocab, removeVocab, isWordSaved } = useVocabStore();
 
     const worthyTokens = useMemo(() => filterWorthyVocab(tokens), [tokens]);
 
+    // 组件加载时获取释义
     useEffect(() => {
         let cancelled = false;
 
@@ -123,63 +166,210 @@ export default function VocabTip({ tokens }: VocabTipProps) {
         return () => { cancelled = true; };
     }, [worthyTokens]);
 
-    if (isLoading || vocabEntries.length === 0) return null;
+    // 自动选中第一个生词（当 InfoPanel 为空时）
+    useEffect(() => {
+        if (!isLoading && vocabEntries.length >= 3 && !selectedToken && !selectedGrammar) {
+            const firstEntry = vocabEntries[0];
+            if (firstEntry) {
+                const sentenceOriginal = tokens.map(t => t.surface).join('');
+                setCurrentSentence(sentenceOriginal);
+                setSelectedToken(firstEntry.token);
+            }
+        }
+    }, [isLoading, vocabEntries, selectedToken, selectedGrammar, tokens, setCurrentSentence, setSelectedToken]);
+
+    // 生词最少3个才显示
+    if (isLoading || vocabEntries.length < 3) return null;
 
     const handleWordClick = (token: WordToken, e: React.MouseEvent) => {
         e.stopPropagation();
         const sentenceOriginal = tokens.map(t => t.surface).join('');
         setCurrentSentence(sentenceOriginal);
         setSelectedToken(token);
+
+        if (settings.autoReadOnClick) {
+            ttsManager.speak(token.surface, settings);
+        }
     };
 
     return (
-        <div className="mt-2">
-            {/* Header row */}
+        <div className="py-1">
             <div
-                className="flex items-center gap-2 flex-wrap cursor-pointer"
+                className="flex items-start gap-3 cursor-pointer group"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <span className={clsx(
-                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border transition-colors",
-                    "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)] shadow-sm"
-                )}>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    生词
-                </span>
+                <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
+                    <span className="w-[3px] h-3 bg-[#437e6f] rounded-sm mr-2 block"></span>
+                    <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                        生词
+                    </h3>
+                </div>
 
-                {vocabEntries.map((entry, idx) => (
-                    <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--bg-elevated)] shadow-sm text-[var(--text-secondary)] text-xs border border-[var(--border-default)]">
-                        {entry.token.surface}
-                    </span>
-                ))}
+                <div className="flex-1 min-w-0">
+                    {/* Preview Chips (Always visible) */}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                        {worthyTokens.map((token, idx) => {
+                            // Resolve theme colors
+                            const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
+                            const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
+                            const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
 
-                <svg className={clsx("w-4 h-4 text-slate-400 transition-transform", isExpanded && "rotate-180")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            // Determine style classes
+                            const bgClass = isColorEnabled ? themeColors.bg : 'bg-[var(--bg-elevated)]';
+                            const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-secondary)]';
+                            const borderClass = isColorEnabled
+                                ? (themeColors.border || 'border-transparent')
+                                : 'border-[var(--border-muted)]';
+
+                            return (
+                                <span
+                                    key={idx}
+                                    className={clsx(
+                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border",
+                                        bgClass,
+                                        textClass,
+                                        borderClass
+                                    )}
+                                >
+                                    {token.surface}
+                                </span>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Arrow - Always visible */}
+                <svg
+                    className={clsx(
+                        "w-4 h-4 text-[var(--text-muted)] transition-transform mt-0.5 shrink-0 hover:text-[var(--text-secondary)]",
+                        isExpanded && "rotate-180"
+                    )}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
             </div>
 
-            {/* Expanded cards */}
+            {/* List Content (Visible when expanded) - Placed below header with indentation */}
             {isExpanded && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                    {vocabEntries.map((entry, idx) => (
-                        <div
-                            key={idx}
-                            className="bg-[var(--bg-elevated)] shadow-sm rounded-lg px-3 py-2 border border-[var(--border-default)] hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
-                            onClick={(e) => handleWordClick(entry.token, e)}
-                        >
-                            {/* Line 1: Word + Reading */}
-                            <div className="flex items-baseline gap-1.5">
-                                <span className="font-bold text-[var(--text-primary)] text-sm">{entry.token.surface}</span>
-                                {entry.token.reading && entry.token.reading !== entry.token.surface && (
-                                    <span className={clsx("text-xs", isDark ? "text-blue-300" : "text-blue-600")}>{entry.token.reading}</span>
-                                )}
+                <div className="flex flex-col gap-1 mt-2 ml-[60px] border-l-2 border-[var(--border-muted)] pl-2">
+                    {vocabEntries.map((entry, idx) => {
+                        const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
+                        const themeColors = currentTheme.colors[entry.token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
+                        const isColorEnabled = (settings.activeColorPOS || []).includes(entry.token.pos);
+                        const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-primary)]';
+                        const hoverTextClass = isColorEnabled ? themeColors.text.replace('text-', 'hover:text-') : 'hover:text-[#437e6f]';
+                        // Generate hover bg (lighter)
+                        const hoverBgClass = isColorEnabled
+                            ? themeColors.bg.replace('bg-', 'hover:bg-').replace('/50', '/20').replace('/20', '/10')
+                            : 'hover:bg-[#437e6f]/10';
+
+                        // Logic for Saved State
+                        const effectiveReading = entry.token.reading || entry.token.surface;
+                        const isSaved = isWordSaved(entry.token.surface, effectiveReading);
+
+                        const handleToggleSave = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            if (isSaved) {
+                                const item = vocabList.find(v => v.word === entry.token.surface && v.reading === effectiveReading);
+                                if (item) removeVocab(item.id);
+                            } else {
+                                const sentenceContext = tokens.map(t => t.surface).join('');
+                                addVocab({
+                                    word: entry.token.surface,
+                                    reading: effectiveReading,
+                                    baseForm: entry.token.baseForm, // Assuming baseForm is available on token
+                                    meaning: entry.shortMeaning,
+                                    pos: entry.token.pos,
+                                    pitch: entry.token.pitch,
+                                    context: sentenceContext,
+                                });
+                            }
+                        };
+
+                        return (
+                            <div
+                                key={idx}
+                                className="flex items-baseline gap-2 py-1 border-b border-[var(--border-muted)] last:border-0 hover:bg-[var(--bg-elevated)] transition-colors px-2 -mx-2 rounded cursor-pointer group/row"
+                                onClick={(e) => handleWordClick(entry.token, e)}
+                            >
+                                {/* Word + Reading */}
+                                <div className="shrink-0 flex items-baseline gap-2 w-1/3 min-w-[100px]">
+                                    {/* Star Button - Always visible, subtle by default */}
+                                    <button
+                                        onClick={handleToggleSave}
+                                        className={clsx(
+                                            "shrink-0 w-4 h-4 transition-all focus:outline-none flex items-center justify-center -ml-1 mr-1",
+                                            isSaved
+                                                ? "text-amber-400 fill-amber-400"
+                                                : "text-slate-300 hover:text-amber-400 hover:fill-amber-400" // Very subtle gray by default
+                                        )}
+                                        title={isSaved ? "保存済み（クリックして削除）" : "単語帳に保存"}
+                                    >
+                                        <Star className="w-3.5 h-3.5" strokeWidth={isSaved ? 2 : 1.5} />
+                                    </button>
+
+                                    <span className={clsx("font-bold text-base", textClass)}>
+                                        {entry.token.surface}
+                                    </span>
+
+                                    {/* Speaker Button - Always visible, circular bg when speaking */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (speakingWord === entry.token.surface) {
+                                                ttsManager.stop();
+                                                setSpeakingWord(null);
+                                                return;
+                                            }
+
+                                            setSpeakingWord(entry.token.surface);
+                                            ttsManager.speak(entry.token.surface, settings, {
+                                                onStart: () => { },
+                                                onEnd: () => setSpeakingWord(null),
+                                                onError: () => setSpeakingWord(null)
+                                            });
+                                        }}
+                                        className={clsx(
+                                            "inline-flex items-center justify-center w-5 h-5 rounded-full transition-all ml-1",
+                                            speakingWord === entry.token.surface
+                                                ? "bg-emerald-100 text-emerald-600 scale-110" // Active state
+                                                : "text-slate-300 hover:text-emerald-600 hover:bg-emerald-50" // Default subtle state
+                                        )}
+                                        title="朗读"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            {speakingWord === entry.token.surface ? (
+                                                // Active/Speaking Icon (Sound waves)
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                            ) : (
+                                                // Static Icon (Simple Speaker)
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                            )}
+                                        </svg>
+                                    </button>
+                                    {/* 纯英文不显示读音 */}
+                                    {entry.token.reading &&
+                                        entry.token.reading !== entry.token.surface &&
+                                        !/^[a-zA-Z0-9\s]+$/.test(entry.token.surface) && (
+                                            <span className="text-xs text-[var(--text-muted)] truncate">
+                                                {entry.token.reading}
+                                            </span>
+                                        )}
+                                </div>
+
+                                {/* Separator */}
+                                <div className="text-[var(--text-faint)] text-xs">·</div>
+
+                                {/* Meaning */}
+                                <div className="text-[var(--text-secondary)] text-sm truncate flex-1" title={entry.shortMeaning}>
+                                    {entry.shortMeaning}
+                                </div>
                             </div>
-                            {/* Line 2: Chinese meaning */}
-                            <div className="text-[var(--text-secondary)] text-xs mt-0.5">{entry.shortMeaning}</div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

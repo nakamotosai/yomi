@@ -9,13 +9,13 @@ let Kuroshiro: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let KuromojiAnalyzer: any = null;
 
-// Kuromoji token interface
+// Kuromoji token interface (原始分词结果)
 interface KuromojiToken {
     surface_form: string;
     reading?: string;
-    pos: string;
-    pos_detail_1: string;
-    basic_form: string;
+    pos: string;           // 词性: 名詞, 動詞, 形容詞, 助動詞, 助詞, 接頭詞, 接尾辞 等
+    pos_detail_1: string;  // 词性细节: 数, 接続助詞, 終助詞, 助数詞 等
+    basic_form: string;    // 原形/辞書形
     conjugated_type?: string;
 }
 
@@ -37,7 +37,6 @@ async function initializeKuroshiro(): Promise<void> {
     if (initPromise) return initPromise;
 
     if (isInitializing) {
-        // Wait for existing initialization
         return new Promise((resolve) => {
             const check = setInterval(() => {
                 if (kuroshiroInstance) {
@@ -52,7 +51,6 @@ async function initializeKuroshiro(): Promise<void> {
 
     initPromise = (async () => {
         try {
-            // Dynamic imports for client-side only
             const kuroshiroModule = await import('kuroshiro');
             const analyzerModule = await import('kuroshiro-analyzer-kuromoji');
 
@@ -61,7 +59,6 @@ async function initializeKuroshiro(): Promise<void> {
 
             const instance = new Kuroshiro() as KuroshiroInstance;
 
-            // Initialize with dictionary path pointing to public folder
             await instance.init(new KuromojiAnalyzer({
                 dictPath: '/dict'
             }));
@@ -99,15 +96,13 @@ function mapPosToEnum(pos: string): PartOfSpeech {
     return posMap[pos] || PartOfSpeech.OTHER;
 }
 
-// Estimate pitch accent pattern (heuristic-based for MVP)
+// Estimate pitch accent pattern (heuristic-based)
 function estimatePitch(reading: string, pos: PartOfSpeech): { pattern: PitchPattern; accentMora: number } {
     if (!reading) return { pattern: [], accentMora: 0 };
 
-    // Count morae (combining small kana with previous)
     const moras = reading.replace(/[ぁぃぅぇぉゃゅょゎっ]/g, '').length;
     if (moras === 0) return { pattern: [], accentMora: 0 };
 
-    // Simple deterministic hash for consistent pitch in demo
     const hash = reading.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const type = hash % 4;
 
@@ -115,20 +110,16 @@ function estimatePitch(reading: string, pos: PartOfSpeech): { pattern: PitchPatt
     let accentMora = 0;
 
     if (type === 0) {
-        // Heiban (平板): L H H H...
         pattern = [0, ...Array(moras - 1).fill(1)];
         accentMora = 0;
     } else if (type === 1) {
-        // Atamadaka (頭高): H L L L...
         pattern = [1, ...Array(moras - 1).fill(0)];
         accentMora = 1;
     } else if (type === 2 && moras > 2) {
-        // Nakadaka (中高): L H...H L L
         const peak = Math.floor(moras / 2);
         pattern = Array(moras).fill(0).map((_, i) => (i === 0 ? 0 : i <= peak ? 1 : 0));
         accentMora = peak + 1;
     } else {
-        // Odaka (尾高): L H H H (drop after)
         pattern = [0, ...Array(moras - 1).fill(1)];
         accentMora = moras;
     }
@@ -142,7 +133,6 @@ export function getDeinflectedForm(token: WordToken): string {
         return token.baseForm;
     }
 
-    // Fallback rules for common conjugations
     const s = token.surface;
     if (token.pos === PartOfSpeech.VERB) {
         if (s.endsWith('ます')) return s.replace(/ます$/, 'る');
@@ -157,6 +147,229 @@ export function getDeinflectedForm(token: WordToken): string {
     return token.surface;
 }
 
+// ============================================================================
+// TOKEN MERGING SYSTEM (核心后处理逻辑)
+// ============================================================================
+
+/**
+ * 不规则日期读音映射表
+ */
+const DATE_READINGS: Record<string, string> = {
+    '1日': 'ついたち', '2日': 'ふつか', '3日': 'みっか', '4日': 'よっか',
+    '5日': 'いつか', '6日': 'むいか', '7日': 'なのか', '8日': 'ようか',
+    '9日': 'ここのか', '10日': 'とおか', '14日': 'じゅうよっか',
+    '20日': 'はつか', '24日': 'にじゅうよっか',
+};
+
+/**
+ * 不规则人数读音映射表
+ */
+const PERSON_READINGS: Record<string, string> = {
+    '1人': 'ひとり', '2人': 'ふたり',
+};
+
+/**
+ * 计数器读音映射表 (1つ〜10)
+ */
+const COUNTER_TSU_READINGS: Record<string, string> = {
+    '1つ': 'ひとつ', '2つ': 'ふたつ', '3つ': 'みっつ', '4つ': 'よっつ',
+    '5つ': 'いつつ', '6つ': 'むっつ', '7つ': 'ななつ', '8つ': 'やっつ',
+    '9つ': 'ここのつ', '10': 'とお',
+};
+
+/**
+ * 单 Token 读音修正表 (当分词器输出的单个token读音错误时)
+ */
+const SINGLE_TOKEN_CORRECTIONS: Record<string, string> = {
+    ...DATE_READINGS,
+    ...PERSON_READINGS,
+    ...COUNTER_TSU_READINGS,
+    // 月份特殊读音
+    '4月': 'しがつ', '7月': 'しちがつ', '9月': 'くがつ',
+};
+
+/**
+ * 数字转假名 (0-99)
+ */
+function numberToKana(numStr: string): string {
+    const normalized = numStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+    const num = parseInt(normalized, 10);
+    if (isNaN(num)) return numStr;
+
+    const DIGITS = ['ぜろ', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう', 'じゅう'];
+
+    if (num <= 10) return DIGITS[num];
+    if (num < 100) {
+        const tens = Math.floor(num / 10);
+        const ones = num % 10;
+        const p1 = tens === 1 ? 'じゅう' : DIGITS[tens] + 'じゅう';
+        const p2 = ones === 0 ? '' : DIGITS[ones];
+        return p1 + p2;
+    }
+    return normalized;
+}
+
+/**
+ * 合并 Kuromoji 原始 token 数组
+ * 使用 while 循环手动控制索引，实现向后贪婪吞噬
+ */
+function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
+    const merged: KuromojiToken[] = [];
+    let i = 0;
+
+    while (i < tokens.length) {
+        const curr = tokens[i];
+
+        // ========================================
+        // Rule C: 接头词合并 (优先级最高)
+        // 如果当前词是 接頭詞，强制与下一个词合并
+        // 例: お + 水 → お水
+        // ========================================
+        if (curr.pos === '接頭詞' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+            merged.push({
+                surface_form: curr.surface_form + next.surface_form,
+                reading: (curr.reading || curr.surface_form) + (next.reading || next.surface_form),
+                pos: next.pos,           // 使用后词的词性
+                pos_detail_1: next.pos_detail_1,
+                basic_form: curr.surface_form + (next.basic_form !== '*' ? next.basic_form : next.surface_form),
+                conjugated_type: next.conjugated_type,
+            });
+            i += 2;
+            continue;
+        }
+
+        // ========================================
+        // Rule A: 数字与单位/助数词合并
+        // 如果当前词是 名詞-数，且下一个词是 接尾辞 或 助数詞
+        // 例: 2026 + 年 → 2026年
+        // 例: 1 + つ → 1つ
+        // ========================================
+        if (curr.pos === '名詞' && curr.pos_detail_1 === '数' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+
+            // 检查是否是 接尾辞 (包括助数詞)
+            if (next.pos === '接尾辞' || next.pos_detail_1 === '助数詞' || next.pos === '名詞') {
+                const combinedSurface = curr.surface_form + next.surface_form;
+
+                // 查找特殊读音
+                let combinedReading: string;
+                if (SINGLE_TOKEN_CORRECTIONS[combinedSurface]) {
+                    combinedReading = SINGLE_TOKEN_CORRECTIONS[combinedSurface];
+                } else if (DATE_READINGS[combinedSurface]) {
+                    combinedReading = DATE_READINGS[combinedSurface];
+                } else if (PERSON_READINGS[combinedSurface]) {
+                    combinedReading = PERSON_READINGS[combinedSurface];
+                } else {
+                    // 通用数字+单位读音
+                    const numReading = numberToKana(curr.surface_form);
+                    const suffixReading = next.reading || next.surface_form;
+                    combinedReading = numReading + wanakana.toHiragana(suffixReading);
+                }
+
+                merged.push({
+                    surface_form: combinedSurface,
+                    reading: combinedReading,
+                    pos: '名詞',
+                    pos_detail_1: '数詞結合',
+                    basic_form: combinedSurface,
+                    conjugated_type: undefined,
+                });
+                i += 2;
+                continue;
+            }
+        }
+
+        // ========================================
+        // Rule B: 动词/形容词的形态素链合并 (最重要)
+        // 触发点: 当前词是 動詞 或 形容詞
+        // 向后吞噬: 只要下一个词是可合并类型就持续合并
+        // 例: 食べ + られ + ませ + ん → 食べられません
+        // 例: 行か + なけれ + ば → 行かなければ
+        // ========================================
+        if (curr.pos === '動詞' || curr.pos === '形容詞') {
+            let mergedSurface = curr.surface_form;
+            let mergedReading = curr.reading || curr.surface_form;
+            const baseForm = curr.basic_form !== '*' ? curr.basic_form : curr.surface_form;
+            let j = i + 1;
+
+            // 向后贪婪吞噬
+            while (j < tokens.length) {
+                const next = tokens[j];
+
+                // 判断是否可以合并
+                const canMerge = (
+                    // 1. 助動詞: ます, ない, たい, れる, られる, た, だ 等
+                    next.pos === '助動詞' ||
+
+                    // 2. 接尾辞: さ (形容词名词化), み 等
+                    next.pos === '接尾辞' ||
+
+                    // 3. 接続助詞中的 て, で, ば (保持 食べて, 行けば 完整性)
+                    (next.pos === '助詞' && next.pos_detail_1 === '接続助詞' &&
+                        ['て', 'で', 'ば', 'たら', 'ても', 'ながら'].includes(next.surface_form)) ||
+
+                    // 4. 終助詞: ね, よ, か, な, わ 等 (可选)
+                    (next.pos === '助詞' && next.pos_detail_1 === '終助詞')
+                );
+
+                if (canMerge) {
+                    mergedSurface += next.surface_form;
+                    mergedReading += next.reading || next.surface_form;
+                    j++;
+                } else {
+                    break;
+                }
+            }
+
+            // 如果发生了合并 (j > i + 1)
+            if (j > i + 1) {
+                merged.push({
+                    surface_form: mergedSurface,
+                    reading: mergedReading,
+                    pos: curr.pos,           // 保留原动词/形容词词性
+                    pos_detail_1: '活用結合',
+                    basic_form: baseForm,    // 保留原形
+                    conjugated_type: curr.conjugated_type,
+                });
+                i = j;
+                continue;
+            }
+        }
+
+        // 无匹配规则，原样保留
+        merged.push(curr);
+        i++;
+    }
+
+    return merged;
+}
+
+/**
+ * 对已转换的 WordToken 数组进行单 token 读音修正
+ */
+function correctSingleTokenReadings(tokens: WordToken[]): WordToken[] {
+    return tokens.map(token => {
+        const correctReading = SINGLE_TOKEN_CORRECTIONS[token.surface];
+        if (correctReading && token.reading !== correctReading) {
+            const hiraganaReading = wanakana.toHiragana(correctReading);
+            const { pattern, accentMora } = estimatePitch(hiraganaReading, token.pos);
+            return {
+                ...token,
+                reading: hiraganaReading,
+                romaji: wanakana.toRomaji(hiraganaReading),
+                pitch: pattern,
+                accentMora,
+            };
+        }
+        return token;
+    });
+}
+
+// ============================================================================
+// MAIN ANALYSIS FUNCTIONS
+// ============================================================================
+
 // Main analysis function
 export async function analyzeJapaneseText(text: string): Promise<AnalysisResult> {
     await initializeKuroshiro();
@@ -165,7 +378,6 @@ export async function analyzeJapaneseText(text: string): Promise<AnalysisResult>
         throw new Error('Kuroshiro not initialized');
     }
 
-    // Split into sentences
     const rawSentences = text.split(/([。！？\n]+)/).filter(Boolean);
     const sentences: SentenceAnalysis[] = [];
     let currentStr = '';
@@ -184,7 +396,6 @@ export async function analyzeJapaneseText(text: string): Promise<AnalysisResult>
         }
     }
 
-    // Handle remaining text without sentence ending
     if (currentStr.trim()) {
         const sentenceAnalysis = await analyzeSentence(currentStr.trim(), sentences.length);
         sentences.push(sentenceAnalysis);
@@ -194,212 +405,62 @@ export async function analyzeJapaneseText(text: string): Promise<AnalysisResult>
 }
 
 async function analyzeSentence(sentence: string, index: number): Promise<SentenceAnalysis> {
-    // Get raw tokenization data from Kuroshiro's internal tokenizer
     if (!kuroshiroInstance) {
         throw new Error('Kuroshiro not initialized');
     }
+
+    // 1. 获取原始分词结果
     const rawTokens = await kuroshiroInstance._analyzer.parse(sentence);
 
-    const tokens: WordToken[] = await Promise.all(
-        rawTokens.map(async (t: KuromojiToken, idx: number) => {
-            const surface = t.surface_form;
-            const readingKatakana = t.reading || surface;
-            const readingHiragana = wanakana.toHiragana(readingKatakana);
-            const pos = mapPosToEnum(t.pos);
+    // 2. 在原始 token 层面进行合并 (关键步骤!)
+    const mergedRawTokens = mergeKuromojiTokens(rawTokens);
 
-            const { pattern, accentMora } = estimatePitch(readingHiragana, pos);
+    // 3. 将合并后的 token 转换为 WordToken
+    const tokens: WordToken[] = mergedRawTokens.map((t: KuromojiToken, idx: number) => {
+        const surface = t.surface_form;
+        const readingKatakana = t.reading || surface;
+        const readingHiragana = wanakana.toHiragana(readingKatakana);
+        const pos = mapPosToEnum(t.pos);
 
-            // Determine if reading is redundant (surface is already kana)
-            const isKanaOnly = wanakana.isHiragana(surface) || wanakana.isKatakana(surface);
-            const reading = isKanaOnly ? '' : readingHiragana;
+        const { pattern, accentMora } = estimatePitch(readingHiragana, pos);
 
-            const baseForm = t.basic_form !== '*' ? t.basic_form : surface;
+        const isKanaOnly = wanakana.isHiragana(surface) || wanakana.isKatakana(surface);
+        const reading = isKanaOnly ? '' : readingHiragana;
 
-            // Deterministic ID generation to ensure stability across strict mode re-renders
-            // Format: sentenceIndex-tokenIndex-hash(surface)
-            const simpleHash = surface.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const stableId = `${index}-${idx}-${simpleHash}`;
+        const baseForm = t.basic_form !== '*' ? t.basic_form : surface;
 
-            return {
-                id: stableId,
-                surface,
-                reading,
-                romaji: wanakana.toRomaji(readingHiragana),
-                pos,
-                posDetail: t.pos_detail_1,
-                baseForm,
-                pitch: pattern,
-                accentMora,
-                isCommon: COMMON_WORDS.has(baseForm) || COMMON_WORDS.has(surface),
-                conjugation: t.conjugated_type !== '*' ? t.conjugated_type : undefined,
-            };
-        })
-    );
+        const simpleHash = surface.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const stableId = `${index}-${idx}-${simpleHash}`;
 
-    // Post-process tokens to fix number + counter issues (e.g. 5日 -> itsuka)
+        return {
+            id: stableId,
+            surface,
+            reading,
+            romaji: wanakana.toRomaji(readingHiragana),
+            pos,
+            posDetail: t.pos_detail_1,
+            baseForm,
+            pitch: pattern,
+            accentMora,
+            isCommon: COMMON_WORDS.has(baseForm) || COMMON_WORDS.has(surface),
+            conjugation: t.conjugated_type !== '*' ? t.conjugated_type : undefined,
+        };
+    });
+
+    // 4. 对单个 token 进行读音修正 (处理分词器未正确分割的情况)
+    const correctedTokens = correctSingleTokenReadings(tokens);
+
     return {
         id: `sentence-${index}`,
         original: sentence,
-        tokens: postProcessTokens(tokens, index),
+        tokens: correctedTokens,
     };
 }
 
-// Helper to convert number to simple kana reading (0-99)
-function numberToKana(numStr: string): string {
-    const normalized = numStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-    const num = parseInt(normalized, 10);
-    if (isNaN(num)) return numStr;
+// ============================================================================
+// TEXT-TO-SPEECH (保持原有功能)
+// ============================================================================
 
-    const DIGITS = ['ぜろ', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう', 'じゅう'];
-
-    if (num <= 10) return DIGITS[num];
-    if (num < 100) {
-        const tens = Math.floor(num / 10);
-        const ones = num % 10;
-        const p1 = tens === 1 ? 'じゅう' : DIGITS[tens] + 'じゅう';
-        const p2 = ones === 0 ? '' : DIGITS[ones];
-        return p1 + p2;
-    }
-    return normalized; // Fallback for >= 100
-}
-
-// Post-processing rules
-function postProcessTokens(tokens: WordToken[], sentenceIndex: number): WordToken[] {
-    const processed: WordToken[] = [];
-
-    // Map of irregular date readings
-    const DATE_READINGS: Record<string, string> = {
-        '1日': 'ついたち',
-        '2日': 'ふつか',
-        '3日': 'みっか',
-        '4日': 'よっか',
-        '5日': 'いつか',
-        '6日': 'むいか',
-        '7日': 'なのか',
-        '8日': 'ようか',
-        '9日': 'ここのか',
-        '10日': 'とおか',
-        '14日': 'じゅうよっか',
-        '20日': 'はつか',
-        '24日': 'にじゅうよっか',
-    };
-
-    for (let i = 0; i < tokens.length; i++) {
-        const curr = tokens[i];
-        const next = tokens[i + 1];
-
-        // Combined Number Logic
-        if (next && /^[0-9０-９]+$/.test(curr.surface)) {
-            let mergedSurface = '';
-            let mergedReading = '';
-            let mergedPosDetail = '助数詞結合';
-
-            // 1. Specific Date Readings (Number + 日)
-            if (next.surface === '日') {
-                const combinedSurface = curr.surface + next.surface;
-                const specificReading = DATE_READINGS[combinedSurface];
-                if (specificReading) {
-                    mergedSurface = combinedSurface;
-                    mergedReading = specificReading;
-                    mergedPosDetail = '日付';
-                }
-                // If not in map, might fall through to generic merge below if we added '日' to suffixes?
-                // But for now, let's keep the specific map priority.
-            }
-
-            // 2. Month Readings
-            // Make sure we didn't already merge (though 1日 and 1月 are mutually exclusive for next.surface)
-            if (!mergedSurface) {
-                const MONTH_READINGS: Record<string, string> = {
-                    '1月': 'いちがつ', '2月': 'にがつ', '3月': 'さんがつ', '4月': 'しがつ',
-                    '5月': 'ごがつ', '6月': 'ろくがつ', '7月': 'しちがつ', '8月': 'はちがつ',
-                    '9月': 'くがつ', '10月': 'じゅうがつ', '11月': 'じゅういちがつ', '12月': 'じゅうにがつ'
-                };
-                if (next.surface === '月' && MONTH_READINGS[curr.surface + '月']) {
-                    mergedSurface = curr.surface + '月';
-                    mergedReading = MONTH_READINGS[mergedSurface];
-                    mergedPosDetail = '日付';
-                }
-            }
-
-            // 3. Hour Check (Specific because of 4, 7, 9 irregularities)
-            if (!mergedSurface && next.surface === '時') {
-                // Simple map for hours
-                const HOUR_READINGS: Record<string, string> = {
-                    '1': 'いち', '2': 'に', '3': 'さん', '4': 'よ', '5': 'ご',
-                    '6': 'ろく', '7': 'しち', '8': 'はち', '9': 'く', '10': 'じゅう',
-                    '11': 'じゅういち', '12': 'じゅうに',
-                    '0': 'れい', '13': 'じゅうさん', '14': 'じゅうよ', '15': 'じゅうご',
-                    '16': 'じゅうろく', '17': 'じゅうしち', '18': 'じゅうはち', '19': 'じゅうく',
-                    '20': 'にじゅう', '21': 'にじゅういち', '22': 'にじゅうに', '23': 'にじゅうさん', '24': 'にじゅうよ'
-                };
-                // If number is in map, use it. Else default to generic calculation if we had one.
-                // Currently curr.surface is the number string.
-                if (HOUR_READINGS[curr.surface]) {
-                    mergedSurface = curr.surface + '時';
-                    mergedReading = HOUR_READINGS[curr.surface] + 'じ';
-                    mergedPosDetail = '時間';
-                }
-            }
-
-            // 4. Generic Suffixes
-            if (!mergedSurface) {
-                const MERGE_SUFFIXES = new Set(['分', '秒', '週間', '年', '回', '歳', '才', '円', '日', '番', '台', '階', '人']);
-
-                if (MERGE_SUFFIXES.has(next.surface)) {
-                    // Special case: Persons
-                    if (next.surface === '人') {
-                        if (curr.surface === '1') {
-                            mergedSurface = '1人'; mergedReading = 'ひとり'; mergedPosDetail = '助数詞結合';
-                        } else if (curr.surface === '2') {
-                            mergedSurface = '2人'; mergedReading = 'ふたり'; mergedPosDetail = '助数詞結合';
-                        }
-                    }
-
-                    if (!mergedSurface) {
-                        mergedSurface = curr.surface + next.surface; // e.g. 20分
-
-                        // Convert number to kana
-                        const numReading = numberToKana(curr.surface);
-
-                        // Suffix reading (fallback to surface if no reading)
-                        let suffixReading = (next.reading && next.reading !== next.surface) ? next.reading : next.surface;
-
-                        // 3階 -> sangai fix
-                        if (next.surface === '階' && curr.surface === '3') {
-                            suffixReading = 'がい';
-                        }
-
-                        mergedReading = numReading + suffixReading;
-                    }
-                }
-            }
-
-            if (mergedSurface && mergedReading) {
-                const { pattern, accentMora } = estimatePitch(mergedReading, PartOfSpeech.NOUN);
-                processed.push({
-                    ...curr,
-                    id: `${curr.id}-merged`,
-                    surface: mergedSurface,
-                    reading: mergedReading,
-                    romaji: wanakana.toRomaji(mergedReading),
-                    pos: PartOfSpeech.NOUN,
-                    posDetail: mergedPosDetail,
-                    pitch: pattern,
-                    accentMora: accentMora,
-                    baseForm: mergedSurface,
-                });
-                i++; // Skip next
-                continue;
-            }
-        }
-        processed.push(curr);
-    }
-
-    return processed;
-}
-
-// Text-to-Speech using Web Speech API
 export function speakText(
     text: string,
     onStart?: () => void,
@@ -418,7 +479,6 @@ export function speakText(
     utterance.rate = 0.85;
     utterance.pitch = 1;
 
-    // Try to use a Japanese voice
     const voices = window.speechSynthesis.getVoices();
     const japaneseVoice = voices.find(v => v.lang.startsWith('ja'));
     if (japaneseVoice) {

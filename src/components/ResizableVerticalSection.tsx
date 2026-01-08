@@ -33,7 +33,8 @@ export default function ResizableVerticalSection({
     onSplitRatioChange,
     minTopHeight = 100,
     minBottomHeight = 100,
-}: ResizableVerticalSectionProps) {
+    gap = 0
+}: ResizableVerticalSectionProps & { gap?: number }) {
     const [bottomHeight, setBottomHeight] = useState(initialBottomHeight);
     const [splitRatio, setSplitRatio] = useState(initialSplitRatio);
     const [isDragging, setIsDragging] = useState(false);
@@ -65,37 +66,43 @@ export default function ResizableVerticalSection({
 
             if (mode === 'bottom-fixed') {
                 // Calculate new bottom height based on mouse position
-                // Mouse is at the split line.
-                // Bottom height = Container Height - Mouse Y (relative to container top)
-                // Wait, if Mouse Y is the top of the bottom section (split line).
-                // Then Bottom Height = Container Height - Relative Y.
+                // relativeY is the position of the mouse, which is dragging the gap.
+                // We want to calculate the new bottom height.
+                // Distance from bottom = Container Height - Mouse Y
+                // Adjust for gap center: we want the mouse to be in the middle of the gap.
+                // So bottom start = Mouse Y + gap/2
+                // Bottom Height = Container Height - (Mouse Y + gap/2)
 
-                let newHeight = containerHeight - relativeY;
+                let newHeight = containerHeight - relativeY - (gap / 2);
 
                 // Constraints
-                // Top section height = relativeY. Must be >= minTopHeight
-                // Bottom section height = newHeight. Must be >= minBottomHeight
+                // Top section height = relativeY - gap/2. Must be >= minTopHeight
+                const potentialTopHeight = containerHeight - newHeight - gap;
 
-                if (relativeY < minTopHeight) {
-                    newHeight = containerHeight - minTopHeight;
+                if (potentialTopHeight < minTopHeight) {
+                    newHeight = containerHeight - minTopHeight - gap;
                 } else if (newHeight < minBottomHeight) {
                     newHeight = minBottomHeight;
                 }
 
                 setBottomHeight(newHeight);
             } else if (mode === 'ratio') {
-                // Calculate ratio
-                let ratio = relativeY / containerHeight;
+                // Calculate ratio based on available space (Container - Gap)
+                const availableHeight = containerHeight - gap;
+                if (availableHeight <= 0) return;
 
-                // Constraints using pixels for conversion
-                const topPixelHeight = ratio * containerHeight;
-                const bottomPixelHeight = (1 - ratio) * containerHeight;
+                // Mouse Y is at the gap. 
+                // Top Height = Mouse Y - gap/2
+                const topHeight = relativeY - (gap / 2);
 
-                if (topPixelHeight < minTopHeight) {
-                    ratio = minTopHeight / containerHeight;
-                } else if (bottomPixelHeight < minBottomHeight) {
-                    ratio = 1 - (minBottomHeight / containerHeight);
-                }
+                let ratio = topHeight / availableHeight;
+
+                // Constraints
+                // limit ratio between 0.1 and 0.9 or based on min pixels
+                const minRatio = minTopHeight / availableHeight;
+                const maxRatio = 1 - (minBottomHeight / availableHeight);
+
+                ratio = Math.max(minRatio, Math.min(maxRatio, ratio));
 
                 setSplitRatio(ratio);
             }
@@ -125,36 +132,46 @@ export default function ResizableVerticalSection({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, mode, bottomHeight, splitRatio, minTopHeight, minBottomHeight, onBottomHeightChange, onSplitRatioChange]);
+    }, [isDragging, mode, bottomHeight, splitRatio, minTopHeight, minBottomHeight, onBottomHeightChange, onSplitRatioChange, gap]);
 
     return (
-        <div ref={containerRef} className="flex flex-col h-full w-full overflow-hidden relative">
+        <div ref={containerRef} className="flex flex-col h-full w-full relative">
             {/* Top Section */}
             <div
                 style={{
-                    height: mode === 'ratio' ? `${splitRatio * 100}%` : `calc(100% - ${bottomHeight}px)`,
-                    // Flex grow if not fixed? No, height matches.
+                    height: mode === 'ratio'
+                        ? `calc((100% - ${gap}px) * ${splitRatio})`
+                        : `calc(100% - ${bottomHeight}px - ${gap}px)`,
                 }}
-                className="flex flex-col min-h-0 relative"
+                className="flex flex-col min-h-0 relative transition-[height] duration-0 ease-linear"
             >
                 {topContent}
             </div>
 
-            {/* Splitter */}
+            {/* Splitter (The Gap) */}
             <div
-                className="h-1 cursor-row-resize bg-[var(--border-default)] hover:bg-[var(--text-secondary)] transition-colors z-10 flex-shrink-0 relative"
+                className="cursor-row-resize z-10 flex-shrink-0 relative group flex items-center justify-center transition-colors"
+                style={{ height: `${gap}px` }} // Physical gap
                 onMouseDown={handleMouseDown}
             >
-                {/* Invisible hit area to make grabbing easier */}
-                <div className="absolute top-[-3px] bottom-[-3px] left-0 right-0 z-20 cursor-row-resize" />
+                {/* 
+                   Hidden Interaction Hitbox 
+                   (Larger than the visual gap if gap is small, but if gap is big (e.g. 12px), it's fine) 
+                */}
+                <div className="absolute top-0 bottom-0 left-0 right-0" />
+
+                {/* Visual Handle (Optional hover effect) */}
+                <div className="w-8 h-1 rounded-full bg-[var(--border-default)] opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
 
             {/* Bottom Section */}
             <div
                 style={{
-                    height: mode === 'ratio' ? `${(1 - splitRatio) * 100}%` : `${bottomHeight}px`
+                    height: mode === 'ratio'
+                        ? `calc((100% - ${gap}px) * (1 - ${splitRatio}))`
+                        : `${bottomHeight}px`
                 }}
-                className="flex flex-col min-h-0 relative"
+                className="flex flex-col min-h-0 relative transition-[height] duration-0 ease-linear"
             >
                 {bottomContent}
             </div>
