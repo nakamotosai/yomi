@@ -48,11 +48,11 @@ export const useVocabStore = create<VocabState>()(
     )
 );
 
-// Export utilities for Anki/CSV export
+// Export utilities for CSV export
 export function exportToCSV(vocabList: VocabItem[]): string {
-    const header = 'Word,Reading,BaseForm,Meaning,POS,Context,CreatedAt\n';
-    const rows = vocabList.map(v =>
-        `"${v.word}","${v.reading}","${v.baseForm}","${v.meaning}","${v.pos}","${v.context}","${new Date(v.createdAt).toISOString()}"`
+    const header = 'No.,Word,Reading,BaseForm,Meaning,POS,Context,CreatedAt\n';
+    const rows = vocabList.map((v, index) =>
+        `"${index + 1}","${v.word}","${v.reading}","${v.baseForm}","${v.meaning.replace(/"/g, '""')}","${v.pos}","${v.context?.replace(/"/g, '""') || ''}","${new Date(v.createdAt).toISOString()}"`
     ).join('\n');
     return header + rows;
 }

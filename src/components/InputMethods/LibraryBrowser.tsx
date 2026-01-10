@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Book, Loader2, Search, Library } from 'lucide-react';
 import { FEATURED_BOOKS, fetchAozoraContent, parseAozoraHTML, chunkText, AozoraBook } from '@/lib/aozora';
-import clsx from 'clsx';
+
 
 interface LibraryBrowserProps {
     onTextLoaded: (text: string) => void;

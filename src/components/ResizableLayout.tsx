@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 
 interface ResizableLayoutProps {
@@ -17,11 +17,12 @@ export default function ResizableLayout({ leftContent, centerContent, rightConte
     const [isDraggingLeft, setIsDraggingLeft] = useState(false);
     const [isDraggingRight, setIsDraggingRight] = useState(false);
 
-    // Sync from store on mount
-    useEffect(() => {
+    // Sync from store on mount (use useLayoutEffect to avoid flicker)
+    useLayoutEffect(() => {
         if (layout.leftSidebarWidth) setLeftWidth(layout.leftSidebarWidth);
         if (layout.rightSidebarWidth) setRightWidth(layout.rightSidebarWidth);
-    }, [layout.leftSidebarWidth, layout.rightSidebarWidth]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Handle global mouse events
     useEffect(() => {

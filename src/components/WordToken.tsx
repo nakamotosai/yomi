@@ -10,14 +10,19 @@ import PitchAccent from './PitchAccent';
 
 interface WordTokenProps {
     token: WordToken;
-    onSelect: (token: WordToken) => void;
+    // Updated to accept optional sentenceText for context-aware callbacks
+    onSelect: (token: WordToken, sentenceText?: string) => void;
     isSelected?: boolean;
     isSpeaking?: boolean;
+    skyDropReveal?: boolean; // Prop to control visibility in Sky Drop mode
+    sentenceText?: string;   // Optional context prop for memoization optimization
 }
 
-export default function WordTokenComponent({ token, onSelect, isSelected, isSpeaking }: WordTokenProps) {
-    // Get settings
-    const { settings } = useAppStore();
+// Internal component (unmemoized)
+function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal = true, sentenceText }: WordTokenProps) {
+    // Get settings and global speaking state
+    // Alias global isSpeaking to avoid conflict with prop
+    const { settings, isSpeaking: isGlobalSpeaking } = useAppStore();
 
     // 判断是否为标点符号（包括括号等）
     const isPunctuation = token.pos === PartOfSpeech.SYMBOL ||
@@ -54,12 +59,53 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
 
     // 检查该词性是否启用了颜色高亮
     const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
+    const isWafu = settings.colorScheme === 'wafu';
+    const isMonochrome = settings.colorScheme === 'monochrome';
+
+    // Helper to get Wafu/Monochrome override styles
+    const getOverrideStyle = () => {
+        if ((!isWafu && !isMonochrome) || !isColorEnabled) return {};
+
+        // Helper to map POS to safe CSS variable key (aligned with HistoryPanel/InfoPanel)
+        const getPosKey = (pos: string) => {
+            const lower = pos.toLowerCase();
+            if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+            if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
+            if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
+            if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
+            if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词')) return 'adjective';
+            if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+            if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
+            if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
+            if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
+            if (lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词')) return 'interjection';
+            if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
+            if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
+            if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
+            return 'other';
+        };
+
+        const key = getPosKey(token.pos);
+
+        // For monochrome, we can reuse the same wafu-prefixed variables because we defined them in the [data-color-scheme="monochrome"] block
+        // to point to the grayscale vars. This keeps the JS clean.
+        return {
+            background: `var(--wafu-${key}-bg)`,
+            color: `var(--wafu-${key}-text)`,
+            // Optional: border if needed, though standard theme doesn't usually use border for box style
+            border: `1px solid var(--wafu-${key}-border)`
+        };
+    };
+
+    const overrideStyle = getOverrideStyle();
 
     // 背景色：如果启用则使用主题色，否则透明
-    const bgClass = isColorEnabled ? themeColors.bg : 'bg-transparent';
+    // If Wafu or Monochrome is active, standard bgClass is ignored in favor of style override
+    const bgClass = (!isWafu && !isMonochrome && isColorEnabled) ? themeColors.bg : 'bg-transparent';
 
     // 文字颜色：始终使用主题颜色（即使背景透明）
-    const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-muted)]';
+    // If Wafu or Monochrome is active, standard textClass is ignored in favor of style override
+    const textClass = (!isWafu && !isMonochrome && isColorEnabled) ? themeColors.text : ((isWafu || isMonochrome) && isColorEnabled ? '' : 'text-[var(--text-muted)]');
 
     // Logic: Show Furigana?
     const isEnglish = /^[a-zA-Z0-9\s.,!?'"()-]+$/.test(token.surface);
@@ -71,19 +117,31 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
     const isParticle = token.pos === PartOfSpeech.PARTICLE;
     const isHiddenParticle = settings.hideParticles && isParticle;
 
+    // Extract dynamic glow color from themeColors.text if possible (assuming it's a hex code)
+    const extractHexColor = (str: string) => {
+        const match = str.match(/#[0-9a-fA-F]{6}/);
+        return match ? match[0] : null;
+    };
+
+    const dynamicGlowColor = (!isWafu && !isMonochrome && themeColors?.text)
+        ? (extractHexColor(themeColors.text) || POS_GLOW_COLORS[token.pos])
+        : (isMonochrome ? '#4b5563' : POS_GLOW_COLORS[token.pos]); // Use gray for monochrome glow
+
     return (
         <div
             className={clsx(
                 "relative inline-flex flex-col items-center mx-0.5 mb-1 group cursor-pointer select-none transition-all duration-200",
-                isSelected && "scale-105 z-10"
+                isSelected && "z-10" // Removed scale-105
             )}
             onClick={(e) => {
                 e.stopPropagation();
-                onSelect(token);
+                // Pass token AND sentenceText to the callback if available
+                // This allows parent to handle logic without creating inline functions
+                onSelect(token, sentenceText);
 
-                // Auto-read on click if enabled
-                if (settings.autoReadOnClick) {
-                    ttsManager.speak(token.surface, settings);
+                // Auto-read on click if enabled AND NOT currently playing global audio
+                if (settings.autoReadOnClick && !isGlobalSpeaking) {
+                    ttsManager.speak(token.surface, settings, {});
                 }
             }}
         >
@@ -108,38 +166,107 @@ export default function WordTokenComponent({ token, onSelect, isSelected, isSpea
             {/* Main Surface Text */}
             <div
                 className={clsx(
-                    "px-1.5 py-0.5 rounded font-medium transition-all duration-200",
+                    "px-1.5 py-0.5 rounded font-medium transition-all duration-200 relative",
                     fontSizeClasses.main,
                     isHiddenParticle
                         ? "text-transparent bg-gray-100 min-w-[1em] hover:text-gray-400"
-                        : currentTheme.type === 'underline'
+                        : (!isWafu && currentTheme.type === 'underline')
                             ? clsx(
                                 "border-b-[3px] border-solid rounded-none px-0.5 mx-0.5 pb-0.5",
                                 textClass,
                                 themeColors.border || 'border-transparent',
                                 "bg-transparent"
                             )
-                            : clsx(bgClass, textClass),
+                            : clsx(bgClass, textClass), // Box style (Standard OR Wafu)
                     !isSelected && !isSpeaking && "hover:brightness-95",
-                    isSpeaking && settings.karaokeMode && "scale-110 z-10"
+                    // Karaoke animations based on style
+                    isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'glow-scale' && "scale-110 z-10",
+                    isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'float-up' && "karaoke-float-up z-10",
+                    isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'bounce' && "karaoke-bounce z-10",
+                    isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'underline' && "karaoke-underline z-10"
                 )}
                 style={{
-                    boxShadow: isSelected
-                        ? `0 0 12px 4px ${POS_GLOW_COLORS[token.pos]}66, 0 0 4px 2px ${POS_GLOW_COLORS[token.pos]}44`
-                        : isSpeaking && settings.karaokeMode
-                            ? `0 0 18px 8px ${POS_GLOW_COLORS[token.pos]}55, 0 0 8px 4px ${POS_GLOW_COLORS[token.pos]}40`
-                            : undefined
+                    ...overrideStyle, // Apply Wafu/Monochrome overrides
+                    boxShadow: isSpeaking && settings.karaokeMode && (settings.karaokeStyle === 'glow-scale' || settings.karaokeStyle === 'glow-only')
+                        ? `0 0 18px 8px ${dynamicGlowColor}55, 0 0 8px 4px ${dynamicGlowColor}40`
+                        : undefined,
+                    // Gradient fill animation
+                    ...(isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'border' ? {
+                        // Use box-shadow to simulate border ensuring no layout shift (jitter)
+                        boxShadow: `0 0 0 2px ${dynamicGlowColor}, 0 0 8px ${dynamicGlowColor}40`,
+                        borderRadius: '4px',
+                        background: `${dynamicGlowColor}10`,
+                        transition: 'all 0.2s ease',
+                        transform: 'scale(1.02)',
+                        willChange: 'transform, box-shadow' // Hardware acceleration
+                    } : {})
                 }}
             >
-                {token.surface}
+                <span style={{
+                    display: 'inline-block',
+                    // Use undefined to let class transition take precedence
+                    transition: (settings.karaokeMode && settings.karaokeStyle === 'sky-drop')
+                        ? undefined
+                        : 'all 0.1s ease-out',
+                    transform: isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'text-magnify' ? 'scale(1.25)' : 'none',
+                    color: isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'text-magnify' ? dynamicGlowColor : 'inherit',
+                    fontWeight: isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'text-magnify' ? '700' : 'inherit',
+                    willChange: isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'text-magnify' ? 'transform' : 'auto',
+                    // Sky Drop Animation
+                    ...(isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'sky-drop' ? {
+                        animation: 'skyDrop 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+                        opacity: 0,
+                        color: dynamicGlowColor,
+                        fontWeight: 700
+                    } : {})
+                }}
+                    className={clsx(
+                        settings.karaokeMode && settings.karaokeStyle === 'sky-drop' && "sky-drop-base",
+                        settings.karaokeMode && settings.karaokeStyle === 'sky-drop' && !skyDropReveal && "sky-drop-hidden",
+                        settings.karaokeMode && settings.karaokeStyle === 'sky-drop' && skyDropReveal && "sky-drop-visible"
+                    )}
+                >
+                    {token.surface}
+                </span>
+
+                {/* Selected Underline (Absolute layer, no layout shift) */}
+                {isSelected && (
+                    <span
+                        className="absolute bottom-0 left-0 w-full h-[3px]"
+                        style={{
+                            backgroundColor: dynamicGlowColor,
+                            // Match parent rounded corners at the bottom
+                            borderBottomLeftRadius: '0.25rem',
+                            borderBottomRightRadius: '0.25rem',
+                        }}
+                    />
+                )}
+
+                {/* Underline slide effect */}
+                {isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'underline' && (
+                    <span
+                        className="absolute bottom-0 left-0 h-[3px] rounded-full"
+                        style={{
+                            backgroundColor: dynamicGlowColor,
+                            animation: 'karaoke-underline-slide 0.5s ease-out forwards'
+                        }}
+                    />
+                )}
             </div>
 
             {/* Cloze Mode Hint */}
-            {isHiddenParticle && (
-                <div className="absolute top-full mt-0.5 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                    ?
-                </div>
-            )}
-        </div>
+            {
+                isHiddenParticle && (
+                    <div className="absolute top-full mt-0.5 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                        ?
+                    </div>
+                )
+            }
+        </div >
     );
 }
+
+// Memoized export
+// Use custom comparison or default shallow comparison?
+// Default shallow comparison should work if onSelect, token, and other primitives are stable.
+export default React.memo(WordTokenBase);

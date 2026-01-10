@@ -60,7 +60,6 @@ const KanaCard = React.memo(({ char, isPressed, onClick }: { char: KanaChar, isP
 KanaCard.displayName = 'KanaCard';
 
 export default function KanaGrid() {
-    const { settings } = useAppStore();
     const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
     const [filterType, setFilterType] = useState<'seion' | 'dakuon' | 'yoon'>('seion');
     const [selectedChar, setSelectedChar] = useState<KanaChar | null>(null);

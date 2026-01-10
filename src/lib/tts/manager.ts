@@ -3,6 +3,8 @@ import { EdgeTtsProvider } from './edge';
 import { VoicevoxProvider } from './voicevox';
 import { AppSettings } from '@/types';
 
+import { wakeUpAudio } from '@/lib/audioUtils';
+
 class TtsManager {
     private edge: EdgeTtsProvider;
     private voicevox: VoicevoxProvider;
@@ -25,8 +27,11 @@ class TtsManager {
         onStart?: () => void;
         onEnd?: () => void;
         onError?: (error: Error) => void;
-        onBoundary?: (charIndex: number) => void;
+        onBoundary?: (charIndex: number, charLength?: number, boundaryIndex?: number) => void;
     }) {
+        // Universal Bluetooth Wake-up
+        wakeUpAudio();
+
         const provider = this.getProvider(settings);
 
         // Stop any previous playback from any provider

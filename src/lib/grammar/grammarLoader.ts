@@ -1,7 +1,7 @@
 import { GrammarEntry } from '@/types/grammar';
 
 // 语法词典索引
-let grammarIndex: Map<string, GrammarEntry[]> = new Map();
+const grammarIndex: Map<string, GrammarEntry[]> = new Map();
 let isLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 
@@ -130,6 +130,16 @@ export async function loadGrammar(): Promise<void> {
             if (!existing.some(e => e.title === entry.title)) {
                 existing.push(entry);
                 grammarIndex.set(entry.term, existing);
+            }
+
+            // 【新增】同时建立 Reading 索引 (如果 reading 和 term 不同)
+            // 这样 matchGrammar 可以通过 reading 查找到对应的 term 解释
+            if (entry.reading && entry.reading !== entry.term) {
+                const existingReading = grammarIndex.get(entry.reading) || [];
+                if (!existingReading.some(e => e.title === entry.title)) {
+                    existingReading.push(entry);
+                    grammarIndex.set(entry.reading, existingReading);
+                }
             }
         }
 

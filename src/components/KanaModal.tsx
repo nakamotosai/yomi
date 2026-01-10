@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RefreshCw, CheckCircle2, RotateCcw, Pencil, PlayCircle } from 'lucide-react';
 import { KanaChar } from '@/types';
@@ -24,6 +24,7 @@ export default function KanaModal({ char, isOpen, onClose }: KanaModalProps) {
     // Sync view type with global settings initially
     useEffect(() => {
         if (settings.kanaCharType) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setViewType(settings.kanaCharType);
         }
     }, [settings.kanaCharType, isOpen]);
@@ -250,7 +251,7 @@ function StrokeOrderView({ strokeData, onReplay }: { strokeData: KanaStrokeData 
 // Advanced Tracing Canvas
 // ----------------------------------------------------------------------
 
-function TracingCanvas({ strokeData, charDisplay }: { strokeData: KanaStrokeData | undefined, charDisplay: string }) {
+function TracingCanvas({ strokeData }: { strokeData: KanaStrokeData | undefined, charDisplay: string }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [currentStrokeIndex, setCurrentStrokeIndex] = useState(0);
     const [isComplete, setIsComplete] = useState(false);

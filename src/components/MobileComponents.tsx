@@ -4,6 +4,7 @@ import React, { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Menu } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import Image from 'next/image';
 
 // --- Mobile Header ---
 export function MobileHeader() {
@@ -26,8 +27,8 @@ export function MobileHeader() {
                 <Menu className="w-6 h-6" />
             </button>
 
-            <div className="ml-3 flex items-center gap-2">
-                <img src="/logo.png" alt="Logo" className="w-6 h-6 object-contain" />
+            <div className="ml-3 flex items-center gap-2 relative w-6 h-6">
+                <Image src="/logo.png" alt="Logo" fill className="object-contain" unoptimized />
                 <span className="font-bold text-slate-500">
                     {appMode === 'reader' ? 'Reader' : 'Kana'}
                 </span>

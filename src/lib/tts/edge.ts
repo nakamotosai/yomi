@@ -113,6 +113,7 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number, boundaryIndex?: number) => void) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         let lastEmittedIndex = -2;
         let lastBoundaryArrayIndex = -1;
 

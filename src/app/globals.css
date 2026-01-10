@@ -76,6 +76,470 @@
   /* 选择区域 */
   --selection-bg: #e2e8f0;
   --selection-text: #1e293b;
+
+  /* ========================================
+     通用配色方案变量 (Scheme Tokens)
+     默认为莫兰迪配色
+     ======================================== */
+
+  /* 主强调色 - Sage Green */
+  --scheme-primary: #437E6F;
+  --scheme-primary-hover: #356659;
+  --scheme-primary-bg: rgba(67, 126, 111, 0.15);
+
+  /* 次强调色 - Sage Green */
+  --scheme-accent: #556B58;
+  --scheme-accent-hover: #455647;
+  --scheme-accent-bg: rgba(85, 107, 88, 0.15);
+
+  /* 静默状态 */
+  --scheme-muted: #8F9E8B;
+  --scheme-muted-hover: #7A8A76;
+  --scheme-muted-bg: rgba(143, 158, 139, 0.15);
+
+  /* 输入框 */
+  --scheme-input-bg: white;
+  --scheme-input-border: #e2e8f0;
+
+  /* 语法颜色 - Blue (Morandi Other Group) */
+  --scheme-grammar: #2D6D8B;
+}
+
+
+/* ========================================
+   和风模式变量 - 传统日式配色 (Wafu)
+   ======================================== */
+
+[data-color-scheme="wafu"] {
+  /* 语法颜色 - Preserve Purple for Wafu */
+  --scheme-grammar: #9B8AA5;
+
+  /* ========================================
+     基础背景 (Backgrounds) - 和纸/米汤色系
+     ======================================== */
+  --bg-base: #f4e4c1;
+  /* 浓郁的米黄色 (Kuchiba) */
+  --bg-elevated: #fbf6ec;
+  /* 用户指定的极浅米白 (Rice Paper) */
+  --bg-muted: #eaddcf;
+  /* 浅杏色 (Apricot) */
+  --bg-subtle: #efe6d8;
+  /* 暖灰米色 */
+
+  /* ========================================
+     文字颜色 (Typography) - 传统墨色系 (Sumi & Tea)
+     ======================================== */
+  --text-primary: #3c3633;
+  /* 浓墨褐 (Dark Brown Ink) - 代替 Slate-700 */
+  --text-secondary: #594e46;
+  /* 枯茶 (Dried Tea) - 代替 Slate-600 */
+  --text-muted: #8c7e72;
+  /* 栗梅 (Chestnut Plum) - 代替 Slate-500 */
+  --text-faint: #b3a698;
+  /* 利休白茶 (Pale Tea) - 代替 Slate-400 */
+
+  /* ========================================
+     边框与分割线 (Borders) - 暖调
+     ======================================== */
+  --border-default: #d4c5b0;
+  --border-muted: #e6d8c5;
+
+  /* 输入框 (Input) - 修复纯白背景问题 */
+  --scheme-input-bg: #fbf6ec !important;
+  --scheme-input-border: #d4c5b0 !important;
+
+  /* ========================================
+     滚动条 (Scrollbar) - 木色系
+     ======================================== */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #d4c4b7 !important;
+  /* 浅木色 */
+  --scrollbar-thumb-hover: #bcaaa0 !important;
+  /* 深木色 */
+
+  /* ========================================
+     交互状态 (Interaction) - 抹茶色系
+     ======================================== */
+  --hover-bg: rgba(85, 107, 47, 0.08);
+  /* 极淡抹茶 */
+  --active-bg: rgba(85, 107, 47, 0.12);
+
+  /* ========================================
+     通用强调色 (Accents) - 抹茶 & 茜色
+     ======================================== */
+  --accent-primary: #556B2F;
+  /* 抹茶 (Matcha) */
+  --accent-primary-light: #d8e6c3;
+  /* 浅抹茶 */
+
+  /* ========================================
+     视觉特效 (Effects)
+     ======================================== */
+  /* 毛玻璃 - 暖调 */
+  --glass-bg: rgba(251, 246, 236, 0.85);
+  /* Warm Tinted Glass */
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: 12px;
+
+  /* 阴影 - 暖棕色漫射 (Diffuse Brown Shadows) */
+  --shadow-sm: 0 2px 8px rgba(60, 54, 51, 0.06);
+  --shadow-md: 0 4px 16px -2px rgba(60, 54, 51, 0.08);
+  --shadow-lg: 0 12px 32px -4px rgba(60, 54, 51, 0.12);
+
+  /* 选择区域 - 抹茶高亮 */
+  --selection-bg: #d0e0c0;
+  --selection-text: #2b2f25;
+
+  /* ========================================
+     词性颜色映射 (POS Colors) - Simplified to 5 Groups (Wafu)
+     ======================================== */
+
+  /* 
+    Group 1: 名词组 (Noun Group) - Asagi (浅葱色) 
+    Shared by: Noun, Pronoun, Proper Noun, Prefix, Suffix
+  */
+  --wafu-group-noun-text: #2D6D8B;
+  --wafu-group-noun-bg: rgba(51, 166, 184, 0.15);
+  --wafu-group-noun-border: rgba(51, 166, 184, 0.3);
+
+  /* 
+    Group 2: 动词组 (Verb Group) - Tokiwa-iro (常磐色 -> GREEN for Wafu intent) 
+    Shared by: Verb, Auxiliary
+  */
+  --wafu-group-verb-text: #007B43;
+  --wafu-group-verb-bg: rgba(0, 123, 67, 0.12);
+  --wafu-group-verb-border: rgba(0, 123, 67, 0.25);
+
+  /* 
+    Group 3: 修饰组 (Adj/Adv Group) - Kohaku (琥珀色)
+    Shared by: Adjective, Adverb
+  */
+  --wafu-group-adj-text: #BF783A;
+  --wafu-group-adj-bg: rgba(202, 120, 83, 0.15);
+  --wafu-group-adj-border: rgba(202, 120, 83, 0.3);
+
+  /* 
+    Group 4: 虚词组 (Particle/Conj Group) - Toki-iro (鸨色)
+    Shared by: Particle, Conjunction, Interjection
+  */
+  --wafu-group-particle-text: #D05A6E;
+  --wafu-group-particle-bg: rgba(244, 167, 185, 0.15);
+  --wafu-group-particle-border: rgba(244, 167, 185, 0.3);
+
+  /* 
+    Group 5: 其他组 (Other Group) - Kuchiba (朽叶)
+    Shared by: Symbol, Other
+  */
+  --wafu-group-other-text: #8C7063;
+  --wafu-group-other-bg: rgba(140, 112, 99, 0.1);
+  --wafu-group-other-border: rgba(140, 112, 99, 0.2);
+
+
+  /* --- Mapping Specific Keys to Master Groups --- */
+
+  /* Noun Group Mappings */
+  --wafu-noun-text: var(--wafu-group-noun-text);
+  --wafu-noun-bg: var(--wafu-group-noun-bg);
+  --wafu-noun-border: var(--wafu-group-noun-border);
+
+  --wafu-pronoun-text: var(--wafu-group-noun-text);
+  --wafu-pronoun-bg: var(--wafu-group-noun-bg);
+  --wafu-pronoun-border: var(--wafu-group-noun-border);
+  --wafu-代词-text: var(--wafu-group-noun-text);
+  --wafu-代词-bg: var(--wafu-group-noun-bg);
+  --wafu-代词-border: var(--wafu-group-noun-border);
+
+  --wafu-proper_noun-text: var(--wafu-group-noun-text);
+  --wafu-proper_noun-bg: var(--wafu-group-noun-bg);
+  --wafu-proper_noun-border: var(--wafu-group-noun-border);
+  --wafu-专名-text: var(--wafu-group-noun-text);
+  --wafu-专名-bg: var(--wafu-group-noun-bg);
+  --wafu-专名-border: var(--wafu-group-noun-border);
+
+  --wafu-prefix-text: var(--wafu-group-noun-text);
+  --wafu-prefix-bg: var(--wafu-group-noun-bg);
+  --wafu-prefix-border: var(--wafu-group-noun-border);
+  --wafu-前缀-text: var(--wafu-group-noun-text);
+  --wafu-前缀-bg: var(--wafu-group-noun-bg);
+  --wafu-前缀-border: var(--wafu-group-noun-border);
+
+  --wafu-suffix-text: var(--wafu-group-noun-text);
+  --wafu-suffix-bg: var(--wafu-group-noun-bg);
+  --wafu-suffix-border: var(--wafu-group-noun-border);
+  --wafu-后缀-text: var(--wafu-group-noun-text);
+  --wafu-后缀-bg: var(--wafu-group-noun-bg);
+  --wafu-后缀-border: var(--wafu-group-noun-border);
+
+
+  /* Verb Group Mappings */
+  --wafu-verb-text: var(--wafu-group-verb-text);
+  --wafu-verb-bg: var(--wafu-group-verb-bg);
+  --wafu-verb-border: var(--wafu-group-verb-border);
+
+  --wafu-auxiliary-text: var(--wafu-group-verb-text);
+  --wafu-auxiliary-bg: var(--wafu-group-verb-bg);
+  --wafu-auxiliary-border: var(--wafu-group-verb-border);
+
+
+  /* Adj/Adv Group Mappings */
+  --wafu-adjective-text: var(--wafu-group-adj-text);
+  --wafu-adjective-bg: var(--wafu-group-adj-bg);
+  --wafu-adjective-border: var(--wafu-group-adj-border);
+
+  --wafu-adverb-text: var(--wafu-group-adj-text);
+  --wafu-adverb-bg: var(--wafu-group-adj-bg);
+  --wafu-adverb-border: var(--wafu-group-adj-border);
+
+
+  /* Particle/Conj Group Mappings */
+  --wafu-particle-text: var(--wafu-group-particle-text);
+  --wafu-particle-bg: var(--wafu-group-particle-bg);
+  --wafu-particle-border: var(--wafu-group-particle-border);
+
+  --wafu-conjunction-text: var(--wafu-group-particle-text);
+  --wafu-conjunction-bg: var(--wafu-group-particle-bg);
+  --wafu-conjunction-border: var(--wafu-group-particle-border);
+
+  --wafu-interjection-text: var(--wafu-group-particle-text);
+  --wafu-interjection-bg: var(--wafu-group-particle-bg);
+  --wafu-interjection-border: var(--wafu-group-particle-border);
+  --wafu-感叹词-text: var(--wafu-group-particle-text);
+  --wafu-感叹词-bg: var(--wafu-group-particle-bg);
+  --wafu-感叹词-border: var(--wafu-group-particle-border);
+
+
+  /* Other Group Mappings */
+  --wafu-symbol-text: var(--wafu-group-other-text);
+  --wafu-symbol-bg: var(--wafu-group-other-bg);
+  --wafu-symbol-border: var(--wafu-group-other-border);
+  --wafu-符号-text: var(--wafu-group-other-text);
+  --wafu-符号-bg: var(--wafu-group-other-bg);
+  --wafu-符号-border: var(--wafu-group-other-border);
+
+  --wafu-other-text: var(--wafu-group-other-text);
+  --wafu-other-bg: var(--wafu-group-other-bg);
+  --wafu-other-border: var(--wafu-group-other-border);
+
+
+  /* Standard Keys (Redefine generic vars for legacy components) */
+  --color-noun: var(--wafu-group-noun-text);
+  --color-verb: var(--wafu-group-verb-text);
+  --color-adjective: var(--wafu-group-adj-text);
+  --color-particle: var(--wafu-group-particle-text);
+  --color-auxiliary: var(--wafu-group-verb-text);
+  --color-adverb: var(--wafu-group-adj-text);
+  --color-conjunction: var(--wafu-group-particle-text);
+  --color-pitch: #d64f55;
+}
+
+/* ========================================
+   纯黑白灰色主题 (Monochrome)
+   ======================================== */
+
+[data-color-scheme="monochrome"] {
+  /* ========================================
+     基础背景 (Backgrounds)
+     ======================================== */
+  --bg-base: #faf9f6;
+  /* 极浅暖白 (Warm White) */
+  --bg-elevated: #f3f4f6;
+  /* 浅灰色 (Gray-100) - 卡片背景 */
+  --bg-muted: #e5e7eb;
+  /* Gray-200 */
+  --bg-subtle: #f9fafb;
+  /* Gray-50 */
+
+  /* ========================================
+     文字颜色 (Typography)
+     ======================================== */
+  --text-primary: #1f2937;
+  /* 深灰色 (Gray-800) */
+  --text-secondary: #374151;
+  /* Gray-700 */
+  --text-muted: #6b7280;
+  /* Gray-500 */
+  --text-faint: #9ca3af;
+  /* Gray-400 */
+
+  /* ========================================
+     边框与分割线 (Borders)
+     ======================================== */
+  --border-default: #e5e7eb;
+  /* Gray-200 */
+  --border-muted: #f3f4f6;
+  /* Gray-100 */
+
+  /* 输入框 */
+  --scheme-input-bg: #ffffff;
+  --scheme-input-border: #d1d5db;
+
+  /* ========================================
+     滚动条 (Scrollbar)
+     ======================================== */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #d1d5db !important;
+  --scrollbar-thumb-hover: #9ca3af !important;
+
+  /* ========================================
+     交互状态 (Interaction)
+     ======================================== */
+  --hover-bg: rgba(0, 0, 0, 0.05);
+  --active-bg: rgba(0, 0, 0, 0.1);
+
+  /* ========================================
+     通用强调色 (Accents)
+     ======================================== */
+  --accent-primary: #374151;
+  /* Gray-700 */
+  --accent-primary-light: #e5e7eb;
+  /* Gray-200 */
+
+  /* 语法颜色 - Grayscale */
+  --scheme-grammar: #4b5563;
+  /* Gray-600 */
+
+  /* ========================================
+     Scheme Overrides for Monochrome
+     Ensure all scheme-* variables are grayscale
+     ======================================== */
+  --scheme-primary: #374151;
+  /* Gray-700 */
+  --scheme-primary-hover: #1f2937;
+  /* Gray-800 */
+  --scheme-primary-bg: rgba(55, 65, 81, 0.1);
+
+  --scheme-accent: #4b5563;
+  /* Gray-600 */
+  --scheme-accent-hover: #374151;
+  /* Gray-700 */
+  --scheme-accent-bg: rgba(75, 85, 99, 0.1);
+
+  --scheme-muted: #9ca3af;
+  /* Gray-400 */
+  --scheme-muted-hover: #6b7280;
+  /* Gray-500 */
+  --scheme-muted-bg: rgba(156, 163, 175, 0.1);
+
+  --scheme-input-bg: #ffffff;
+  --scheme-input-border: #d1d5db;
+
+  /* 
+    Master Variables for Monochrome 
+    All groups use the same grayscale palette
+  */
+  --mono-group-text: #374151;
+  /* Gray-700 */
+  --mono-group-bg: rgba(55, 65, 81, 0.05);
+  --mono-group-border: rgba(55, 65, 81, 0.15);
+
+  /* Group 1: Noun Group */
+  --wafu-group-noun-text: var(--mono-group-text);
+  --wafu-group-noun-bg: var(--mono-group-bg);
+  --wafu-group-noun-border: var(--mono-group-border);
+
+  /* Group 2: Verb Group */
+  --wafu-group-verb-text: var(--mono-group-text);
+  --wafu-group-verb-bg: var(--mono-group-bg);
+  --wafu-group-verb-border: var(--mono-group-border);
+
+  /* Group 3: Adj/Adv Group */
+  --wafu-group-adj-text: var(--mono-group-text);
+  --wafu-group-adj-bg: var(--mono-group-bg);
+  --wafu-group-adj-border: var(--mono-group-border);
+
+  /* Group 4: Particle/Conj Group */
+  --wafu-group-particle-text: var(--mono-group-text);
+  --wafu-group-particle-bg: var(--mono-group-bg);
+  --wafu-group-particle-border: var(--mono-group-border);
+
+  /* Group 5: Other Group */
+  --wafu-group-other-text: var(--mono-group-text);
+  --wafu-group-other-bg: var(--mono-group-bg);
+  --wafu-group-other-border: var(--mono-group-border);
+
+
+  /* --- Mapping Specific Keys to Master Groups --- */
+  /* Reuse Wafu variable infrastructure but point to monochrome vars */
+
+  /* Noun Group */
+  --wafu-noun-text: var(--mono-group-text);
+  --wafu-noun-bg: var(--mono-group-bg);
+  --wafu-noun-border: var(--mono-group-border);
+  --wafu-pronoun-text: var(--mono-group-text);
+  --wafu-pronoun-bg: var(--mono-group-bg);
+  --wafu-pronoun-border: var(--mono-group-border);
+  --wafu-代词-text: var(--mono-group-text);
+  --wafu-代词-bg: var(--mono-group-bg);
+  --wafu-代词-border: var(--mono-group-border);
+  --wafu-proper_noun-text: var(--mono-group-text);
+  --wafu-proper_noun-bg: var(--mono-group-bg);
+  --wafu-proper_noun-border: var(--mono-group-border);
+  --wafu-专名-text: var(--mono-group-text);
+  --wafu-专名-bg: var(--mono-group-bg);
+  --wafu-专名-border: var(--mono-group-border);
+  --wafu-prefix-text: var(--mono-group-text);
+  --wafu-prefix-bg: var(--mono-group-bg);
+  --wafu-prefix-border: var(--mono-group-border);
+  --wafu-前缀-text: var(--mono-group-text);
+  --wafu-前缀-bg: var(--mono-group-bg);
+  --wafu-前缀-border: var(--mono-group-border);
+  --wafu-suffix-text: var(--mono-group-text);
+  --wafu-suffix-bg: var(--mono-group-bg);
+  --wafu-suffix-border: var(--mono-group-border);
+  --wafu-后缀-text: var(--mono-group-text);
+  --wafu-后缀-bg: var(--mono-group-bg);
+  --wafu-后缀-border: var(--mono-group-border);
+
+  /* Verb Group */
+  --wafu-verb-text: var(--mono-group-text);
+  --wafu-verb-bg: var(--mono-group-bg);
+  --wafu-verb-border: var(--mono-group-border);
+  --wafu-auxiliary-text: var(--mono-group-text);
+  --wafu-auxiliary-bg: var(--mono-group-bg);
+  --wafu-auxiliary-border: var(--mono-group-border);
+
+  /* Adj/Adv Group */
+  --wafu-adjective-text: var(--mono-group-text);
+  --wafu-adjective-bg: var(--mono-group-bg);
+  --wafu-adjective-border: var(--mono-group-border);
+  --wafu-adverb-text: var(--mono-group-text);
+  --wafu-adverb-bg: var(--mono-group-bg);
+  --wafu-adverb-border: var(--mono-group-border);
+
+  /* Particle/Conj Group */
+  --wafu-particle-text: var(--mono-group-text);
+  --wafu-particle-bg: var(--mono-group-bg);
+  --wafu-particle-border: var(--mono-group-border);
+  --wafu-conjunction-text: var(--mono-group-text);
+  --wafu-conjunction-bg: var(--mono-group-bg);
+  --wafu-conjunction-border: var(--mono-group-border);
+  --wafu-interjection-text: var(--mono-group-text);
+  --wafu-interjection-bg: var(--mono-group-bg);
+  --wafu-interjection-border: var(--mono-group-border);
+  --wafu-感叹词-text: var(--mono-group-text);
+  --wafu-感叹词-bg: var(--mono-group-bg);
+  --wafu-感叹词-border: var(--mono-group-border);
+
+  /* Other Group */
+  --wafu-symbol-text: var(--mono-group-text);
+  --wafu-symbol-bg: var(--mono-group-bg);
+  --wafu-symbol-border: var(--mono-group-border);
+  --wafu-符号-text: var(--mono-group-text);
+  --wafu-符号-bg: var(--mono-group-bg);
+  --wafu-符号-border: var(--mono-group-border);
+  --wafu-other-text: var(--mono-group-text);
+  --wafu-other-bg: var(--mono-group-bg);
+  --wafu-other-border: var(--mono-group-border);
+
+  /* Standard Keys Override */
+  --color-noun: var(--mono-group-text);
+  --color-verb: var(--mono-group-text);
+  --color-adjective: var(--mono-group-text);
+  --color-particle: var(--mono-group-text);
+  --color-auxiliary: var(--mono-group-text);
+  --color-adverb: var(--mono-group-text);
+  --color-conjunction: var(--mono-group-text);
+  --color-pitch: #9ca3af;
 }
 
 /* ========================================
@@ -155,6 +619,8 @@
   --selection-text: #d4d4d8;
 
   /* 彩虹边框渐变 */
+  --rainbow-gradient: linear-gradient(90deg,
+      #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f472b6, #f87171);
   --rainbow-border: linear-gradient(135deg,
       rgba(251, 191, 36, 0.6) 0%,
       rgba(245, 158, 11, 0.5) 12%,
@@ -165,6 +631,60 @@
       rgba(59, 130, 246, 0.5) 72%,
       rgba(34, 197, 94, 0.5) 84%,
       rgba(251, 191, 36, 0.6) 100%);
+}
+
+/* ========================================
+   Monochrome + Dark Mode Overrides
+   Ensure text is bright gray in dark mode
+   ======================================== */
+[data-theme="dark"][data-color-scheme="monochrome"] {
+  /* Master Monochrome Variables - Light Gray for Dark Mode */
+  --mono-group-text: #9ca3af;
+  /* Gray-400 */
+  --mono-group-bg: rgba(0, 0, 0, 0.4);
+  /* Darker black background */
+  --mono-group-border: rgba(255, 255, 255, 0.1);
+
+  /* Grammar color */
+  --scheme-grammar: #9ca3af;
+  /* Gray-400 */
+
+  /* Scheme Overrides - Light Grays */
+  --scheme-primary: #9ca3af;
+  /* Gray-400 - Was Gray-300 */
+  --scheme-primary-hover: #d1d5db;
+  /* Gray-300 */
+  --scheme-primary-bg: rgba(0, 0, 0, 0.4);
+  /* Darker bg */
+
+  --scheme-accent: #9ca3af;
+  /* Gray-400 */
+  --scheme-accent-hover: #d1d5db;
+  /* Gray-300 */
+  --scheme-accent-bg: rgba(0, 0, 0, 0.4);
+
+  --scheme-muted: #6b7280;
+  /* Gray-500 */
+  --scheme-muted-hover: #9ca3af;
+  /* Gray-400 */
+  --scheme-muted-bg: rgba(0, 0, 0, 0.4);
+
+  /* Force dark backgrounds to prevent light mode bleed-through */
+  --bg-elevated: rgba(10, 10, 12, 0.7);
+  /* Darker glass */
+  --bg-muted: rgba(20, 20, 25, 0.6);
+  --bg-subtle: rgba(30, 30, 35, 0.5);
+  --glass-bg: rgba(5, 5, 8, 0.7);
+  /* Deep dark glass */
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Base text overrides */
+  --text-primary: #9ca3af;
+  /* Gray-400 - Was Gray-100 */
+  --text-secondary: #6b7280;
+  /* Gray-500 - Was Gray-200 */
+  --text-muted: #4b5563;
+  /* Gray-600 */
 }
 
 /* ========================================
@@ -421,6 +941,104 @@ ruby rt {
 .word-token:hover {
   transform: translateY(-2px);
 }
+
+/* ========================================
+   卡拉OK高亮动画
+   ======================================== */
+
+/* 方案 1: 轻盈上抬 (Float Up) */
+.karaoke-float-up {
+  transform: translateY(-3px);
+  opacity: 1;
+  will-change: transform;
+}
+
+/* 方案 2: 弹性跳动 (Bounce) - Optimized for smoothness */
+.karaoke-bounce {
+  /* Using a spring-like bezier for the main motion */
+  animation: karaoke-bounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  will-change: transform;
+  /* Hardware acceleration */
+}
+
+@keyframes karaoke-bounce {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+
+  /* Rapid overshoot */
+  35% {
+    transform: scale(1.2) translateY(-4px);
+  }
+
+  /* Settle back with dampening */
+  65% {
+    transform: scale(1.05) translateY(-1px);
+  }
+
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes karaoke-pulse-animation {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+/* 方案 3: 渐变填充 (Gradient Fill) */
+@keyframes karaoke-gradient-fill {
+  0% {
+    background-size: 0% 100%;
+  }
+
+  100% {
+    background-size: 100% 100%;
+  }
+}
+
+/* Sky Drop Transition Classes */
+.sky-drop-base {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity, filter;
+}
+
+.sky-drop-hidden {
+  opacity: 0 !important;
+  transform: translateY(-30px);
+  filter: blur(2px);
+}
+
+.sky-drop-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* 方案 5: 底部高亮条 (Underline Slide) */
+.karaoke-underline {
+  /* Container style - no animation on container */
+}
+
+@keyframes karaoke-underline-slide {
+  0% {
+    width: 0%;
+  }
+
+  100% {
+    width: 100%;
+  }
+}
+
 
 /* ========================================
    加载动画

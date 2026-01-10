@@ -13,12 +13,7 @@ interface VoicevoxAccentPhrase {
     pause_mora?: VoicevoxMora;
 }
 
-interface VoicevoxQuery {
-    accent_phrases: VoicevoxAccentPhrase[];
-    speedScale: number;
-    prePhonationLength?: number;
-    postPhonationLength?: number;
-}
+
 
 interface VoicevoxSpeaker {
     name: string;
@@ -78,7 +73,9 @@ export class VoicevoxProvider implements TtsProvider {
             // Moras have 'vowel_length' and 'consonant_length' in seconds.
             // We can calculate cumulative time.
 
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const alignment: { time: number }[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             let currentTime = 0 + (query.prePhonationLength || 0.1); // Add some padding/pre-phonation
 
             // Note: speedScale affects synthesis, so we must adjust our calculated time by speedScale?
@@ -221,7 +218,6 @@ export class VoicevoxProvider implements TtsProvider {
     // Simple linear interpolation tracker for Voicevox (better than nothing)
     // Since we know the Exact Total Duration from the phonemes, this is reasonably accurate for short sentences.
     private startBoundaryTracking(textLength: number, totalDurationMs: number, callback: (idx: number) => void) {
-        const startTime = performance.now();
 
         const track = () => {
             if (!this.audio || this.audio.paused) return;
@@ -292,7 +288,7 @@ export class VoicevoxProvider implements TtsProvider {
                 });
             });
             return voices;
-        } catch (e) {
+        } catch {
             return [{ id: '3', name: '连接失败 (请启动VOICEVOX)' }];
         }
     }

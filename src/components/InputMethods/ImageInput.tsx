@@ -3,7 +3,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { createWorker } from 'tesseract.js';
-import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import clsx from 'clsx';
 
 interface ImageInputProps {
@@ -17,7 +18,7 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
     const [progressStatus, setProgressStatus] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-    const processImage = async (file: File | Blob) => {
+    const processImage = useCallback(async (file: File | Blob) => {
         setIsProcessing(true);
         setProgress(0);
         setProgressStatus('準備中...');
@@ -59,7 +60,7 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [onTextExtracted]);
 
     // Clean OCR output for Japanese text
     // Removes extra spaces that Tesseract inserts between CJK characters
@@ -90,7 +91,7 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
         if (acceptedFiles.length > 0) {
             processImage(acceptedFiles[0]);
         }
-    }, []);
+    }, [processImage]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -120,7 +121,7 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
 
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
-    }, []);
+    }, [processImage]);
 
     const clearImage = (e?: React.MouseEvent) => {
         e?.stopPropagation(); // Prevent dropzone click
@@ -153,11 +154,15 @@ export default function ImageInput({ onTextExtracted, className }: ImageInputPro
                 </div>
             ) : (
                 <div className="relative rounded-xl border border-[var(--border-default)] overflow-hidden bg-[var(--bg-subtle)]">
-                    <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="w-full h-48 object-contain bg-pattern-checker"
-                    />
+                    <div className="relative w-full h-48 bg-pattern-checker">
+                        <Image
+                            src={imagePreview}
+                            alt="Preview"
+                            fill
+                            className="object-contain"
+                            unoptimized // Since it's a blob/data URL local preview
+                        />
+                    </div>
 
                     {/* Overlay for processing */}
                     {isProcessing && (

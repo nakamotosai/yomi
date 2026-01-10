@@ -7,21 +7,23 @@ import { GrammarEntry } from '@/types/grammar';
 
 const DEFAULT_SETTINGS: AppSettings = {
     showFurigana: true,
-    hideCommonFurigana: true,
+    hideCommonFurigana: false, // Default: Do not hide common furigana
     showPitchAccent: false,
     hideParticles: false,
     karaokeMode: true,
+    karaokeStyle: 'glow-only', // Default: Glow only
     fontSize: 'medium',
-    fontFamily: 'serif',
-    theme: 'light',
+    fontFamily: 'sans', // Default: Sans-serif (Hei-ti)
+    theme: 'light', // Auto-detection would require 'system' option, sticking to light for stability
     ttsProvider: 'native',
     nativeVoiceURI: '',
     voicevoxSpeakerId: 3, // 3: Zundamon Normal
     voicevoxUrl: 'http://localhost:50021',
     playbackSpeed: 1.0,
     dictionaryProvider: 'jisho',
-    activeColorPOS: [PartOfSpeech.VERB, PartOfSpeech.ADJECTIVE, PartOfSpeech.PARTICLE, PartOfSpeech.AUXILIARY, PartOfSpeech.ADVERB, PartOfSpeech.NOUN], // Default: Include nouns for full color
-    colorTheme: 'google_dark',
+    activeColorPOS: Object.values(PartOfSpeech), // Default: All POS colors enabled
+    colorTheme: 'standard', // Default: Block style
+    colorScheme: 'morandi',
     showTranslation: true,
     autoReadOnClick: true,
 
@@ -66,13 +68,13 @@ interface AppState {
         leftInputHeight: number; // Height of the bottom input area in left sidebar
         rightBottomHeight: number; // Height of the bottom panel (History) in right sidebar
     };
-    setLayout: (layout: {
+    setLayout: (layout: Partial<{
         leftSidebarWidth: number;
         rightSidebarWidth: number;
         leftTopHeight: number;
         leftInputHeight: number;
         rightBottomHeight: number;
-    }) => void;
+    }>) => void;
 
     // Current sentence context for vocab saving
     currentSentence: string;
@@ -88,8 +90,10 @@ interface AppState {
 
     // Global Playlist
     playlist: TTSSentence[];
+    fullPlaylist: TTSSentence[]; // Store the complete article playlist
     currentSentenceIndex: number;
     setPlaylist: (sentences: TTSSentence[]) => void;
+    setFullPlaylist: (sentences: TTSSentence[]) => void;
     playPlaylist: (sentences: TTSSentence[], startIndex?: number) => void;
     playNextSentence: () => void;
     playPrevSentence: () => void;
@@ -100,6 +104,10 @@ interface AppState {
     setIsMobileDrawerOpen: (open: boolean) => void;
     isMobileSheetOpen: boolean;
     setIsMobileSheetOpen: (open: boolean) => void;
+
+    // Extension source flag (auto-triggers translation expansion)
+    isFromExtension: boolean;
+    setIsFromExtension: (fromExtension: boolean) => void;
 }
 
 export interface TTSTokenMap {
@@ -114,6 +122,10 @@ export interface TTSSentence {
     tokenMap: TTSTokenMap[];
 }
 
+export const DEFAULT_INPUT_TEXT = `ようこそ、ここでは日本語の文章を入力して、詳細な読み方や意味を解析することができます。
+単語をクリックすると右側に詳しい辞書情報が表示され、学習の履歴も自動で保存されます。
+左のメニューから「単語帳」や「仮名練習」モードに切り替えて、様々な方法で日本語を学びましょう。`;
+
 export const useAppStore = create<AppState>()(
     persist(
         (set) => ({
@@ -121,7 +133,7 @@ export const useAppStore = create<AppState>()(
             setAppMode: (mode) => set({ appMode: mode }),
             centerViewMode: 'reader', // 'reader' | 'vocab' | 'grammar'
             setCenterViewMode: (mode) => set({ centerViewMode: mode }),
-            inputText: '',
+            inputText: DEFAULT_INPUT_TEXT,
             setInputText: (text) => set({ inputText: text }),
 
             isAnalyzing: false,
@@ -167,7 +179,9 @@ export const useAppStore = create<AppState>()(
                 leftInputHeight: 180, // Height of input card
                 rightBottomHeight: 240, // symmetrical height
             },
-            setLayout: (layout) => set({ layout }),
+            setLayout: (newLayout) => set((state) => ({
+                layout: { ...state.layout, ...newLayout }
+            })),
 
             currentSentence: '',
             setCurrentSentence: (sentence) => set({ currentSentence: sentence }),
@@ -180,8 +194,10 @@ export const useAppStore = create<AppState>()(
             setSpeakingTokenId: (id) => set({ speakingTokenId: id }),
 
             playlist: [],
+            fullPlaylist: [],
             currentSentenceIndex: 0,
             setPlaylist: (playlist) => set({ playlist, currentSentenceIndex: 0, speakingTokenId: null }),
+            setFullPlaylist: (playlist) => set({ fullPlaylist: playlist }),
             playPlaylist: (newPlaylist, startIndex = 0) => set((state) => {
                 // Smart Check: If playlist is effectively the same, don't update Reference
                 // This prevents GlobalAudioPlayer from restarting playback if TextAnalyzer re-generates same list
@@ -231,9 +247,12 @@ export const useAppStore = create<AppState>()(
             setIsMobileDrawerOpen: (open) => set({ isMobileDrawerOpen: open }),
             isMobileSheetOpen: false,
             setIsMobileSheetOpen: (open) => set({ isMobileSheetOpen: open }),
+
+            isFromExtension: false,
+            setIsFromExtension: (fromExtension) => set({ isFromExtension: fromExtension }),
         }),
         {
-            name: 'yomi-app-store-v4', // Bump version to force reset
+            name: 'yomi-app-store-v7', // Bump version to force reset
             partialize: (state) => ({
                 settings: state.settings,
                 inputText: state.inputText,

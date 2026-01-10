@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
 
@@ -30,6 +30,46 @@ export default function GlobalAudioPlayer() {
         currentIndexRef.current = currentIndex;
     }, [isSpeaking, currentIndex]);
 
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                // Ignore if typing in input/textarea
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                    return;
+                }
+
+                e.preventDefault(); // Prevent scrolling
+
+                // Toggle Play/Pause
+                const store = useAppStore.getState();
+
+                // Logic: If current playlist is partial (single sentence), Space should RESET to full
+                const isPartial = store.playlist.length !== store.fullPlaylist.length;
+
+                if (isPartial) {
+                    store.setPlaylist(store.fullPlaylist);
+                    store.setIsSpeaking(true);
+                    store.setIsPaused(false);
+                    return;
+                }
+
+                if (store.isSpeaking) {
+                    store.setIsPaused(!store.isPaused);
+                } else {
+                    // Start Playing (if content exists)
+                    if (store.playlist.length > 0) {
+                        store.setIsSpeaking(true);
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     // Effect: Handle Playback
     useEffect(() => {
         // If not speaking, ensure TTS is stopped
@@ -43,6 +83,8 @@ export default function GlobalAudioPlayer() {
             ttsManager.pause();
             return;
         } else {
+
+
             // If was paused and now resumed, and we correspond to the same sentence?
             // Since we re-run this effect on `isPaused` change, we need to check if we should resume or start fresh.
             // ttsManager.resume() works if audio exists. 
@@ -82,44 +124,57 @@ export default function GlobalAudioPlayer() {
                 stopTTS();
             },
             onBoundary: (charIndex, _charLength, boundaryIndex) => {
-                // Ignore invalid boundary
-                if (charIndex === -1 || boundaryIndex === undefined || boundaryIndex === -1) {
-                    setSpeakingTokenId(null);
+                // Ignore invalid boundary - Do NOT clear speakingTokenId
+                // This preserves the "active" state during silence/gaps for Sky Drop
+                if (charIndex === -1) {
+                    // setSpeakingTokenId(null); // REMOVED to prevent flicker
                     return;
                 }
 
                 const map = currentSentence.tokenMap;
+                if (!map || map.length === 0) {
+                    setSpeakingTokenId(null);
+                    return;
+                }
 
-                // Strategy 1: Use boundaryIndex to match token by sequence order
-                // This works when TTS word count roughly matches our token count
-                if (boundaryIndex < map.length) {
+                // Primary Strategy: Use charIndex to find the token
+                // This is the most accurate because it's based on TTS timing
+                const match = map.find(t => charIndex >= t.start && charIndex < t.end);
+
+                if (match) {
+                    setSpeakingTokenId(match.id);
+                    return;
+                }
+
+                // Fallback 1: Find token whose start is closest to charIndex (within range)
+                let closest = null;
+                let minDist = Infinity;
+                for (const t of map) {
+                    // Check if charIndex is near this token's boundaries
+                    const distStart = Math.abs(t.start - charIndex);
+                    const distEnd = Math.abs(t.end - charIndex);
+                    const dist = Math.min(distStart, distEnd);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closest = t;
+                    }
+                }
+
+                // Accept match if within reasonable distance (5 chars)
+                if (closest && minDist <= 5) {
+                    setSpeakingTokenId(closest.id);
+                    return;
+                }
+
+                // Fallback 2: Use boundaryIndex if it's valid
+                // This handles cases where charIndex doesn't match exactly
+                if (boundaryIndex !== undefined && boundaryIndex >= 0 && boundaryIndex < map.length) {
                     setSpeakingTokenId(map[boundaryIndex].id);
                     return;
                 }
 
-                // Strategy 2: Fallback to charIndex matching for longer sentences
-                // where TTS may have different word segmentation
-                let match = map.find(t => charIndex >= t.start && charIndex < t.end);
-
-                if (match) {
-                    setSpeakingTokenId(match.id);
-                } else {
-                    // Fallback: find the closest token
-                    let closest = null;
-                    let minDist = Infinity;
-                    for (const t of map) {
-                        const distStart = Math.abs(t.start - charIndex);
-                        const distEnd = Math.abs(t.end - charIndex);
-                        const dist = Math.min(distStart, distEnd);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            closest = t;
-                        }
-                    }
-                    if (closest && minDist <= 15) {
-                        setSpeakingTokenId(closest.id);
-                    }
-                }
+                // No match found - also keep last state instead of clearing?
+                // setSpeakingTokenId(null); // REMOVED to prevent flicker
             }
         });
 

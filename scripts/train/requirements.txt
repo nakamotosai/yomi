@@ -1,0 +1,11 @@
+torch
+transformers
+peft
+datasets
+bitsandbytes
+accelerate
+scipy
+pandas
+tiktoken
+sentencepiece
+protobuf

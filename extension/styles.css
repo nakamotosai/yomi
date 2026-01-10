@@ -1,0 +1,40 @@
+.yomi-floating-icon {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    cursor: pointer;
+    z-index: 2147483647;
+    /* Max z-index to be on top */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    animation: yomi-pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.yomi-floating-icon:hover {
+    transform: scale(1.1);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.yomi-floating-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+@keyframes yomi-pop-in {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

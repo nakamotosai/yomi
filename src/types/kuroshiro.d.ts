@@ -8,10 +8,10 @@ declare module 'kuroshiro' {
     }
 
     class Kuroshiro {
-        init(analyzer: any): Promise<void>;
+        init(analyzer: unknown): Promise<void>;
         convert(text: string, options?: KuroshiroOptions): Promise<string>;
         _analyzer: {
-            parse(text: string): Promise<any[]>;
+            parse(text: string): Promise<unknown[]>;
         };
     }
 
@@ -26,7 +26,7 @@ declare module 'kuroshiro-analyzer-kuromoji' {
     class Analyzer {
         constructor(options?: AnalyzerOptions);
         init(): Promise<void>;
-        parse(text: string): Promise<any[]>;
+        parse(text: string): Promise<unknown[]>;
     }
 
     export default Analyzer;

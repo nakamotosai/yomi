@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, X, Trophy } from 'lucide-react';
 import { KanaChar } from '@/types';
@@ -24,15 +24,9 @@ export default function KanaGame({ isOpen, onClose }: KanaGameProps) {
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
     // Reset game when opened
-    useEffect(() => {
-        if (isOpen) {
-            setScore(0);
-            setStreak(0);
-            nextQuestion();
-        }
-    }, [isOpen]);
 
-    const speak = (text: string) => {
+
+    const speak = useCallback((text: string) => {
         window.speechSynthesis.cancel();
         const uttr = new SpeechSynthesisUtterance(text);
         uttr.lang = 'ja-JP';
@@ -40,14 +34,13 @@ export default function KanaGame({ isOpen, onClose }: KanaGameProps) {
         const jaVoice = voices.find(v => v.lang === 'ja-JP' && !v.name.includes('Google'));
         if (jaVoice) uttr.voice = jaVoice;
         window.speechSynthesis.speak(uttr);
-    };
+    }, []);
 
-    const nextQuestion = () => {
+    const nextQuestion = useCallback(() => {
         setSelectedOptionId(null);
         setIsCorrect(null);
 
         // Pick a random char from ALL data
-        // TODO: Ideally use only active filtered ones if passed, but global for now is fine
         const target = KANA_DATA[Math.floor(Math.random() * KANA_DATA.length)];
         setCurrentQuestion(target);
 
@@ -66,7 +59,7 @@ export default function KanaGame({ isOpen, onClose }: KanaGameProps) {
 
         // Auto play sound after short delay
         setTimeout(() => speak(target.hiragana), 500);
-    };
+    }, [speak]);
 
     const handleOptionClick = (char: KanaChar) => {
         if (selectedOptionId) return; // Prevent double click
@@ -91,6 +84,16 @@ export default function KanaGame({ isOpen, onClose }: KanaGameProps) {
     const replaySound = () => {
         if (currentQuestion) speak(currentQuestion.hiragana);
     };
+
+    // Reset game when opened
+    useEffect(() => {
+        if (isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setScore(0);
+            setStreak(0);
+            setTimeout(() => nextQuestion(), 0);
+        }
+    }, [isOpen, nextQuestion]);
 
     if (!isOpen) return null;
 

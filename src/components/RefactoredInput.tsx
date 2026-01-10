@@ -13,8 +13,9 @@ interface RefactoredInputProps {
     compact?: boolean;
 }
 
-export default function RefactoredInput({ inputText, setInputText, onClear, compact = false }: RefactoredInputProps) {
-    const [isInputFocused, setIsInputFocused] = useState(false);
+export default function RefactoredInput({ inputText, setInputText, onClear }: RefactoredInputProps) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_isInputFocused, setIsInputFocused] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
         };
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Image preprocessing for better OCR
@@ -161,10 +163,12 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                 isDark && "rainbow-highlight"
             )}
             style={{
-                background: isDark ? 'var(--bg-muted)' : 'white',
+                background: isDark
+                    ? 'var(--bg-muted)'
+                    : 'var(--glass-bg)',
                 border: isDark
                     ? 'none'
-                    : '1px solid #e2e8f0',
+                    : '1px solid var(--border-default)',
             }}
         >
             <textarea

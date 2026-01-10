@@ -6,9 +6,10 @@ import {
     Speaker, Languages, Sparkles, Sun, Moon, Info, RotateCcw,
     Github, Keyboard, ExternalLink
 } from 'lucide-react';
+import Image from 'next/image';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
-import { PartOfSpeech } from '@/types';
+import { PartOfSpeech, AppSettings } from '@/types';
 import { COLOR_THEMES, ThemeId } from '@/lib/colorThemes';
 import clsx from 'clsx';
 
@@ -17,7 +18,7 @@ interface SettingsModalProps {
     onClose: () => void;
 }
 
-type TabId = 'appearance' | 'reading' | 'audio' | 'about';
+type TabId = 'appearance' | 'highlight' | 'reading' | 'audio' | 'about';
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const { settings, updateSettings, toggleSetting } = useAppStore();
@@ -36,6 +37,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
     const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
         { id: 'appearance', label: '外观', icon: Palette },
+        { id: 'highlight', label: '高亮', icon: Sparkles },
         { id: 'reading', label: '阅读', icon: BookOpen },
         { id: 'audio', label: '语音', icon: Speaker },
         { id: 'about', label: '关于', icon: Info },
@@ -67,6 +69,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div
                 className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
                 style={{
+                    height: '560px',
                     maxHeight: '85vh',
                     background: 'var(--bg-elevated)',
                     border: `1px solid var(--border-default)`
@@ -261,49 +264,56 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 </div>
                             </div>
 
-                            {/* 词性配色 + 颜色高亮 - 并排 */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* 词性配色风格 */}
-                                <div>
-                                    <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>高亮样式</h3>
-                                    <div className="space-y-1">
-                                        {(Object.keys(COLOR_THEMES) as ThemeId[]).map((themeKey) => {
-                                            const theme = COLOR_THEMES[themeKey];
-                                            const isSelected = settings.colorTheme === themeKey;
-                                            return (
-                                                <button
-                                                    key={themeKey}
-                                                    onClick={() => updateSettings({ colorTheme: themeKey })}
-                                                    className={clsx(
-                                                        "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all text-left",
-                                                        isDark && isSelected && "rainbow-highlight"
-                                                    )}
-                                                    style={{
-                                                        background: isSelected
-                                                            ? (isDark ? 'rgba(0,0,0,0.4)' : 'white')
-                                                            : 'transparent',
-                                                        backdropFilter: isSelected && isDark ? 'blur(8px)' : 'none',
-                                                        WebkitBackdropFilter: isSelected && isDark ? 'blur(8px)' : 'none',
-                                                        border: isDark
-                                                            ? (isSelected ? 'none' : '1px solid rgba(255,255,255,0.15)')
-                                                            : 'none',
-                                                        borderRadius: '8px',
-                                                        boxShadow: isSelected && !isDark ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                                    }}
-                                                >
-                                                    <div className="flex gap-0.5">
-                                                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#84A69D' }} />
-                                                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#C8733A' }} />
-                                                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#B8956B' }} />
-                                                    </div>
-                                                    <span className="text-xs" style={{ color: isSelected && isDark ? 'white' : 'var(--text-primary)' }}>
-                                                        {theme.name}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                            {/* 配色方案 (Color Scheme) */}
+                            <div>
+                                <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>配色风格</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { id: 'morandi', label: '莫兰迪', desc: '现代高级灰', colors: ['#9B8AA5', '#437E6F'] },
+                                        { id: 'wafu', label: '和风', desc: '传统日式色', colors: ['#c5e1a5', '#d66a6a'] },
+                                        { id: 'monochrome', label: '墨韵', desc: '纯粹黑白灰', colors: ['#374151', '#e5e7eb'] },
+                                    ].map((scheme) => (
+                                        <button
+                                            key={scheme.id}
+                                            onClick={() => updateSettings({ colorScheme: scheme.id as 'morandi' | 'wafu' })}
+                                            className={clsx(
+                                                "flex flex-col items-center justify-center p-3 rounded-xl border transition-all relative overflow-hidden",
+                                                settings.colorScheme === scheme.id ? "ring-2 ring-offset-1 ring-blue-500/50" : ""
+                                            )}
+                                            style={{
+                                                background: settings.colorScheme === scheme.id
+                                                    ? (isDark ? 'rgba(255,255,255,0.1)' : 'white')
+                                                    : 'transparent',
+                                                borderColor: settings.colorScheme === scheme.id
+                                                    ? 'transparent'
+                                                    : 'var(--border-default)',
+                                            }}
+                                        >
+                                            <div className="flex gap-1 mb-2">
+                                                {scheme.colors.map((c, i) => (
+                                                    <div key={i} className="w-4 h-4 rounded-full shadow-sm" style={{ background: c }} />
+                                                ))}
+                                            </div>
+                                            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{scheme.label}</span>
+                                            <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{scheme.desc}</span>
+
+                                            {/* Selection Indicator */}
+                                            {settings.colorScheme === scheme.id && (
+                                                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500" />
+                                            )}
+                                        </button>
+                                    ))}
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ==================== 高亮 TAB ==================== */}
+                    {activeTab === 'highlight' && (
+                        <div className="space-y-6">
+                            {/* 词性配色 + 颜色高亮 */}
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* 词性配色风格 - 已移除，只有一种风格 */}
 
                                 {/* 词性颜色高亮 */}
                                 <div>
@@ -320,7 +330,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                             { label: '名词', color: '#84A69D', members: [PartOfSpeech.NOUN, PartOfSpeech.PREFIX, PartOfSpeech.SUFFIX] },
                                             { label: '动词', color: '#C8733A', members: [PartOfSpeech.VERB, PartOfSpeech.AUXILIARY] },
                                             { label: '形容词/副词', color: '#B8956B', members: [PartOfSpeech.ADJECTIVE, PartOfSpeech.ADVERB] },
-                                            { label: '助词/连词', color: '#9B8AA5', members: [PartOfSpeech.PARTICLE, PartOfSpeech.CONJUNCTION, PartOfSpeech.INTERJECTION, PartOfSpeech.OTHER, PartOfSpeech.SYMBOL] },
+                                            { label: '助词/连词', color: '#A67C7C', members: [PartOfSpeech.PARTICLE, PartOfSpeech.CONJUNCTION, PartOfSpeech.INTERJECTION, PartOfSpeech.OTHER, PartOfSpeech.SYMBOL] },
                                         ].map((group) => {
                                             const currentList = settings.activeColorPOS || [];
                                             const isFullyActive = group.members.every(m => currentList.includes(m));
@@ -366,6 +376,55 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 卡拉OK高亮 */}
+                            <section className="space-y-4">
+                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>卡拉OK模式</h3>
+                                <div className="space-y-3 rounded-xl p-1 shadow-sm" style={cardStyle}>
+                                    <SettingToggle
+                                        icon={<Sparkles className="w-4 h-4" style={{ color: 'var(--color-adjective)' }} />}
+                                        label="卡拉OK高亮"
+                                        description="朗读时高亮当前单词"
+                                        checked={settings.karaokeMode}
+                                        onChange={() => toggleSetting('karaokeMode')}
+                                        isDark={isDark}
+                                    />
+                                    {/* Karaoke Style Selector - Only show when karaokeMode is enabled */}
+                                    {settings.karaokeMode && (
+                                        <div className="ml-6 mt-2 mb-2">
+                                            <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--text-muted)' }}>
+                                                动画风格
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                {[
+                                                    { id: 'glow-only', label: '💫 只发光', desc: '柔和效果' },
+                                                    { id: 'glow-scale', label: '✨ 发光放大', desc: '经典效果' },
+                                                    { id: 'float-up', label: '🪶 轻盈上抬', desc: '优雅效果' },
+                                                    { id: 'sky-drop', label: '🌤️ 天降文字', desc: '依次掉落' },
+                                                    { id: 'border', label: '🔲 动态边框', desc: '词性配色外框' },
+                                                    { id: 'bounce', label: '🎵 弹性跳动', desc: '活泼效果' },
+                                                    { id: 'text-magnify', label: '🔍 文字放大', desc: '纯文字放大' },
+                                                    { id: 'underline', label: '📖 底部高亮', desc: '极简效果' },
+                                                ].map((style) => (
+                                                    <button
+                                                        key={style.id}
+                                                        onClick={() => updateSettings({ karaokeStyle: style.id as AppSettings['karaokeStyle'] })}
+                                                        className={clsx(
+                                                            "px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left",
+                                                            settings.karaokeStyle === style.id
+                                                                ? (isDark ? "bg-white/10 text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20")
+                                                                : (isDark ? "bg-white/5 text-gray-400 hover:bg-white/10" : "bg-gray-50 text-gray-600 hover:bg-gray-100")
+                                                        )}
+                                                    >
+                                                        <div>{style.label}</div>
+                                                        <div className="text-[10px] opacity-60">{style.desc}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
                         </div>
                     )}
 
@@ -384,7 +443,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         onChange={() => toggleSetting('showFurigana')}
                                         isDark={isDark}
                                     />
-                                    <Divider isDark={isDark} />
+                                    <Divider />
                                     <SettingToggle
                                         icon={<BookOpen className="w-4 h-4" style={{ color: '#f97316' }} />}
                                         label="隐藏简单词假名"
@@ -408,7 +467,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         onChange={() => toggleSetting('showPitchAccent')}
                                         isDark={isDark}
                                     />
-                                    <Divider isDark={isDark} />
+                                    <Divider />
                                     <SettingToggle
                                         icon={<Languages className="w-4 h-4" style={{ color: 'var(--color-adverb)' }} />}
                                         label="显示中文翻译"
@@ -417,16 +476,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         onChange={() => toggleSetting('showTranslation')}
                                         isDark={isDark}
                                     />
-                                    <Divider isDark={isDark} />
-                                    <SettingToggle
-                                        icon={<Sparkles className="w-4 h-4" style={{ color: 'var(--color-adjective)' }} />}
-                                        label="卡拉OK高亮"
-                                        description="朗读时高亮当前单词"
-                                        checked={settings.karaokeMode}
-                                        onChange={() => toggleSetting('karaokeMode')}
-                                        isDark={isDark}
-                                    />
-                                    <Divider isDark={isDark} />
+                                    <Divider />
                                     <SettingToggle
                                         icon={settings.hideParticles ? <EyeOff className="w-4 h-4" style={{ color: 'var(--color-auxiliary)' }} /> : <Eye className="w-4 h-4" style={{ color: 'var(--text-faint)' }} />}
                                         label="助词填空模式"
@@ -435,7 +485,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         onChange={() => toggleSetting('hideParticles')}
                                         isDark={isDark}
                                     />
-                                    <Divider isDark={isDark} />
+                                    <Divider />
                                     <SettingToggle
                                         icon={<Speaker className="w-4 h-4" style={{ color: 'var(--color-verb)' }} />}
                                         label="点击自动朗读"
@@ -583,11 +633,15 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <div className="space-y-6">
                             {/* 应用信息 */}
                             <section className="text-center py-6">
-                                <img
-                                    src="/logo.png"
-                                    alt="YOMI Logo"
-                                    className="w-16 h-16 mx-auto mb-4 rounded-2xl shadow-lg"
-                                />
+                                <div className="relative w-16 h-16 mx-auto mb-4">
+                                    <Image
+                                        src="/logo.png"
+                                        alt="YOMI Logo"
+                                        fill
+                                        className="rounded-2xl shadow-lg object-contain"
+                                        unoptimized
+                                    />
+                                </div>
                                 <h3 className="text-xl font-bold" style={labelStyle}>読み | YOMI</h3>
                                 <p className="text-sm mt-1" style={descStyle}>日语阅读学习助手</p>
                                 <p className="text-xs mt-2" style={sectionTitleStyle}>版本 0.1.0 (Early Access)</p>
@@ -667,7 +721,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     読み | YOMI Early Access • v0.1.0
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -716,6 +770,6 @@ function SettingToggle({ icon, label, description, checked, onChange, isDark }: 
     );
 }
 
-function Divider({ isDark }: { isDark: boolean }) {
+function Divider() {
     return <div className="h-px mx-14" style={{ background: 'var(--border-default)' }} />;
 }

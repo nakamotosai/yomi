@@ -4,6 +4,7 @@ import React from 'react';
 import { GraduationCap, X, Trash2, Star, ArrowLeft } from 'lucide-react';
 import { useGrammarStore, SavedGrammar } from '@/store/useGrammarStore';
 import { useAppStore } from '@/store/useAppStore';
+import { ttsManager } from '@/lib/tts/manager';
 
 export default function GrammarListView() {
     const { grammarList, removeGrammar, clearGrammar } = useGrammarStore();
@@ -36,7 +37,7 @@ export default function GrammarListView() {
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
-                        <GraduationCap className="w-5 h-5" style={{ color: '#5F7387' }} />
+                        <GraduationCap className="w-5 h-5" style={{ color: 'var(--scheme-grammar)' }} />
                         <h2 className="text-lg font-bold text-[var(--text-primary)]">文法帳</h2>
                         <span className="text-sm text-[var(--text-muted)]">({grammarList.length})</span>
                     </div>
@@ -48,7 +49,7 @@ export default function GrammarListView() {
                                         clearGrammar();
                                     }
                                 }}
-                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-500 dark:text-[#D4A5A5] hover:bg-rose-50 dark:hover:bg-[#AA5555]/10 rounded transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[var(--scheme-grammar)] hover:bg-[var(--scheme-grammar)]/10 rounded transition-colors"
                             >
                                 <Trash2 className="w-3 h-3" />
                                 全削除
@@ -79,14 +80,19 @@ export default function GrammarListView() {
                             {grammarList.map((item) => (
                                 <div
                                     key={item.id}
-                                    onClick={() => handleGrammarClick(item)}
-                                    className="group relative px-4 py-3 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col gap-1 justify-between h-full bg-[#5F7387]/10 dark:bg-[#5F7387]/15 border-[#5F7387]/20 dark:border-[#5F7387]/20"
+                                    onClick={() => {
+                                        handleGrammarClick(item);
+                                        // Speak title using ttsManager
+                                        const cleanTitle = item.title.replace(/[~～]/g, '');
+                                        ttsManager.speak(cleanTitle, settings);
+                                    }}
+                                    className="group relative px-4 py-3 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col gap-1 justify-between h-full bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20"
                                 >
                                     <div className="flex flex-col gap-1">
-                                        <div className="text-lg font-bold pr-6 leading-tight text-[#5F7387] dark:text-[#AABCCD]">
-                                            {item.title.replace(/[（(][^）)]*[）)]/g, '').trim()}
+                                        <div className="text-lg font-bold pr-6 leading-tight text-[var(--scheme-grammar)]">
+                                            {item.title.replace(/[（(][^）)]*[）)]/g, '').replace(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/g, '').trim()}
                                         </div>
-                                        <div className="text-sm line-clamp-2 text-[#5F7387]/80 dark:text-[#AABCCD]/70">
+                                        <div className="text-sm line-clamp-2 text-[var(--scheme-grammar)]/80">
                                             {item.meaning}
                                         </div>
                                     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Settings2,
@@ -10,13 +10,16 @@ import {
   StopCircle,
   GraduationCap,
   BookOpen,
-  Languages
 } from 'lucide-react';
+import Image from 'next/image';
 
-import { useAppStore } from '@/store/useAppStore';
+import { useSearchParams } from 'next/navigation';
+import { useAppStore, DEFAULT_INPUT_TEXT } from '@/store/useAppStore';
+
 import { useVocabStore } from '@/store/useVocabStore';
 import { useGrammarStore } from '@/store/useGrammarStore';
 import { ttsManager } from '@/lib/tts/manager';
+import { translateText } from '@/lib/translate'; // Import translation function
 import SettingsModal from '@/components/SettingsModal';
 import RefactoredInput from '@/components/RefactoredInput';
 import InfoPanel from '@/components/InfoPanel';
@@ -27,6 +30,7 @@ import ResizableLayout from '@/components/ResizableLayout';
 import ResizableVerticalSection from '@/components/ResizableVerticalSection';
 import ResizableThreeSection from '@/components/ResizableThreeSection';
 import { MobileHeader, MobileDrawer, MobileBottomSheet } from '@/components/MobileComponents';
+import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import clsx from 'clsx';
 
 // Dynamic imports
@@ -42,13 +46,88 @@ const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
 
 const GlobalAudioPlayer = dynamic(() => import('@/components/GlobalAudioPlayer'), { ssr: false });
 
-const KanaGrid = dynamic(() => import('@/components/KanaGrid'), {
-  loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Grid...</div>,
+const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
+  loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Kana Mode...</div>,
 });
 
+const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
+
 const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: () => void }) => {
-  const { appMode, inputText, isSpeaking, isPaused, settings, centerViewMode } = useAppStore();
+  const { appMode, inputText, isSpeaking, isPaused, settings, centerViewMode, isFromExtension, setIsFromExtension } = useAppStore();
   const isDark = settings.theme === 'dark';
+
+  // Translation State
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [fullTranslation, setFullTranslation] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  // Auto-expand translation when imported from browser extension
+  useEffect(() => {
+    if (isFromExtension && inputText.trim() && !showTranslation) {
+      setShowTranslation(true);
+      // Trigger translation
+      setIsTranslating(true);
+      translateText(inputText).then(text => {
+        setFullTranslation(text);
+      }).catch(e => {
+        console.error("Translation failed", e);
+      }).finally(() => {
+        setIsTranslating(false);
+        // Reset extension flag after handling
+        setIsFromExtension(false);
+      });
+    }
+  }, [isFromExtension, inputText, showTranslation, setIsFromExtension]);
+
+  // Handle toggling translation
+  const handleToggleTranslation = async () => {
+    if (showTranslation) {
+      setShowTranslation(false);
+    } else {
+      setShowTranslation(true);
+      if (!fullTranslation && inputText.trim()) {
+        setIsTranslating(true);
+        try {
+          const text = await translateText(inputText);
+          setFullTranslation(text);
+        } catch (e) {
+          console.error("Translation failed", e);
+        } finally {
+          setIsTranslating(false);
+        }
+      }
+    }
+  };
+
+  // Effect to auto-update translation when input text changes
+  useEffect(() => {
+    // If panel is closed, clear stale translation so next open fetches fresh
+    if (!showTranslation) {
+      if (fullTranslation) setFullTranslation(null);
+      return;
+    }
+
+    // If panel is open, debounce and translate
+    const timer = setTimeout(async () => {
+      if (!inputText.trim()) {
+        setFullTranslation(null);
+        return;
+      }
+
+      setIsTranslating(true);
+      try {
+        const text = await translateText(inputText);
+        setFullTranslation(text);
+      } catch (e) {
+        console.error("Auto-translation failed", e);
+      } finally {
+        setIsTranslating(false);
+      }
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputText]);
 
   // Scrollbar Visibility Logic
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -100,112 +179,114 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       }}
     >
       {inputText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
-        <div className="shrink-0 z-10 px-2 pt-4 pb-2"> {/* Wrapper for spacing */}
+        <div className="shrink-0 z-10 px-2 pt-4 pb-2">
           <div
-            className="h-14 flex items-center px-4 justify-between rounded-2xl glass-panel transition-all"
+            className="flex flex-col relative overflow-hidden transition-all duration-300 ease-spring rounded-2xl"
             style={{
               border: `1px solid var(--border-default)`,
               background: isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.65)',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
-            <h2 className="font-bold hidden md:block" style={{ color: 'var(--text-muted)' }}>読解モード</h2>
-            <div className="md:hidden" />
+            {/* Header Section (Refactored to ReaderHeader) */}
+            <ReaderHeader
+              isTranslationVisible={showTranslation}
+              onToggleTranslation={handleToggleTranslation}
+              isLoadingTranslation={isTranslating}
 
-            {/* Playback Controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onPlayAll}
-                className={clsx(
-                  "flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all active:scale-95",
-                  isDark && "rainbow-highlight"
-                )}
-                style={{
-                  background: isSpeaking && !isPaused
-                    ? (isDark ? 'rgba(251, 191, 36, 0.15)' : 'var(--bg-elevated)')
-                    : (isDark ? 'rgba(255, 255, 255, 0.03)' : 'white'),
-                  color: isSpeaking && !isPaused
-                    ? (isDark ? '#fbbf24' : 'var(--text-muted)')
-                    : (isDark ? 'var(--text-muted)' : 'var(--text-muted)'),
-                  border: isDark
-                    ? 'none'
-                    : `1px solid ${isSpeaking && !isPaused ? 'var(--border-default)' : 'var(--border-muted)'}`,
-                  boxShadow: !isDark && isSpeaking && !isPaused ? 'var(--shadow-sm)' : 'none'
-                }}
-              >
-                {isSpeaking && !isPaused ? (
-                  <PauseCircle className="w-4 h-4" />
-                ) : (
-                  <PlayCircle className="w-4 h-4" />
-                )}
-                {isSpeaking && !isPaused ? '一時停止' : (isPaused ? '再開' : '全文再生')}
-              </button>
+              isSpeaking={isSpeaking}
+              isPaused={isPaused}
+              onPlay={onPlayAll}
+              onStop={onStop}
+            />
 
-              {isSpeaking && (
-                <button
-                  onClick={onStop}
-                  className="p-1.5 rounded-full transition-colors hover:bg-[#AA5555]/15"
-                  style={{
-                    background: isDark ? 'rgba(170, 85, 85, 0.1)' : 'rgba(170, 85, 85, 0.08)',
-                    color: '#AA5555'
-                  }}
-                  title="停止"
-                >
-                  <StopCircle className="w-4 h-4" />
-                </button>
+            {/* Content Section (Animated Grid) */}
+            <div
+              className={clsx(
+                "grid transition-[grid-template-rows] duration-300 ease-spring",
+                showTranslation ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
               )}
+            >
+              <div className="overflow-hidden">
+                <div className="px-5 pb-5 pt-0 border-t border-dashed border-black/5 dark:border-white/5 mt-[-1px]">
+                  <div className="pt-4 max-h-[50vh] overflow-y-auto custom-scrollbar">
+                    {isTranslating ? (
+                      <div className="flex flex-col gap-2 animate-pulse">
+                        <div className="h-4 bg-black/5 dark:bg-white/10 rounded w-3/4"></div>
+                        <div className="h-4 bg-black/5 dark:bg-white/10 rounded w-1/2"></div>
+                      </div>
+                    ) : fullTranslation ? (
+                      <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                        {fullTranslation}
+                      </p>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-2 opacity-50 gap-2">
+                        <p className="text-xs">ボタンを押して翻訳を開始</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
+
           </div>
         </div>
       )}
+
 
       {/* Vocab List View - Full takeover */}
-      {centerViewMode === 'vocab' && (
-        <VocabListView />
-      )}
+      {
+        centerViewMode === 'vocab' && (
+          <VocabListView />
+        )
+      }
 
       {/* Grammar List View - Full takeover */}
-      {centerViewMode === 'grammar' && (
-        <GrammarListView />
-      )}
+      {
+        centerViewMode === 'grammar' && (
+          <GrammarListView />
+        )
+      }
 
       {/* Content Scroll Area - Only for reader mode */}
-      {centerViewMode === 'reader' && (
-        <div
-          ref={scrollRef}
-          data-visible={isMounted ? (isVisible ? "true" : "false") : undefined}
-          className="flex-1 overflow-y-auto pt-2 pb-4 pl-2 pr-2 floating-scrollbar"
-        >
-          <div className="max-w-5xl mx-auto min-h-full">
-            {appMode === 'reader' ? (
-              inputText.trim() ? (
-                <TextAnalyzer key={inputText} text={inputText} />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center select-none pb-20" style={{ color: 'var(--text-faint)' }}>
-                  <div
-                    className="w-24 h-24 border-4 border-dashed rounded-full flex items-center justify-center mb-4"
-                    style={{ borderColor: 'var(--border-default)' }}
-                  >
-                    <PlayCircle className="w-10 h-10" style={{ color: 'var(--text-faint)' }} />
+      {
+        centerViewMode === 'reader' && (
+          <div
+            ref={scrollRef}
+            data-visible={isMounted ? (isVisible ? "true" : "false") : undefined}
+            className="flex-1 overflow-y-auto pt-2 pb-4 pl-2 pr-1 floating-scrollbar"
+          >
+            <div className="min-h-full">
+              {appMode === 'reader' ? (
+                inputText.trim() ? (
+                  <TextAnalyzer key={inputText} text={inputText} />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center select-none pb-20" style={{ color: 'var(--text-faint)' }}>
+                    <div
+                      className="w-24 h-24 border-4 border-dashed rounded-full flex items-center justify-center mb-4"
+                      style={{ borderColor: 'var(--border-default)' }}
+                    >
+                      <PlayCircle className="w-10 h-10" style={{ color: 'var(--text-faint)' }} />
+                    </div>
+                    <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
+                    <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
+                      左下の入力欄に日本語を入力するか、画像を貼り付けてOCR解析を開始します
+                    </p>
                   </div>
-                  <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
-                  <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
-                    左下の入力欄に日本語を入力するか、画像を貼り付けてOCR解析を開始します
-                  </p>
-                </div>
-              )
-            ) : (
-              <KanaGrid />
-            )}
-            <div className="h-20" /> {/* Bottom spacer */}
+                )
+              ) : (
+                <KanaModeView />
+              )}
+              <div className="h-20" /> {/* Bottom spacer */}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
-export default function Home() {    // Optimized selectors to prevent re-renders
+function HomeContent() {    // Optimized selectors to prevent re-renders
   const appMode = useAppStore(s => s.appMode);
   const setAppMode = useAppStore(s => s.setAppMode);
   const inputText = useAppStore(s => s.inputText);
@@ -217,7 +298,6 @@ export default function Home() {    // Optimized selectors to prevent re-renders
   const setSpeakingTokenId = useAppStore(s => s.setSpeakingTokenId);
   const layout = useAppStore(s => s.layout);
   const setLayout = useAppStore(s => s.setLayout);
-  const isMobileDrawerOpen = useAppStore(s => s.isMobileDrawerOpen);
   const setIsMobileDrawerOpen = useAppStore(s => s.setIsMobileDrawerOpen);
   const setCenterViewMode = useAppStore(s => s.setCenterViewMode);
   const centerViewMode = useAppStore(s => s.centerViewMode);
@@ -242,7 +322,70 @@ export default function Home() {    // Optimized selectors to prevent re-renders
     setSpeakingTokenId(null);
   }, [setIsSpeaking, setIsPaused, setSpeakingTokenId]);
 
+  // Handle URL query parameters (e.g. ?text=...&source=extension)
+  const searchParams = useSearchParams();
+  const setIsFromExtension = useAppStore(s => s.setIsFromExtension);
+
+  useEffect(() => {
+    const textParam = searchParams.get('text');
+    const sourceParam = searchParams.get('source');
+
+    if (textParam) {
+      // Check if this is from browser extension
+      const isFromExt = sourceParam === 'extension';
+      if (isFromExt) {
+        setIsFromExtension(true);
+      }
+
+      // Detect if text contains Japanese characters (Hiragana, Katakana, or Kanji)
+      const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(textParam);
+
+      if (hasJapanese) {
+        // Japanese text - use directly
+        setInputText(textParam);
+      } else {
+        // Non-Japanese text - translate to Japanese first
+        translateText(textParam, 'ja', 'auto').then(japaneseText => {
+          if (japaneseText && japaneseText.trim()) {
+            setInputText(japaneseText);
+          } else {
+            // Fallback to original text if translation fails
+            setInputText(textParam);
+          }
+        }).catch(() => {
+          setInputText(textParam);
+        });
+      }
+
+      // Remove the query parameters from the URL without reloading
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('text');
+      newUrl.searchParams.delete('source');
+      window.history.replaceState({}, '', newUrl.toString());
+    } else {
+      // If no URL param, check if current text is empty. If so, restore default guidance.
+      const currentText = useAppStore.getState().inputText;
+      if (!currentText || !currentText.trim()) {
+        setInputText(DEFAULT_INPUT_TEXT);
+      }
+    }
+  }, [searchParams, setInputText, setIsFromExtension]);
+
   const handlePlayAll = () => {
+    // Logic: If current playlist is partial (e.g. single sentence), 
+    // Play All should RESET to full playlist
+    const store = useAppStore.getState();
+    const isPartial = store.playlist.length !== store.fullPlaylist.length;
+
+    if (isPartial) {
+      // Reset to full playlist and start
+      store.setPlaylist(store.fullPlaylist);
+      store.setIsSpeaking(true);
+      store.setIsPaused(false);
+      return;
+    }
+
+    // Normal Toggle
     if (isSpeaking) {
       if (isPaused) {
         ttsManager.resume();
@@ -273,8 +416,10 @@ export default function Home() {    // Optimized selectors to prevent re-renders
       <div
         className="h-16 hidden lg:flex items-center px-4 shrink-0 bg-transparent border-none"
       >
-        <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain mr-3" />
-        <h1 className="text-[16px] font-bold tracking-tight text-slate-500">
+        <div className="relative w-8 h-8 mr-3">
+          <Image src="/logo.png" alt="Logo" fill className="object-contain" unoptimized />
+        </div>
+        <h1 className="text-[16px] font-bold tracking-tight" style={{ color: 'var(--text-muted)' }}>
           読み | YOMI
         </h1>
         <button
@@ -296,7 +441,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
           <button
             onClick={() => { setAppMode('reader'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
             className={clsx(
-              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2 text-slate-500",
+              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2",
               appMode === 'reader' && centerViewMode === 'reader' && isDark && "rainbow-highlight",
               appMode === 'reader' && centerViewMode === 'reader' && !isDark && "shadow-sm"
             )}
@@ -306,7 +451,8 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                 : 'transparent',
               border: appMode === 'reader' && centerViewMode === 'reader' && !isDark
                 ? '1px solid var(--border-default)'
-                : '1px solid transparent'
+                : '1px solid transparent',
+              color: appMode === 'reader' && centerViewMode === 'reader' ? 'var(--text-primary)' : 'var(--text-secondary)'
             }}
           >
             <div
@@ -318,7 +464,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
           <button
             onClick={() => { setAppMode('kana'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
             className={clsx(
-              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2 text-slate-500",
+              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2",
               appMode === 'kana' && isDark && "rainbow-highlight",
               appMode === 'kana' && !isDark && "shadow-sm"
             )}
@@ -328,7 +474,8 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                 : 'transparent',
               border: appMode === 'kana' && !isDark
                 ? '1px solid var(--border-default)'
-                : '1px solid transparent'
+                : '1px solid transparent',
+              color: appMode === 'kana' ? 'var(--text-primary)' : 'var(--text-secondary)'
             }}
           >
             <div
@@ -354,7 +501,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                 border: `1px solid var(--border-default)`
               }}
             >
-              <BookMarked className="w-5 h-5 mb-1 transition-colors" style={{ color: '#437E6F' }} />
+              <BookMarked className="w-5 h-5 mb-1 transition-colors" style={{ color: 'var(--scheme-primary)' }} />
               <span className="font-medium text-slate-500 text-[16px]">単語帳</span>
               {vocabList.length > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
@@ -371,7 +518,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                 border: `1px solid var(--border-default)`
               }}
             >
-              <GraduationCap className="w-5 h-5 mb-1" style={{ color: '#2B4C7E' }} />
+              <GraduationCap className="w-5 h-5 mb-1" style={{ color: 'var(--scheme-grammar)' }} />
               <span className="font-medium text-slate-500 text-[16px]">文法帳</span>
               {grammarList.length > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full" />
@@ -535,7 +682,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
               </div>
             )
           ) : (
-            <KanaGrid />
+            <KanaModeView />
           )}
           <div className="h-20" /> {/* Bottom spacer */}
         </div>
@@ -573,7 +720,9 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                     <div
                       className="h-14 hidden lg:flex items-center px-4 shrink-0 bg-transparent border-none"
                     >
-                      <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain mr-3 dark:brightness-[0.7]" />
+                      <div className="relative w-8 h-8 mr-3">
+                        <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
+                      </div>
                       <h1 className="text-[16px] font-bold tracking-tight text-slate-500">
                         読み | YOMI
                       </h1>
@@ -606,7 +755,7 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                         >
                           <BookOpen
                             className="w-5 h-5 mb-1 transition-colors"
-                            style={{ color: '#AA5555' }}
+                            style={{ color: 'var(--scheme-accent)' }}
                           />
                           <span className="font-medium text-[16px] text-slate-500">
                             読解モード
@@ -626,11 +775,13 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                               : '1px solid var(--border-default)'
                           }}
                         >
-                          <Languages
-                            className="w-5 h-5 mb-1 transition-colors"
-                            style={{ color: '#A89BCA' }}
-                          />
-                          <span className="font-medium text-[16px] text-slate-500">
+                          <span
+                            className="w-5 h-5 mb-1 transition-colors flex items-center justify-center font-serif font-bold text-xl leading-none"
+                            style={{ color: 'var(--scheme-grammar)' }}
+                          >
+                            あ
+                          </span>
+                          <span className="font-medium text-[16px]" style={{ color: 'var(--text-secondary)' }}>
                             仮名モード
                           </span>
                         </button>
@@ -661,15 +812,15 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                             <BookMarked
                               className="w-5 h-5 mb-1 transition-colors"
                               style={{
-                                color: '#437E6F'
+                                color: 'var(--scheme-primary)'
                               }}
                             />
                             <div className="flex items-center gap-1">
-                              <span className="font-medium text-[16px] text-slate-500">
+                              <span className="font-medium text-[16px]" style={{ color: 'var(--text-secondary)' }}>
                                 単語帳
                               </span>
                               {vocabList.length > 0 && (
-                                <span className="text-sm transition-colors text-slate-400">
+                                <span className="text-sm transition-colors" style={{ color: 'var(--text-faint)' }}>
                                   ({vocabList.length})
                                 </span>
                               )}
@@ -692,15 +843,15 @@ export default function Home() {    // Optimized selectors to prevent re-renders
                             <GraduationCap
                               className="w-5 h-5 mb-1 transition-colors"
                               style={{
-                                color: '#5F7387' // Morandi Blue
+                                color: 'var(--scheme-grammar)'
                               }}
                             />
                             <div className="flex items-center gap-1">
-                              <span className="font-medium text-[16px] text-slate-500">
+                              <span className="font-medium text-[16px]" style={{ color: 'var(--text-secondary)' }}>
                                 文法帳
                               </span>
                               {grammarList.length > 0 && (
-                                <span className="text-sm transition-colors text-slate-400">
+                                <span className="text-sm transition-colors" style={{ color: 'var(--text-faint)' }}>
                                   ({grammarList.length})
                                 </span>
                               )}
@@ -740,27 +891,33 @@ export default function Home() {    // Optimized selectors to prevent re-renders
           centerContent={<CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} />}
           rightContent={
             <div className="h-full pt-4 pr-4 pb-4 pl-2"> {/* Padding for floating effect */}
-              <ResizableVerticalSection
-                mode="bottom-fixed"
-                initialBottomHeight={layout.rightBottomHeight}
-                onBottomHeightChange={(h) => setLayout({ ...layout, rightBottomHeight: h })}
-                gap={16} // GAP ADDED
-                topContent={
-                  <div className="h-full flex flex-col relative rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
-                    <InfoPanel />
-                  </div>
-                }
-                bottomContent={
-                  <div
-                    className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm"
-                    style={{
-                      background: 'var(--bg-elevated)'
-                    }}
-                  >
-                    <HistoryPanel />
-                  </div>
-                }
-              />
+              {appMode === 'kana' ? (
+                <div className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm bg-[var(--bg-elevated)]">
+                  <KanaSidePanel />
+                </div>
+              ) : (
+                <ResizableVerticalSection
+                  mode="bottom-fixed"
+                  initialBottomHeight={layout.rightBottomHeight}
+                  onBottomHeightChange={(h) => setLayout({ ...layout, rightBottomHeight: h })}
+                  gap={16}
+                  topContent={
+                    <div className="h-full flex flex-col relative rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
+                      <InfoPanel />
+                    </div>
+                  }
+                  bottomContent={
+                    <div
+                      className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm"
+                      style={{
+                        background: 'var(--bg-elevated)'
+                      }}
+                    >
+                      <HistoryPanel />
+                    </div>
+                  }
+                />
+              )}
             </div>
           }
         />
@@ -789,5 +946,13 @@ export default function Home() {    // Optimized selectors to prevent re-renders
       {/* Global Logic Components */}
       <GlobalAudioPlayer />
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -15,15 +15,15 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         // Apply theme to document root
         document.documentElement.setAttribute('data-theme', theme);
 
-        // Also update body background for immediate visual feedback
-        if (theme === 'dark') {
-            document.body.style.backgroundColor = '#0d1117';
-            document.body.style.color = '#f0f6fc';
-        } else {
-            document.body.style.backgroundColor = '#f8fafc';
-            document.body.style.color = '#1e293b';
-        }
-    }, [theme]);
+        // Apply color scheme - CSS variables will handle the rest
+        const scheme = settings?.colorScheme || 'morandi';
+        document.documentElement.setAttribute('data-color-scheme', scheme);
+
+        // Body background now uses CSS variables via globals.css
+        // Just ensure color properties are reset to inherit from CSS
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
+    }, [theme, settings?.colorScheme]);
 
     return <>{children}</>;
 }

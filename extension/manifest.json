@@ -1,0 +1,46 @@
+{
+    "manifest_version": 3,
+    "name": "Yomi - Japanese Reader",
+    "version": "1.0",
+    "description": "Send selected text to Yomi for analysis",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "tabs"
+    ],
+    "host_permissions": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+    ],
+    "icons": {
+        "16": "icons/logo.png",
+        "48": "icons/logo.png",
+        "128": "icons/logo.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "icons/logo.png"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "css": [
+                "styles.css"
+            ]
+        }
+    ]
+}

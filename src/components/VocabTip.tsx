@@ -132,7 +132,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const [speakingWord, setSpeakingWord] = useState<string | null>(null);
-    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar, setIsMobileSheetOpen } = useAppStore();
+    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar } = useAppStore();
     const { vocabList, addVocab, removeVocab, isWordSaved } = useVocabStore();
 
     const worthyTokens = useMemo(() => filterWorthyVocab(tokens), [tokens]);
@@ -183,12 +183,13 @@ export default function VocabTip({ tokens }: VocabTipProps) {
 
     const handleWordClick = (token: WordToken, e: React.MouseEvent) => {
         e.stopPropagation();
+        setIsExpanded(true); // User request: Always expand panel when clicking a word
         const sentenceOriginal = tokens.map(t => t.surface).join('');
         setCurrentSentence(sentenceOriginal);
         setSelectedToken(token);
 
         if (settings.autoReadOnClick) {
-            ttsManager.speak(token.surface, settings);
+            ttsManager.speak(token.surface, settings, {});
         }
     };
 
@@ -199,7 +200,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
-                    <span className="w-[3px] h-3 bg-[#437e6f] rounded-sm mr-2 block"></span>
+                    <span className="w-[3px] h-3 bg-[var(--scheme-primary)] rounded-sm mr-2 block"></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         生词
                     </h3>
@@ -213,6 +214,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                             const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
                             const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
                             const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
+                            const isWafu = settings.colorScheme === 'wafu';
 
                             // Determine style classes
                             const bgClass = isColorEnabled ? themeColors.bg : 'bg-[var(--bg-elevated)]';
@@ -221,15 +223,39 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                 ? (themeColors.border || 'border-transparent')
                                 : 'border-[var(--border-muted)]';
 
+                            // Wafu/Monochrome Override
+                            const wafuStyle = (() => {
+                                const isMonochrome = settings.colorScheme === 'monochrome';
+                                if ((!isWafu && !isMonochrome) || !isColorEnabled) return {};
+
+                                const posKeyMap: Record<string, string> = {
+                                    [PartOfSpeech.NOUN]: 'noun', [PartOfSpeech.PRONOUN]: 'noun', [PartOfSpeech.PROPER_NOUN]: 'noun',
+                                    [PartOfSpeech.VERB]: 'verb', [PartOfSpeech.ADJECTIVE]: 'adjective', [PartOfSpeech.PARTICLE]: 'particle',
+                                    [PartOfSpeech.AUXILIARY]: 'auxiliary', [PartOfSpeech.ADVERB]: 'adverb',
+                                    [PartOfSpeech.CONJUNCTION]: 'conjunction', [PartOfSpeech.INTERJECTION]: 'conjunction',
+                                    [PartOfSpeech.PREFIX]: 'noun', [PartOfSpeech.SUFFIX]: 'noun',
+                                };
+                                const key = posKeyMap[token.pos] || 'other';
+                                return {
+                                    backgroundColor: `var(--wafu-${key}-bg)`,
+                                    color: `var(--wafu-${key}-text)`,
+                                    borderColor: `var(--wafu-${key}-border)`
+                                };
+                            })();
+
                             return (
                                 <span
                                     key={idx}
+                                    onClick={(e) => handleWordClick(token, e)}
                                     className={clsx(
-                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border",
-                                        bgClass,
-                                        textClass,
-                                        borderClass
+                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border cursor-pointer hover:brightness-110",
+                                        // If Wafu or Monochrome is active, we disable standard classes
+                                        // However, inline style always wins.
+                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && bgClass,
+                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && textClass,
+                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && borderClass
                                     )}
+                                    style={isWafu || settings.colorScheme === 'monochrome' ? wafuStyle : undefined}
                                 >
                                     {token.surface}
                                 </span>
@@ -260,11 +286,6 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                         const themeColors = currentTheme.colors[entry.token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
                         const isColorEnabled = (settings.activeColorPOS || []).includes(entry.token.pos);
                         const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-primary)]';
-                        const hoverTextClass = isColorEnabled ? themeColors.text.replace('text-', 'hover:text-') : 'hover:text-[#437e6f]';
-                        // Generate hover bg (lighter)
-                        const hoverBgClass = isColorEnabled
-                            ? themeColors.bg.replace('bg-', 'hover:bg-').replace('/50', '/20').replace('/20', '/10')
-                            : 'hover:bg-[#437e6f]/10';
 
                         // Logic for Saved State
                         const effectiveReading = entry.token.reading || entry.token.surface;

@@ -35,7 +35,7 @@ export default function VocabListView() {
         setIsMobileSheetOpen(true);
 
         if (settings.autoReadOnClick) {
-            ttsManager.speak(token.surface, settings);
+            ttsManager.speak(token.surface, settings, {});
         }
     };
 
@@ -52,19 +52,148 @@ export default function VocabListView() {
         URL.revokeObjectURL(url);
     };
 
+    // 生成带时间戳的文件名
+    const getTimestampedFilename = (prefix: string, ext: string) => {
+        const now = new Date();
+        const timestamp = now.getFullYear().toString() +
+            (now.getMonth() + 1).toString().padStart(2, '0') +
+            now.getDate().toString().padStart(2, '0') + '-' +
+            now.getHours().toString().padStart(2, '0') +
+            now.getMinutes().toString().padStart(2, '0') +
+            now.getSeconds().toString().padStart(2, '0');
+        return `${prefix}-${timestamp}.${ext}`;
+    };
+
     const handleExportCSV = () => {
         // Dynamic import to avoid SSR issues if needed, but functions are pure utils
         import('@/store/useVocabStore').then(({ exportToCSV }) => {
             const csv = exportToCSV(vocabList);
-            downloadFile(csv, 'yomi-vocab.csv', 'text/csv');
+            downloadFile(csv, getTimestampedFilename('yomi-vocab', 'csv'), 'text/csv');
         });
     };
 
-    const handleExportAnki = () => {
-        import('@/store/useVocabStore').then(({ exportToAnkiTSV }) => {
-            const tsv = exportToAnkiTSV(vocabList);
-            downloadFile(tsv, 'yomi-vocab-anki.txt', 'text/plain');
+    const handleExportDOCX = async () => {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        // DOCX is a ZIP file with specific structure
+        // Create minimal DOCX structure
+        const contentXml = generateDocxContent(vocabList);
+
+        // [Content_Types].xml
+        zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+
+        // _rels/.rels
+        zip.folder('_rels')?.file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+
+        // word/document.xml
+        zip.folder('word')?.file('document.xml', contentXml);
+
+        // Generate and download
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = getTimestampedFilename('yomi-vocab', 'docx');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // Generate DOCX content XML
+    const generateDocxContent = (items: VocabItem[]): string => {
+        const escapeXml = (str: string) => str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+
+        const posLabels: Record<string, string> = {
+            'noun': '名词', 'verb': '动词', 'adjective': '形容词',
+            'adverb': '副词', 'particle': '助词', 'conjunction': '连词',
+            'auxiliary': '助动词', 'pronoun': '代词', 'interjection': '感叹词',
+            'prefix': '前缀', 'suffix': '后缀', 'other': '其他', 'symbol': '符号'
+        };
+
+        // Helper: 生成多行段落（按换行符分割）
+        const renderMultilineParagraphs = (label: string, content: string, isItalic = false) => {
+            const lines = content.split('\n').filter(line => line.trim());
+            let result = '';
+            lines.forEach((line, i) => {
+                const labelPart = i === 0
+                    ? `<w:r><w:rPr><w:b/><w:color w:val="437E6F"/></w:rPr><w:t>${label}</w:t></w:r>`
+                    : `<w:r><w:t xml:space="preserve">      </w:t></w:r>`;
+                const textStyle = isItalic ? '<w:i/>' : '';
+                result += `
+      <w:p>
+        ${labelPart}
+        <w:r><w:rPr>${textStyle}</w:rPr><w:t>${escapeXml(line.trim())}</w:t></w:r>
+      </w:p>`;
+            });
+            return result;
+        };
+
+        let paragraphs = '';
+
+        items.forEach((item, index) => {
+            const posLabel = posLabels[item.pos] || item.pos;
+
+            // Word title (bold, large) with bottom border effect
+            paragraphs += `
+      <w:p>
+        <w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:before="240" w:after="120"/></w:pPr>
+        <w:r><w:rPr><w:b/><w:sz w:val="36"/></w:rPr><w:t>${escapeXml(item.word)}</w:t></w:r>
+        <w:r><w:t xml:space="preserve">  </w:t></w:r>
+        <w:r><w:rPr><w:sz w:val="24"/><w:color w:val="888888"/></w:rPr><w:t>[${escapeXml(item.reading)}]</w:t></w:r>
+      </w:p>`;
+
+            // POS + Base form in one line
+            let metaLine = posLabel;
+            if (item.baseForm && item.baseForm !== item.word) {
+                metaLine += ` · 原形: ${item.baseForm}`;
+            }
+            paragraphs += `
+      <w:p>
+        <w:pPr><w:spacing w:after="80"/></w:pPr>
+        <w:r><w:rPr><w:color w:val="666666"/><w:sz w:val="20"/></w:rPr><w:t>${escapeXml(metaLine)}</w:t></w:r>
+      </w:p>`;
+
+            // Meaning (multi-line support)
+            paragraphs += renderMultilineParagraphs('释义: ', item.meaning);
+
+            // Context (if available)
+            if (item.context) {
+                paragraphs += `
+      <w:p>
+        <w:pPr><w:spacing w:before="80"/></w:pPr>
+        <w:r><w:rPr><w:b/><w:color w:val="437E6F"/></w:rPr><w:t>例句: </w:t></w:r>
+        <w:r><w:rPr><w:i/><w:color w:val="555555"/></w:rPr><w:t>${escapeXml(item.context)}</w:t></w:r>
+      </w:p>`;
+            }
+
+            // Horizontal divider between words (except last)
+            if (index < items.length - 1) {
+                paragraphs += `
+      <w:p><w:pPr><w:spacing w:before="200" w:after="200"/></w:pPr><w:r><w:t>────────────────────────────────</w:t></w:r></w:p>`;
+            }
         });
+
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${paragraphs}
+    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+  </w:body>
+</w:document>`;
     };
 
     return (
@@ -87,7 +216,7 @@ export default function VocabListView() {
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
-                        <BookMarked className="w-5 h-5" style={{ color: '#437E6F' }} />
+                        <BookMarked className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
                         <h2 className="text-lg font-bold text-[var(--text-primary)]">単語帳</h2>
                         <span className="text-sm text-[var(--text-muted)]">({vocabList.length})</span>
                     </div>
@@ -96,15 +225,15 @@ export default function VocabListView() {
                             <>
                                 <button
                                     onClick={handleExportCSV}
-                                    className="px-3 py-1.5 text-xs font-bold tracking-wide bg-white dark:bg-[#437E6F]/15 text-[#437E6F] dark:text-[#84A69D] hover:bg-emerald-50 dark:hover:bg-[#437E6F]/25 rounded-lg transition-colors border border-[#437E6F]/20 dark:border-[#437E6F]/30"
+                                    className="px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border bg-white dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20"
                                 >
-                                    CSV
+                                    保存 CSV
                                 </button>
                                 <button
-                                    onClick={handleExportAnki}
-                                    className="px-3 py-1.5 text-xs font-bold tracking-wide bg-white dark:bg-[#5F7387]/15 text-[#5F7387] dark:text-[#AABCCD] hover:bg-blue-50 dark:hover:bg-[#5F7387]/25 rounded-lg transition-colors border border-[#5F7387]/20 dark:border-[#5F7387]/30"
+                                    onClick={handleExportDOCX}
+                                    className="px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border bg-white dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20"
                                 >
-                                    Anki
+                                    保存 Word
                                 </button>
                                 <div className="w-px h-4 bg-[var(--border-default)] mx-1" />
                                 <button
@@ -113,7 +242,7 @@ export default function VocabListView() {
                                             clearVocab();
                                         }
                                     }}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-500 dark:text-[#D4A5A5] hover:bg-rose-50 dark:hover:bg-[#AA5555]/10 rounded transition-colors"
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10"
                                 >
                                     <Trash2 className="w-3 h-3" />
                                     全削除

@@ -97,7 +97,8 @@ function mapPosToEnum(pos: string): PartOfSpeech {
 }
 
 // Estimate pitch accent pattern (heuristic-based)
-function estimatePitch(reading: string, pos: PartOfSpeech): { pattern: PitchPattern; accentMora: number } {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function estimatePitch(reading: string, _pos: PartOfSpeech): { pattern: PitchPattern; accentMora: number } {
     if (!reading) return { pattern: [], accentMora: 0 };
 
     const moras = reading.replace(/[ぁぃぅぇぉゃゅょゎっ]/g, '').length;

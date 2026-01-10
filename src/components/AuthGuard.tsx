@@ -7,6 +7,7 @@
 
 import { useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
+import Image from 'next/image';
 
 interface AuthGuardProps {
     children: React.ReactNode;
@@ -91,12 +92,15 @@ export function UserAvatar({ onLoginClick, size = 32 }: UserAvatarProps) {
                 }}
             >
                 {user.avatar_url ? (
-                    <img
-                        src={user.avatar_url}
-                        alt={user.username || user.email}
-                        className="rounded-full"
-                        style={{ width: size, height: size }}
-                    />
+                    <div style={{ width: size, height: size, position: 'relative' }}>
+                        <Image
+                            src={user.avatar_url}
+                            alt={user.username || user.email}
+                            fill
+                            className="rounded-full object-cover"
+                            unoptimized
+                        />
+                    </div>
                 ) : (
                     <div
                         className="rounded-full flex items-center justify-center font-medium"

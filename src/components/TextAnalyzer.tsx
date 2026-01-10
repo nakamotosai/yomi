@@ -20,10 +20,10 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [translations, setTranslations] = useState<Map<string, string>>(new Map());
-    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist, isDark, playlist } = useAppStore();
+    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist, playlist, currentSentenceIndex } = useAppStore();
+    const isDark = settings.theme === 'dark';
 
-    // Track if we initiated the TTS to avoid double-triggering
-    const ttsInitiatedRef = useRef(false);
+
     // Store token map for boundary events
     const tokenMapRef = useRef<{ start: number, end: number, id: string }[]>([]);
 
@@ -42,13 +42,17 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         setSelectedToken(null);
         setSpeakingTokenId(null);
         setTranslations(new Map());
+        setResult(null); // Clear previous result
 
         try {
             const analysis = await analyzeJapaneseText(text);
             if (!isMountedRef.current) return;
-            setResult(analysis);
 
-            // Start translating sentences in background
+            // Immediately show result - don't wait for translations
+            setResult(analysis);
+            setIsLoading(false); // Stop loading spinner as soon as analysis is ready
+
+            // Start translating sentences in background (parallel, decoupled from display)
             analysis.sentences.forEach(async (sentence) => {
                 try {
                     const translation = await translateText(sentence.original);
@@ -64,8 +68,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
             console.error('Analysis error:', err);
             const errorMessage = err instanceof Error ? err.message : '分析中にエラーが発生しました';
             setError(errorMessage);
-        } finally {
-            if (isMountedRef.current) setIsLoading(false);
+            setIsLoading(false);
         }
     }, [text, setSelectedToken, setSpeakingTokenId]);
 
@@ -121,7 +124,8 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
 
             // transform sentences to playlist
             const newPlaylist = result.sentences.map(s => {
-                const tokens = s.tokens.filter(t => t.surface.trim().length > 0);
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const _tokens = s.tokens.filter(t => t.surface.trim().length > 0);
 
                 // Generate local token map for this sentence
                 let cursor = 0;
@@ -155,6 +159,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
             // But since IDs are deterministic now, even if we reset, it's consistent.
             // We can use the exposed setter from store
             setPlaylist(newPlaylist);
+            useAppStore.getState().setFullPlaylist(newPlaylist);
         }
     }, [result, setPlaylist]);
 
@@ -166,24 +171,18 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
 
     // Auto-analyze on mount
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         analyze();
     }, [analyze]);
 
-    const handleTokenSelect = (token: WordToken, sentenceOriginal: string) => {
+    const handleTokenSelect = (token: WordToken, sentenceOriginal?: string) => {
         setSelectedToken(token);
-        setCurrentSentence(sentenceOriginal);
+        if (sentenceOriginal) {
+            setCurrentSentence(sentenceOriginal);
+        }
         setIsMobileSheetOpen(true);
     };
 
-    // Click outside to deselect
-    const handleContainerClick = () => {
-        if (selectedToken) {
-            // We do NOT deselect here because layout is split; 
-            // user might click blank space in center panel but want to keep side panel info.
-            // If we want to deselect when clicking completely empty space, we can.
-            // setSelectedToken(null);
-        }
-    };
 
     if (isLoading) {
         return (
@@ -266,15 +265,69 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                     "flex flex-wrap items-end relative z-10",
                                     settings.showPitchAccent ? "gap-y-4" : "gap-y-1"
                                 )}>
-                                    {filteredTokens.map((token) => (
-                                        <WordTokenComponent
-                                            key={token.id}
-                                            token={token}
-                                            onSelect={(t) => handleTokenSelect(t, sentence.original)}
-                                            isSelected={selectedToken?.id === token.id}
-                                            isSpeaking={speakingTokenId === token.id}
-                                        />
-                                    ))}
+                                    {filteredTokens.map((token) => {
+                                        // Calculate skyDropReveal logic
+                                        // 1. Identify active sentence (contains speakingTokenId?)
+                                        // Since TextAnalyzer renders multiple sentences, we need to know if speakingTokenId belongs to THIS sentence.
+
+                                        // Find index of speaking token in this sentence
+                                        const speakingTokenIndex = sentence.tokens.findIndex(t => t.id === speakingTokenId);
+                                        const isSentenceActive = speakingTokenIndex !== -1;
+
+                                        // Find index of current token
+                                        const currentTokenIndex = sentence.tokens.findIndex(t => t.id === token.id);
+
+                                        let skyDropReveal = true; // Default visible
+
+                                        if (settings.karaokeMode && settings.karaokeStyle === 'sky-drop') {
+                                            let isVisible = true;
+
+                                            // Use currentSentenceIndex from store as the source of truth for "Past/Current/Future"
+                                            // This persists even during audio loading gaps when speakingTokenId might be null or stale
+                                            if (isSpeaking) {
+                                                isVisible = false; // Default hidden unless proven otherwise
+
+                                                if (sentenceIndex < currentSentenceIndex) {
+                                                    // Past Sentence -> Always Visible
+                                                    isVisible = true;
+                                                } else if (sentenceIndex === currentSentenceIndex) {
+                                                    // Current Sentence -> Check Token Progress
+                                                    if (isSentenceActive) { // isSentenceActive means speakingTokenId is in THIS sentence
+                                                        if (currentTokenIndex <= speakingTokenIndex) {
+                                                            isVisible = true;
+                                                        }
+                                                    } else {
+                                                        // Active Sentence but no valid token match in it yet
+                                                        // (Beginning of sentence or loading) -> Remain Hidden
+                                                    }
+                                                } else {
+                                                    // Future Sentence -> Hidden
+                                                    isVisible = false;
+                                                }
+                                            } else {
+                                                // Not Speaking (Stopped) -> Visible
+                                                isVisible = true;
+                                            }
+
+                                            skyDropReveal = isVisible;
+                                        }
+
+                                        // Memoization optimization:
+                                        // 1. Pass 'sentenceText' so WordToken can pass it back to callback (avoiding closure)
+                                        // 2. Pass 'handleTokenSelect' directly (stable reference)
+                                        return (
+                                            <WordTokenComponent
+                                                key={token.id}
+                                                token={token}
+                                                // Function now correctly typed in WordToken props
+                                                onSelect={handleTokenSelect}
+                                                sentenceText={sentence.original}
+                                                isSelected={selectedToken?.id === token.id}
+                                                isSpeaking={speakingTokenId === token.id}
+                                                skyDropReveal={skyDropReveal}
+                                            />
+                                        );
+                                    })}
                                     {/* Single sentence play button */}
                                     <button
                                         onClick={(e) => {
@@ -341,7 +394,9 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                     <VocabTip tokens={sentence.tokens} />
 
                                     {/* Grammar */}
-                                    <GrammarTip sentence={sentence.original} />
+                                    {/* Grammar */}
+                                    <GrammarTip sentence={sentence.original} tokens={sentence.tokens} />
+
                                 </div>
                             </div>
                         </div>

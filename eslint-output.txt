@@ -1,0 +1,250 @@
+﻿
+C:\Users\sai\yomi\src\app\layout.tsx
+  44:9  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+C:\Users\sai\yomi\src\app\page.tsx
+   14:3   warning  'ChevronDown' is defined but never used                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   15:3   warning  'ChevronUp' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  276:9   warning  'isMobileDrawerOpen' is assigned a value but never used                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  303:9   warning  'router' is assigned a value but never used                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  396:9   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  696:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\AuthGuard.tsx
+  94:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\GlobalAudioPlayer.tsx
+  3:8  warning  'React' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\HistoryPanel.tsx
+  16:11  warning  'isDark' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\InfoPanel.tsx
+   84:5   warning  'settings' is defined but never used                         @typescript-eslint/no-unused-vars
+  360:11  warning  'isDark' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  366:22  warning  'setDictLang' is assigned a value but never used             @typescript-eslint/no-unused-vars
+  792:11  warning  'renderJishoDefinitions' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\InputMethods\ImageInput.tsx
+    6:39  warning  'ImageIcon' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   93:8   warning  React Hook useCallback has a missing dependency: 'processImage'. Either include it or remove the dependency array                                                                                                                                                                        react-hooks/exhaustive-deps
+  123:8   warning  React Hook useEffect has a missing dependency: 'processImage'. Either include it or remove the dependency array                                                                                                                                                                          react-hooks/exhaustive-deps
+  156:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\InputMethods\LibraryBrowser.tsx
+  6:8  warning  'clsx' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\KanaGame.tsx
+  91:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\KanaGame.tsx:91:13
+  89 |     useEffect(() => {
+  90 |         if (isOpen) {
+> 91 |             setScore(0);
+     |             ^^^^^^^^ Avoid calling setState() directly within an effect
+  92 |             setStreak(0);
+  93 |             setTimeout(() => nextQuestion(), 0);
+  94 |         }  react-hooks/set-state-in-effect
+
+C:\Users\sai\yomi\src\components\KanaGrid.tsx
+  63:13  warning  'settings' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\KanaModal.tsx
+    3:46  warning  'useMemo' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+   27:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\KanaModal.tsx:27:13
+  25 |     useEffect(() => {
+  26 |         if (settings.kanaCharType) {
+> 27 |             setViewType(settings.kanaCharType);
+     |             ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  28 |         }
+  29 |     }, [settings.kanaCharType, isOpen]);
+  30 |  react-hooks/set-state-in-effect
+  253:38  warning  'charDisplay' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\KanaModeView.tsx
+  18:11  warning  'KanaModeViewProps' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\MobileComponents.tsx
+  30:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\ReaderHeader.tsx
+   3:5   warning  'ChevronDown' is defined but never used        @typescript-eslint/no-unused-vars
+  29:5   warning  'onTranslate' is defined but never used        @typescript-eslint/no-unused-vars
+  35:13  warning  'settings' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\RefactoredInput.tsx
+  16:77  warning  'compact' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+  17:12  warning  'isInputFocused' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  77:8   warning  React Hook useEffect has a missing dependency: 'processImage'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\sai\yomi\src\components\ResizableLayout.tsx
+   3:17  warning  'useCallback' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+   3:30  warning  'useRef' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+  22:38  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\ResizableLayout.tsx:22:38
+  20 |     // Sync from store on mount
+  21 |     useEffect(() => {
+> 22 |         if (layout.leftSidebarWidth) setLeftWidth(layout.leftSidebarWidth);
+     |                                      ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  23 |         if (layout.rightSidebarWidth) setRightWidth(layout.rightSidebarWidth);
+  24 |     }, [layout.leftSidebarWidth, layout.rightSidebarWidth]);
+  25 |  react-hooks/set-state-in-effect
+
+C:\Users\sai\yomi\src\components\SettingsModal.tsx
+    7:37  warning  'Flower' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  674:33  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  807:20  warning  'isDark' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\TextAnalyzer.tsx
+   27:11  warning  'ttsInitiatedRef' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  128:23  warning  'tokens' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  174:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\TextAnalyzer.tsx:174:9
+  172 |     // Auto-analyze on mount
+  173 |     useEffect(() => {
+> 174 |         analyze();
+      |         ^^^^^^^ Avoid calling setState() directly within an effect
+  175 |     }, [analyze]);
+  176 |
+  177 |     const handleTokenSelect = (token: WordToken, sentenceOriginal?: string) => {  react-hooks/set-state-in-effect
+  186:11  warning  'handleContainerClick' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\VocabListView.tsx
+  9:8  warning  'clsx' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\VocabTip.tsx
+  135:93  warning  'setIsMobileSheetOpen' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  286:31  warning  'hoverTextClass' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  288:31  warning  'hoverBgClass' is assigned a value but never used          @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\kana\KanaCourseMap.tsx
+  19:11  warning  'isDark' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\kana\KanaSidePanel.tsx
+   8:8   warning  'clsx' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  14:11  warning  'isDark' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  17:21  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\kana\KanaSidePanel.tsx:17:21
+  15 |
+  16 |     const [mounted, setMounted] = useState(false);
+> 17 |     useEffect(() => setMounted(true), []);
+     |                     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  18 |
+  19 |     if (!mounted) return null;
+  20 |  react-hooks/set-state-in-effect
+
+C:\Users\sai\yomi\src\components\kana\PracticeArena.tsx
+    4:18  warning  'AnimatePresence' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+  194:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\kana\PracticeArena.tsx:194:13
+  192 |     useEffect(() => {
+  193 |         if (kanaPool.length > 0) {
+> 194 |             generateQuestion();
+      |             ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  195 |         }
+  196 |     }, [kanaPool, generateQuestion]);
+  197 |                                                                                  react-hooks/set-state-in-effect
+  396:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\kana\PracticeArena.tsx:396:13
+  394 |     useEffect(() => {
+  395 |         if (kanaPool.length > 0) {
+> 396 |             generateQuestion();
+      |             ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  397 |         }
+  398 |     }, [kanaPool, generateQuestion]);
+  399 |                                                                                  react-hooks/set-state-in-effect
+  548:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\kana\PracticeArena.tsx:548:13
+  546 |             // 鐩存帴鐢熸垚闂鑰屼笉鏄皟鐢?generateQuestion
+  547 |             const kana = kanaPool[Math.floor(Math.random() * kanaPool.length)];
+> 548 |             setCurrentKana(kana);
+      |             ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  549 |             setStrokeCount(0);
+  550 |         }
+  551 |     }, [kanaPool]);  react-hooks/set-state-in-effect
+
+C:\Users\sai\yomi\src\lib\audioUtils.ts
+  8:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\lib\grammar\grammarMatcher.ts
+  1:10  warning  'GrammarEntry' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\nlp\analyzer.ts
+  100:41  warning  'pos' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\tts\edge.ts
+  116:13  warning  'lastEmittedIndex' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\tts\native.ts
+  199:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\lib\tts\voicevox.ts
+   16:11  warning  'VoicevoxQuery' is defined but never used         @typescript-eslint/no-unused-vars
+   81:19  warning  'alignment' is assigned a value but never used    @typescript-eslint/no-unused-vars
+   82:17  warning  'currentTime' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  224:15  warning  'startTime' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  295:18  warning  'e' is defined but never used                     @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\types\kuroshiro.d.ts
+  11:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+鉁?67 problems (8 errors, 59 warnings)
+

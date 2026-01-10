@@ -1,0 +1,73 @@
+﻿
+C:\Users\sai\yomi\src\app\layout.tsx
+  44:9  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+C:\Users\sai\yomi\src\app\page.tsx
+  392:9   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  692:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\AuthGuard.tsx
+  94:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\InfoPanel.tsx
+  790:11  warning  'renderJishoDefinitions' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\InputMethods\ImageInput.tsx
+    6:39  warning  'ImageIcon' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   93:8   warning  React Hook useCallback has a missing dependency: 'processImage'. Either include it or remove the dependency array                                                                                                                                                                        react-hooks/exhaustive-deps
+  123:8   warning  React Hook useEffect has a missing dependency: 'processImage'. Either include it or remove the dependency array                                                                                                                                                                          react-hooks/exhaustive-deps
+  156:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\KanaGame.tsx
+  93:13  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+
+C:\Users\sai\yomi\src\components\KanaModal.tsx
+  254:38  warning  'charDisplay' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\KanaModeView.tsx
+  18:11  warning  'KanaModeViewProps' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\MobileComponents.tsx
+  30:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\sai\yomi\src\components\RefactoredInput.tsx
+  16:77  warning  'compact' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+  17:12  warning  'isInputFocused' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  77:8   warning  React Hook useEffect has a missing dependency: 'processImage'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\sai\yomi\src\components\SettingsModal.tsx
+  674:33  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  807:20  warning  'isDark' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\TextAnalyzer.tsx
+  127:23  warning  'tokens' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\kana\KanaCourseMap.tsx
+  9:10  warning  'useAppStore' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\kana\KanaSidePanel.tsx
+  13:13  warning  'settings' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\kana\PracticeArena.tsx
+  552:13  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+
+C:\Users\sai\yomi\src\lib\audioUtils.ts
+  8:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\lib\nlp\analyzer.ts
+  100:41  warning  'pos' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\tts\native.ts
+  199:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\lib\tts\voicevox.ts
+  220:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-unused-vars')
+
+C:\Users\sai\yomi\src\types\kuroshiro.d.ts
+  11:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+鉁?29 problems (0 errors, 29 warnings)
+  0 errors and 3 warnings potentially fixable with the `--fix` option.
+

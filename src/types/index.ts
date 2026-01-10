@@ -3,6 +3,8 @@ import { ThemeId } from '@/lib/colorThemes';
 
 export enum PartOfSpeech {
   NOUN = '名词',
+  PRONOUN = '代词',
+  PROPER_NOUN = '专名',
   VERB = '动词',
   ADJECTIVE = '形容词',
   PARTICLE = '助词',
@@ -71,6 +73,7 @@ export interface AppSettings {
   showPitchAccent: boolean;
   hideParticles: boolean;
   karaokeMode: boolean;
+  karaokeStyle: 'glow-scale' | 'glow-only' | 'float-up' | 'sky-drop' | 'border' | 'bounce' | 'underline' | 'text-magnify';
   fontSize: 'small' | 'medium' | 'large';
   fontFamily: 'sans' | 'serif';
   theme: 'light' | 'dark';
@@ -87,6 +90,7 @@ export interface AppSettings {
   // Visual Settings
   activeColorPOS: PartOfSpeech[];
   colorTheme: ThemeId;
+  colorScheme: 'morandi' | 'wafu' | 'monochrome';
 
   // Translation Settings
   showTranslation: boolean;
@@ -106,7 +110,8 @@ export interface KanaChar {
   hiragana: string;  // 'あ'
   katakana: string;  // 'ア'
   romaji: string;    // 'a'
-  type: 'seion' | 'dakuon' | 'yoon'; // 清音/浊音/拗音
+  type: 'seion' | 'dakuon' | 'handakuon' | 'yoon'; // 清音/浊音/半浊音/拗音
+  row?: string;      // 行标识: 'a', 'k', 's', 't', 'n', 'h', 'm', 'y', 'r', 'w', 'g', 'z', 'd', 'b', 'p' 等
   svgPath?: string;  // SVG Path data
 }
 
@@ -116,6 +121,16 @@ export const POS_COLORS: Record<PartOfSpeech, { bg: string; text: string; border
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     border: 'border-blue-200'
+  },
+  [PartOfSpeech.PRONOUN]: {
+    bg: 'bg-indigo-50',
+    text: 'text-indigo-700',
+    border: 'border-indigo-200'
+  },
+  [PartOfSpeech.PROPER_NOUN]: {
+    bg: 'bg-sky-50',
+    text: 'text-sky-700',
+    border: 'border-sky-200'
   },
   [PartOfSpeech.VERB]: {
     bg: 'bg-red-50',

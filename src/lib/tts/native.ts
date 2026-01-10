@@ -196,6 +196,7 @@ export class NativeTtsProvider implements TtsProvider {
         // CRITICAL FIX: Prevent garbage collection
         // Chrome and other browsers may garbage collect the utterance object if it's not globally referenced,
         // causing events to stop firing mid-speech.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any)._speechSynthesisUtterance = u;
 
         window.speechSynthesis.speak(u);
