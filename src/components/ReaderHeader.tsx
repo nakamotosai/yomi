@@ -26,89 +26,82 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     onPlay,
     onStop,
 }) => {
-
-    // Button styles using CSS variables (no more isWafu checks!)
-    // Unified neutral style for both buttons in all states
-    const unifiedButtonStyle = "bg-[var(--scheme-muted-bg)] text-[var(--text-secondary)] hover:bg-[var(--scheme-muted)]/20 dark:bg-white/5 hover:dark:bg-white/10 ring-0";
-
-    // Stop button: uses muted color
-    const stopStyle = "bg-[var(--scheme-muted)]/10 text-[var(--scheme-muted)] hover:bg-[var(--scheme-muted)]/20 active:scale-95 dark:text-[var(--text-muted)] dark:bg-white/5 dark:hover:bg-white/10 dark:backdrop-blur-md";
+    const isDark = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
 
     return (
-        <div className="flex items-center justify-center gap-3 w-full h-16 px-4 shrink-0 select-none">
-            {/* Header Content - Now aligned left with only buttons */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 w-full h-16 px-4 shrink-0 select-none">
+            {/* Left Placeholder (to balance the grid) */}
+            <div className="h-full" />
 
-            {/* Translate Button */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleTranslation();
-                }}
-                className={clsx(
-                    "flex items-center justify-center gap-2 px-4 h-10 rounded-xl transition-all duration-300 w-44 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap",
-                    // Base Dark Mode Style
-                    "dark:bg-white/5 dark:text-[var(--text-muted)] dark:backdrop-blur-md",
-                    // Active State (Light: No color change, just unified style. Dark: Rainbow Highlight)
-                    isTranslationVisible && "dark:rainbow-highlight", // Only use rainbow highlight in dark mode to avoid color shift in light mode
-
-                    unifiedButtonStyle
-                )}
-                title={isTranslationVisible ? "翻訳を閉じる" : "翻訳を表示"}
-            >
-                {isLoadingTranslation ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                ) : (
-                    <Languages className="w-5 h-5" />
-                )}
-                <span className="text-[16px] font-medium tracking-wide">全文翻訳</span>
-            </button>
-
-            {/* Play/Pause Button (Main Action) - Reordered for better Left-Align flow */}
-            <button
-                onClick={(e) => { e.stopPropagation(); onPlay(); }}
-                className={clsx(
-                    "flex items-center justify-center gap-2 px-5 h-10 rounded-xl transition-all duration-300 shadow-sm active:scale-95 active:shadow-none w-44 whitespace-nowrap",
-                    // Base Dark Mode Style
-                    "dark:bg-white/5 dark:text-[var(--text-muted)] dark:backdrop-blur-md",
-                    // Active State (Dark: Rainbow Highlight)
-                    (isSpeaking && !isPaused) && "dark:rainbow-highlight",
-
-                    unifiedButtonStyle
-                )}
-            >
-                {isSpeaking && !isPaused ? (
-                    <>
-                        <PauseCircle className="w-5 h-5" />
-                        <span className="text-[16px] font-medium tracking-wide">一時停止</span>
-                    </>
-                ) : (
-                    <>
-                        <PlayCircle className="w-5 h-5 ml-0.5" />
-                        <span className="text-[16px] font-medium tracking-wide">
-                            {isPaused ? "再開" : "全文朗読"}
-                        </span>
-                    </>
-                )}
-            </button>
-
-            {/* Stop Button (Only visible when Playing or Paused) */}
-            {(isSpeaking || isPaused) && (
+            {/* Middle Column: Fixed Center Pair */}
+            <div className="flex items-center justify-center gap-3">
+                {/* Translate Button */}
                 <button
-                    onClick={(e) => { e.stopPropagation(); onStop(); }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleTranslation();
+                    }}
                     className={clsx(
-                        "flex items-center justify-center gap-2 px-4 h-10 rounded-xl transition-all duration-300 animate-in fade-in slide-in-from-left-2 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap",
-                        // Base Dark Mode Style
-                        "dark:bg-white/5 dark:text-[var(--text-muted)] dark:backdrop-blur-md",
-                        unifiedButtonStyle
+                        "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-44 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border",
+                        // Active State
+                        isTranslationVisible && (isDark ? "rainbow-highlight" : "ring-2 ring-[var(--scheme-primary)]/20 bg-[var(--scheme-primary)]/5"),
+                        // Theme Styles
+                        isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
                     )}
-                    title="停止"
+                    title={isTranslationVisible ? "翻訳を闭じる" : "翻訳を表示"}
                 >
-                    <StopCircle className="w-5 h-5" />
-                    <span className="text-[16px] font-medium tracking-wide">終了</span>
+                    {isLoadingTranslation ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                        <Languages className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
+                    )}
+                    <span className="text-[14px] font-medium tracking-wide">全文翻訳</span>
                 </button>
-            )}
 
-        </div >
+                {/* Play/Pause Button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onPlay(); }}
+                    className={clsx(
+                        "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-44 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border",
+                        // Active State
+                        (isSpeaking && !isPaused) && (isDark ? "rainbow-highlight" : "ring-2 ring-[var(--scheme-primary)]/20 bg-[var(--scheme-primary)]/5"),
+                        // Theme Styles
+                        isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
+                    )}
+                >
+                    {isSpeaking && !isPaused ? (
+                        <>
+                            <PauseCircle className="w-5 h-5" />
+                            <span className="text-[14px] font-medium tracking-wide">一时停止</span>
+                        </>
+                    ) : (
+                        <>
+                            <PlayCircle className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
+                            <span className="text-[14px] font-medium tracking-wide">
+                                {isPaused ? "再開" : "全文朗读"}
+                            </span>
+                        </>
+                    )}
+                </button>
+            </div>
+
+            {/* Right Column: Stop Button (Conditional) */}
+            <div className="flex items-center justify-start h-full">
+                {(isSpeaking || isPaused) && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onStop(); }}
+                        className={clsx(
+                            "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-24 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border animate-in fade-in slide-in-from-left-2",
+                            isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
+                        )}
+                        title="停止"
+                    >
+                        <StopCircle className="w-5 h-5" />
+                        <span className="text-[14px] font-medium tracking-wide">終了</span>
+                    </button>
+                )}
+            </div>
+        </div>
     );
 };
 

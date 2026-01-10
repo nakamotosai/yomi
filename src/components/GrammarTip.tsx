@@ -16,6 +16,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
     const [isLoading, setIsLoading] = useState(true);
     const setSelectedGrammar = useAppStore(s => s.setSelectedGrammar);
     const settings = useAppStore(s => s.settings);
+    const isSpeaking = useAppStore(s => s.isSpeaking);
 
     useEffect(() => {
         let cancelled = false;
@@ -66,10 +67,11 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
                                     setSelectedGrammar(match.entry);
                                     // Speak with ttsManager
                                     // Nuclear option: Truncate at the first sign of metadata (brackets, numbers)
+                                    if (isSpeaking) return;
                                     let cleanTitle = match.entry.reading || match.entry.term;
                                     cleanTitle = cleanTitle.split(/[（(【\[〔①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/)[0];
                                     cleanTitle = cleanTitle.replace(/[~～]/g, '');
-                                    ttsManager.speak(cleanTitle.trim(), settings);
+                                    ttsManager.speak(cleanTitle.trim(), settings, {});
                                 }}
                                 className="inline-flex items-center px-2 py-0.5 rounded text-base transition-all border cursor-pointer hover:scale-105 hover:brightness-95 bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20 text-[var(--scheme-grammar)]"
                             >

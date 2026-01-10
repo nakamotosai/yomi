@@ -16,6 +16,43 @@ export class EdgeTtsProvider implements TtsProvider {
     private timer: number | null = null; // requestAnimationFrame ID
     private isFetching: boolean = false; // Lock to prevent duplicate requests
     private abortController: AbortController | null = null;
+    private prefetchCache: Map<string, EdgeTtsResponse> = new Map();
+
+    private getCacheKey(text: string, voice: string, rate: number): string {
+        return `${voice}_${rate}_${text}`;
+    }
+
+    async preload(text: string, options: { voiceURI?: string; speed?: number }) {
+        const voice = options.voiceURI || 'ja-JP-NanamiNeural';
+        const rate = (options.speed || 1.0) - 1.0;
+        const key = this.getCacheKey(text, voice, rate);
+
+        if (this.prefetchCache.has(key)) return;
+
+        try {
+            const res = await fetch('/api/tts/edge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice, rate }),
+            });
+
+            if (res.ok) {
+                const data: EdgeTtsResponse = await res.json();
+                if (data.audioBase64) {
+                    // Cache the result
+                    this.prefetchCache.set(key, data);
+                    // Keep cache small
+                    if (this.prefetchCache.size > 1) {
+                        const firstKey = this.prefetchCache.keys().next().value;
+                        if (firstKey !== undefined) this.prefetchCache.delete(firstKey);
+                    }
+                    console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
+                }
+            }
+        } catch (e) {
+            console.warn('[EdgeTTS] Preload failed', e);
+        }
+    }
 
     async speak(text: string, options: {
         voiceURI?: string;
@@ -34,81 +71,92 @@ export class EdgeTtsProvider implements TtsProvider {
             return;
         }
 
-        this.isFetching = true;
-        this.abortController = new AbortController();
+        const voice = options.voiceURI || 'ja-JP-NanamiNeural';
+        const rate = (options.speed || 1.0) - 1.0;
+        const key = this.getCacheKey(text, voice, rate);
 
-        try {
-            const voice = options.voiceURI || 'ja-JP-NanamiNeural';
-            const rate = (options.speed || 1.0) - 1.0;
+        let data: EdgeTtsResponse | null = null;
 
-            const res = await fetch('/api/tts/edge', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice, rate }),
-                signal: this.abortController.signal
-            });
+        // Check Cache
+        if (this.prefetchCache.has(key)) {
+            console.log(`[EdgeTTS] Using cached audio for: ${text.substring(0, 10)}...`);
+            data = this.prefetchCache.get(key)!;
+            this.prefetchCache.delete(key); // Remove after use to free memory (or keep if desired, but sentences are usually unique)
+        }
 
-            // Check if we were stopped during fetch
-            if (!this.isFetching) {
-                console.log('[EdgeTTS] Request was cancelled');
+        if (!data) {
+            this.isFetching = true;
+            this.abortController = new AbortController();
+
+            try {
+                const res = await fetch('/api/tts/edge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice, rate }),
+                    signal: this.abortController.signal
+                });
+
+                // Check if we were stopped during fetch
+                if (!this.isFetching) {
+                    console.log('[EdgeTTS] Request was cancelled');
+                    return;
+                }
+
+                if (!res.ok) {
+                    throw new Error('Edge TTS API failed with status ' + res.status);
+                }
+
+                data = await res.json();
+            } catch (e) {
+                this.isFetching = false;
+                if ((e as Error).name === 'AbortError') {
+                    console.log('[EdgeTTS] Request aborted');
+                } else {
+                    console.error('Edge TTS Error:', e);
+                    if (options.onError) options.onError(e as Error);
+                }
                 return;
             }
+        }
 
-            if (!res.ok) {
-                throw new Error('Edge TTS API failed with status ' + res.status);
-            }
-
-            const data: EdgeTtsResponse = await res.json();
-
-            if (!data.audioBase64) {
-                throw new Error('No audio received');
-            }
-
-            const audioUrl = `data:audio/mp3;base64,${data.audioBase64}`;
-            this.audio = new Audio(audioUrl);
-            this.audio.playbackRate = 1.0;
-
-            this.audio.onplay = () => {
-                console.log('[EdgeTTS] Audio started. Alignment data length:', data.alignment?.length);
-                options.onStart && options.onStart();
-
-                if (options.onBoundary && data.alignment && data.alignment.length > 0) {
-                    this.startBoundaryTracking(data.alignment, options.onBoundary);
-                }
-            };
-
-            this.audio.onended = () => {
-                this.stopBoundaryTracking();
-                this.isFetching = false;
-                options.onEnd && options.onEnd();
-            };
-
-            this.audio.onerror = (e) => {
-                console.error('Edge TTS Playback Error', e);
-                this.isFetching = false;
-                const err = new Error('Playback error');
-                options.onError ? options.onError(err) : (options.onEnd && options.onEnd());
-            };
-
-            await this.audio.play();
-
-        } catch (e) {
+        if (!data || !data.audioBase64) {
             this.isFetching = false;
+            if (options.onError) options.onError(new Error('No audio received'));
+            return;
+        }
 
-            if ((e as Error).name === 'AbortError') {
-                console.log('[EdgeTTS] Request aborted');
-                // Abort is user action, do not call onEnd or onError to avoid side effects
-            } else {
-                console.error('Edge TTS Error:', e);
-                // Real error -> use onError if available, otherwise silence or fallback
-                if (options.onError) {
-                    options.onError(e as Error);
-                } else {
-                    // Legacy behavior fallback, but careful not to loop
-                    // options.onEnd && options.onEnd(); 
-                    // DISABLE fallback to onEnd for errors to prevent loops
-                }
+        const audioUrl = `data:audio/mp3;base64,${data.audioBase64}`;
+        this.audio = new Audio(audioUrl);
+        this.audio.playbackRate = 1.0;
+
+        this.audio.onplay = () => {
+            console.log('[EdgeTTS] Audio started. Alignment data length:', data?.alignment?.length);
+            options.onStart && options.onStart();
+
+            if (options.onBoundary && data?.alignment && data.alignment.length > 0) {
+                this.startBoundaryTracking(data.alignment, options.onBoundary);
             }
+        };
+
+        this.audio.onended = () => {
+            this.stopBoundaryTracking();
+            this.isFetching = false;
+            options.onEnd && options.onEnd();
+        };
+
+        this.audio.onerror = (e) => {
+            console.error('Edge TTS Playback Error', e);
+            this.isFetching = false;
+            const err = new Error('Playback error');
+            options.onError ? options.onError(err) : (options.onEnd && options.onEnd());
+        };
+
+        try {
+            await this.audio.play();
+        } catch (e) {
+            console.error('[EdgeTTS] Play error:', e);
+            this.isFetching = false;
+            if (options.onError) options.onError(e as Error);
         }
     }
 

@@ -47,3 +47,8 @@ next-env.d.ts
 # eslint output
 eslint-output.json
 eslint-result.json
+
+# user requested excludes
+/dist
+/public/models
+/public/qwen

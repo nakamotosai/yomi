@@ -20,11 +20,11 @@ FINAL_MODEL_DIR = os.path.abspath("dist/qwen_finetuned")
 # Hyperparameters
 LORA_R = 16
 LORA_ALPHA = 32
-LORA_DROPOUT = 0.05
+LORA_DROPOUT = 0.1  # Increased dropout to prevent overfitting
 EPOCHS = 3
-BATCH_SIZE = 4
-GRAD_ACCUMULATION = 4
-LEARNING_RATE = 2e-4
+BATCH_SIZE = 2      # Reduced batch size for stability
+GRAD_ACCUMULATION = 8 # Increased accumulation to compensate
+LEARNING_RATE = 5e-5 # LOWERED: 2e-4 is too high for 1.7B, causes collapse!
 MAX_SEQ_LENGTH = 1024
 
 def formatting_func(example):
@@ -33,7 +33,8 @@ def formatting_func(example):
     instruction = example['instruction']
     output = example['output']
     
-    text = f"<|im_start|>system\nYou are a helpful Japanese grammar teacher.<|im_end|>\n"
+    # Updated System Prompt to match inference persona
+    text = f"<|im_start|>system\n你是一位专业的日语语法老师。请用中文详细解释日语语法。<|im_end|>\n"
     text += f"<|im_start|>user\n{instruction}<|im_end|>\n"
     text += f"<|im_start|>assistant\n{output}<|im_end|>"
     return text
@@ -70,7 +71,7 @@ def main():
     print("🤖 Loading Model (BF16)...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,
         device_map="auto",
         trust_remote_code=True
     )
@@ -100,8 +101,8 @@ def main():
         num_train_epochs=EPOCHS,
         save_steps=100,
         save_total_limit=2,
-        bf16=True, # RTX 4090 supports BF16
-        dataloader_num_workers=0, # Windows safe
+        bf16=False,
+        fp16=True, # RTX 2080 Ti supports FP16, not BF16
         remove_unused_columns=True,
     )
 

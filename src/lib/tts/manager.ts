@@ -58,6 +58,18 @@ class TtsManager {
         this.activeProvider = null;
     }
 
+    preload(text: string, settings: AppSettings) {
+        const provider = this.getProvider(settings);
+        if (provider.preload) {
+            provider.preload(text, {
+                voiceURI: settings.nativeVoiceURI,
+                speakerId: settings.voicevoxSpeakerId,
+                serverUrl: settings.voicevoxUrl,
+                speed: settings.playbackSpeed,
+            });
+        }
+    }
+
     pause() {
         if (this.activeProvider) {
             this.activeProvider.pause();

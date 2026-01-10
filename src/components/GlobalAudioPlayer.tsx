@@ -23,6 +23,7 @@ export default function GlobalAudioPlayer() {
     // Refs to track state inside callbacks
     const isSpeakingRef = useRef(isSpeaking);
     const currentIndexRef = useRef(currentIndex);
+    const lastHandledIndexRef = useRef<number | null>(null);
 
     // Sync refs
     useEffect(() => {
@@ -75,24 +76,21 @@ export default function GlobalAudioPlayer() {
         // If not speaking, ensure TTS is stopped
         if (!isSpeaking) {
             ttsManager.stop();
+            lastHandledIndexRef.current = null;
             return;
         }
 
-        // If paused, just pause
+        // Handle Pause/Resume for existing sentence
         if (isPaused) {
             ttsManager.pause();
             return;
         } else {
-
-
-            // If was paused and now resumed, and we correspond to the same sentence?
-            // Since we re-run this effect on `isPaused` change, we need to check if we should resume or start fresh.
-            // ttsManager.resume() works if audio exists. 
-            // BUT, if we switched sentences, we need to speak new.
-
-            // To be safe and simple: 
-            // If we are actively "playing" (not paused) and there is a sentence, we trigger speak.
-            // ttsManager.speak handles stopping previous internal audio.
+            // We are resuming or starting fresh.
+            // If the current index matches the last handled index, it means we are resuming the same sentence.
+            if (lastHandledIndexRef.current === currentIndex) {
+                ttsManager.resume();
+                return;
+            }
         }
 
         const currentSentence = playlist[currentIndex];
@@ -100,14 +98,20 @@ export default function GlobalAudioPlayer() {
         if (!currentSentence) {
             // End of playlist
             stopTTS();
+            lastHandledIndexRef.current = null;
             return;
         }
 
         console.log(`[GlobalPlayer] Playing sentence ${currentIndex + 1}/${playlist.length}:`, currentSentence.text.substring(0, 10) + '...');
+        lastHandledIndexRef.current = currentIndex;
 
         ttsManager.speak(currentSentence.text, settings, {
             onStart: () => {
-                // Optional: Scroll to sentence
+                // Preload NEXT sentence
+                const nextSentence = playlist[currentIndex + 1];
+                if (nextSentence) {
+                    ttsManager.preload(nextSentence.text, settings);
+                }
             },
             onEnd: () => {
                 // Play next
@@ -124,12 +128,8 @@ export default function GlobalAudioPlayer() {
                 stopTTS();
             },
             onBoundary: (charIndex, _charLength, boundaryIndex) => {
-                // Ignore invalid boundary - Do NOT clear speakingTokenId
-                // This preserves the "active" state during silence/gaps for Sky Drop
-                if (charIndex === -1) {
-                    // setSpeakingTokenId(null); // REMOVED to prevent flicker
-                    return;
-                }
+                // Boundary tracking logic (unchanged)
+                if (charIndex === -1) return;
 
                 const map = currentSentence.tokenMap;
                 if (!map || map.length === 0) {
@@ -137,20 +137,15 @@ export default function GlobalAudioPlayer() {
                     return;
                 }
 
-                // Primary Strategy: Use charIndex to find the token
-                // This is the most accurate because it's based on TTS timing
                 const match = map.find(t => charIndex >= t.start && charIndex < t.end);
-
                 if (match) {
                     setSpeakingTokenId(match.id);
                     return;
                 }
 
-                // Fallback 1: Find token whose start is closest to charIndex (within range)
                 let closest = null;
                 let minDist = Infinity;
                 for (const t of map) {
-                    // Check if charIndex is near this token's boundaries
                     const distStart = Math.abs(t.start - charIndex);
                     const distEnd = Math.abs(t.end - charIndex);
                     const dist = Math.min(distStart, distEnd);
@@ -160,56 +155,19 @@ export default function GlobalAudioPlayer() {
                     }
                 }
 
-                // Accept match if within reasonable distance (5 chars)
                 if (closest && minDist <= 5) {
                     setSpeakingTokenId(closest.id);
                     return;
                 }
 
-                // Fallback 2: Use boundaryIndex if it's valid
-                // This handles cases where charIndex doesn't match exactly
                 if (boundaryIndex !== undefined && boundaryIndex >= 0 && boundaryIndex < map.length) {
                     setSpeakingTokenId(map[boundaryIndex].id);
                     return;
                 }
-
-                // No match found - also keep last state instead of clearing?
-                // setSpeakingTokenId(null); // REMOVED to prevent flicker
             }
         });
 
-        // Cleanup: If the component unmounts or we switch sentences, we don't necessarily stop here
-        // because `speak` cancels previous. 
-        // But if `isSpeaking` turns false (handled at top), we stop.
-
     }, [isSpeaking, isPaused, currentIndex, playlist, settings, stopTTS, playNextSentence, setSpeakingTokenId]);
-
-    // Handle Pausing specifically via Resume
-    // The main effect handles "Stop -> Start" logic generally.
-    // But `resume` is special.
-    // If we just toggle `isPaused`, the effect runs.
-    useEffect(() => {
-        if (isSpeaking && !isPaused) {
-            // Check if we need to resume instead of restart?
-            // Our ttsManager wrapper is simple. 
-            // If we call `speak` again, it restarts. 
-            // We need `ttsManager` to support "resume if same text"? 
-            // Currently ttsManager.resume() is for HTMLAudioElement.play().
-            // If we are in the middle of a sentence, we want `resume()`.
-            // If we changed sentence, we want `speak()`.
-
-            // NOTE: The main effect above re-runs on `isPaused` change.
-            // If we go Paused -> Playing:
-            // The effect runs. `ttsManager.speak` is called. It RESTARTS the sentence.
-            // This is acceptable behavior for now (easier to implement).
-            // Ideal: `resume()` only.
-
-            // Optimization for Resume:
-            // We can check if `ttsManager` is paused and we are on the SAME sentence.
-        } else if (isSpeaking && isPaused) {
-            ttsManager.pause();
-        }
-    }, [isPaused, isSpeaking]);
 
     return null; // Logic only component
 }

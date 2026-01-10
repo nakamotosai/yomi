@@ -17,5 +17,6 @@ export interface TtsProvider {
     pause(): void;
     resume(): void;
 
+    preload?(text: string, options: { voiceURI?: string; speed?: number; speakerId?: number; serverUrl?: string }): void;
     getVoices(): Promise<{ id: string; name: string }[]>;
 }

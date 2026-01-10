@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Volume2, Bookmark, ArrowRight, BookOpen } from 'lucide-react';
+import { Volume2, Bookmark, ArrowRight, BookOpen, BookMarked, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { WordToken, DictionaryEntry, PartOfSpeech, AppSettings } from '@/types';
 import { GrammarEntry } from '@/types/grammar';
 import { useAppStore } from '@/store/useAppStore';
@@ -12,6 +13,7 @@ import { ttsManager } from '@/lib/tts/manager';
 import { COLOR_THEMES } from '@/lib/colorThemes';
 
 import clsx from 'clsx';
+import { useWebLLM } from '@/store/useWebLLM'; // Import hook
 import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
@@ -229,7 +231,7 @@ function ExampleWithTranslation({
     );
 }
 // 渲染富文本语法解释（Distilled Data）
-function RichGrammarContent({ grammar, grammarColor, onSpeak }: { grammar: GrammarEntry, grammarColor: string, onSpeak: (text: string) => void }) {
+function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }: { grammar: GrammarEntry, grammarColor: string, onSpeak: (text: string) => void, isGlobalSpeaking: boolean }) {
     const [explanation, setExplanation] = useState<string | null>(null);
     const [exampleTranslation, setExampleTranslation] = useState<string>('');
 
@@ -267,6 +269,7 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak }: { grammar: Gramm
         if ((e.target as HTMLElement).closest('button')) return;
 
         // Speak the explanations (lines joined)
+        if (isGlobalSpeaking) return;
         const textToSpeak = lines.join(' ').replace(/\*\*/g, '');
         onSpeak(textToSpeak);
     };
@@ -397,8 +400,9 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak }: { grammar: Gramm
 }
 
 // 渲染语法详情 - 样式与单词卡片保持一致
-function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: AppSettings }) {
+function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: GrammarEntry; settings: AppSettings; isGlobalSpeaking: boolean }) {
     const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
+    const { generateText, initializeEngine, isModelLoaded, isLoading, progress, unloadModel } = useWebLLM(); /* UPDATED */
     const isSaved = isGrammarSaved(grammar.id);
 
     // 语法颜色使用 CSS 变量
@@ -409,8 +413,25 @@ function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: 
 
     const [isSpeaking, setIsSpeaking] = useState(false);
 
+    // Cleanup on window close/refresh
+    useEffect(() => {
+        const handleUnload = () => {
+            unloadModel();
+        };
+        window.addEventListener('beforeunload', handleUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleUnload);
+        };
+    }, [unloadModel]);
+
+    // AI State
+    const [aiResult, setAiResult] = useState<string>('');
+    const [aiResultTitle, setAiResultTitle] = useState<string>('');
+    const [isGenerating, setIsGenerating] = useState(false);
+
     // Resume TTS Handler
     const handleSpeak = (text: string) => {
+        if (isGlobalSpeaking) return;
         setIsSpeaking(true);
         ttsManager.speak(text, settings, {
             onStart: () => setIsSpeaking(true),
@@ -441,6 +462,67 @@ function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: 
             removeGrammar(grammar.id);
         } else {
             addGrammar(grammar);
+        }
+    };
+
+    const handleAIExplain = async () => {
+        if (isGenerating) return;
+
+        // Prepare context
+        // Ensure model is loaded
+        if (!isModelLoaded) {
+            await initializeEngine();
+        }
+
+        setIsGenerating(true);
+        setAiResult('');
+        setAiResultTitle('AI 老师详解');
+
+        try {
+            await richGrammarLoader.loadDictionary();
+            const explanation = `【Target Grammar】${grammar.title}\n\n【Reference Data】${richGrammarLoader.getExplanation(grammar.title, grammar.reading) || grammar.meaning || "暂无解释"}`;
+
+            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解语法：『${grammar.title}』。
+
+【资料说明】
+下方的【Referece Data】仅供你参考语法的正确含义。**千万不要照抄参考资料的语气**！参考资料是枯燥的教科书，你的任务是把它“翻译”成风趣的人话。
+
+【严格执行步骤】
+第1步 - 人话解读：
+- 用最通俗、接地气的方式解释『${grammar.title}』。
+- 严禁使用“核心：”、“用法：”等标题。开门见山直接说。
+- 必须指出这个语法的“情绪潜台词”。
+
+第2步 - 换行：
+- 解读写完后，**必须输出一个空行**。
+
+第3步 - 神例句：
+- 创作 3 组**全新**的例句（绝对不要和参考资料重复）。
+- 每一组必须包含：一行日文、一行中文。
+- 格式如下：
+  日文句子1
+  (中文翻译1)
+  日文句子2
+  (中文翻译2)
+  日文句子3
+  (中文翻译3)
+
+【警告】
+如果没有输出3个例句，任务即为失败。不要输出任何“总结”或“注意”废话。
+`;
+
+            await generateText(
+                explanation,
+                systemPrompt,
+                (text) => setAiResult(text),
+                { temperature: 0.85, top_p: 0.95 }
+            );
+
+        } catch (error) {
+            console.error("AI Generation failed", error);
+            setAiResult("AI 老师好像在休息，请稍后再试...");
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -514,8 +596,8 @@ function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: 
                         )}
                             style={{
                                 color: grammarColor,
-                                borderColor: `${grammarColor}30`,
-                                backgroundColor: `${grammarColor}10`
+                                borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
+                                backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)`
                             }}>
                             AI 文法
                         </span>
@@ -525,13 +607,81 @@ function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: 
 
             {/* Content - 使用与单词卡片相同的内容样式 */}
             <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
-                <div className="space-y-3 pb-8">
+                <div className="space-y-3 pb-2">
                     {/* Rich AI Explanation (Dynamic) */}
                     <RichGrammarContent
                         grammar={grammar}
                         grammarColor={grammarColor}
                         onSpeak={handleSpeak}
+                        isGlobalSpeaking={isGlobalSpeaking}
                     />
+                </div>
+
+                {/* AI Results Section */}
+                {aiResult && (
+                    <div className="mt-4 p-4 rounded-xl border border-dashed animate-in fade-in slide-in-from-bottom-2 duration-300"
+                        style={{
+                            backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`,
+                            borderColor: `color-mix(in srgb, ${grammarColor}, transparent 80%)`,
+                        }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <Sparkles className="w-4 h-4" style={{ color: grammarColor }} />
+                            <span className="text-sm font-bold" style={{ color: grammarColor }}>{aiResultTitle}</span>
+                        </div>
+                        <div className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                            {aiResult}
+                        </div>
+                    </div>
+                )}
+
+
+                {/* AI Teacher Trigger */}
+                <div className="mt-3 pt-3 border-t border-dashed border-[var(--border-muted)]">
+                    {/* Progress Bar Section - Only show when initializing/loading model */}
+                    {/* We use isLoading from store which is true during initialization */}
+                    {(isLoading) && (
+                        <div className="mb-3 animate-in fade-in zoom-in-95 duration-300">
+                            <div className="flex justify-between items-end mb-1">
+                                <span className="text-[10px] font-medium opacity-70" style={{ color: grammarColor }}>
+                                    第一次加载比较慢，由于模型较大，请耐心等待...
+                                </span>
+                                <span className="text-[10px] font-bold" style={{ color: grammarColor }}>
+                                    {Math.round((progress || 0) * 100)}%
+                                </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full overflow-hidden bg-black/5 dark:bg-white/5">
+                                <div
+                                    className="h-full rounded-full transition-all duration-300 ease-out"
+                                    style={{
+                                        width: `${Math.round((progress || 0) * 100)}%`,
+                                        backgroundColor: grammarColor
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[10px] mt-1 opacity-50 text-center">
+                                (后续使用将无需下载，速度飞快)
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex w-full">
+                        <button
+                            onClick={handleAIExplain}
+                            className="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:opacity-80 active:scale-[0.98] border shadow-sm"
+                            style={{
+                                backgroundColor: aiResultTitle === 'AI 老师详解' ? `color-mix(in srgb, ${grammarColor}, transparent 80%)` : `color-mix(in srgb, ${grammarColor}, transparent 90%)`,
+                                borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
+                                color: grammarColor,
+                            }}
+                            disabled={isGenerating || isLoading}
+                        >
+                            {isGenerating ? (
+                                <Sparkles className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <span className="font-bold text-sm">AI 详解</span>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -539,7 +689,7 @@ function GrammarPanel({ grammar, settings }: { grammar: GrammarEntry; settings: 
 }
 
 export default function InfoPanel() {
-    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings } = useAppStore();
+    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings, isSpeaking: isGlobalSpeaking } = useAppStore();
     const { addVocab, isWordSaved, removeVocab, vocabList } = useVocabStore();
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [speakingLineIndex, setSpeakingLineIndex] = useState<number | null>(null);
@@ -662,7 +812,7 @@ export default function InfoPanel() {
 
     // 如果选中了语法，显示语法面板
     if (grammar && !token) {
-        return <GrammarPanel grammar={grammar} settings={settings} />;
+        return <GrammarPanel grammar={grammar} settings={settings} isGlobalSpeaking={isGlobalSpeaking} />;
     }
 
     if (!token) {
@@ -689,6 +839,7 @@ export default function InfoPanel() {
     const colorScheme = activeTheme.colors[token.pos as PartOfSpeech] || activeTheme.colors[PartOfSpeech.OTHER];
 
     const handleSpeak = () => {
+        if (isGlobalSpeaking) return;
         setIsSpeaking(true);
         ttsManager.speak(
             token.surface,

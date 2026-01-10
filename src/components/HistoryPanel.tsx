@@ -13,6 +13,7 @@ export default function HistoryPanel() {
     const setSelectedToken = useAppStore(state => state.setSelectedToken);
     const clearHistory = useAppStore(state => state.clearHistory); // Get action
     const settings = useAppStore(state => state.settings);
+    const isSpeaking = useAppStore(state => state.isSpeaking);
 
     if (history.length === 0) {
         return (
@@ -97,7 +98,7 @@ export default function HistoryPanel() {
                             key={`${token.id}-${index}`}
                             onClick={() => {
                                 setSelectedToken(token);
-                                if (settings.autoReadOnClick) {
+                                if (settings.autoReadOnClick && !isSpeaking) {
                                     ttsManager.speak(token.surface, settings, {});
                                 }
                             }}

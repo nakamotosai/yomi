@@ -8,7 +8,8 @@ interface ResizableVerticalSectionProps {
     // Two modes:
     // 1. 'bottom-fixed': The bottom section has a height, top fills remaining. (For Left Column w/ Input)
     // 2. 'ratio': The sections are split by a ratio. (For Right Column)
-    mode: 'bottom-fixed' | 'ratio';
+    // 3. 'top-fixed': The top section has a height, bottom fills remaining.
+    mode: 'bottom-fixed' | 'ratio' | 'top-fixed';
 
     // Initial values
     initialBottomHeight?: number; // for bottom-fixed
@@ -28,14 +29,21 @@ export default function ResizableVerticalSection({
     bottomContent,
     mode,
     initialBottomHeight = 160,
+    initialTopHeight = 200, // Default top height
     initialSplitRatio = 0.6,
     onBottomHeightChange,
+    onTopHeightChange,
     onSplitRatioChange,
     minTopHeight = 100,
     minBottomHeight = 100,
     gap = 0
-}: ResizableVerticalSectionProps & { gap?: number }) {
+}: ResizableVerticalSectionProps & {
+    gap?: number;
+    initialTopHeight?: number;
+    onTopHeightChange?: (height: number) => void;
+}) {
     const [bottomHeight, setBottomHeight] = useState(initialBottomHeight);
+    const [topHeight, setTopHeight] = useState(initialTopHeight);
     const [splitRatio, setSplitRatio] = useState(initialSplitRatio);
     const [isDragging, setIsDragging] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -44,6 +52,10 @@ export default function ResizableVerticalSection({
     useEffect(() => {
         setBottomHeight(initialBottomHeight);
     }, [initialBottomHeight]);
+
+    useEffect(() => {
+        setTopHeight(initialTopHeight);
+    }, [initialTopHeight]);
 
     useEffect(() => {
         setSplitRatio(initialSplitRatio);
@@ -66,17 +78,9 @@ export default function ResizableVerticalSection({
 
             if (mode === 'bottom-fixed') {
                 // Calculate new bottom height based on mouse position
-                // relativeY is the position of the mouse, which is dragging the gap.
-                // We want to calculate the new bottom height.
-                // Distance from bottom = Container Height - Mouse Y
-                // Adjust for gap center: we want the mouse to be in the middle of the gap.
-                // So bottom start = Mouse Y + gap/2
-                // Bottom Height = Container Height - (Mouse Y + gap/2)
-
                 let newHeight = containerHeight - relativeY - (gap / 2);
 
                 // Constraints
-                // Top section height = relativeY - gap/2. Must be >= minTopHeight
                 const potentialTopHeight = containerHeight - newHeight - gap;
 
                 if (potentialTopHeight < minTopHeight) {
@@ -86,19 +90,29 @@ export default function ResizableVerticalSection({
                 }
 
                 setBottomHeight(newHeight);
+            } else if (mode === 'top-fixed') {
+                // Calculate new top height based on mouse position
+                let newHeight = relativeY - (gap / 2);
+
+                // Constraints
+                const potentialBottomHeight = containerHeight - newHeight - gap;
+
+                if (potentialBottomHeight < minBottomHeight) {
+                    newHeight = containerHeight - minBottomHeight - gap;
+                } else if (newHeight < minTopHeight) {
+                    newHeight = minTopHeight;
+                }
+
+                setTopHeight(newHeight);
             } else if (mode === 'ratio') {
                 // Calculate ratio based on available space (Container - Gap)
                 const availableHeight = containerHeight - gap;
                 if (availableHeight <= 0) return;
 
-                // Mouse Y is at the gap. 
-                // Top Height = Mouse Y - gap/2
                 const topHeight = relativeY - (gap / 2);
-
                 let ratio = topHeight / availableHeight;
 
                 // Constraints
-                // limit ratio between 0.1 and 0.9 or based on min pixels
                 const minRatio = minTopHeight / availableHeight;
                 const maxRatio = 1 - (minBottomHeight / availableHeight);
 
@@ -117,6 +131,8 @@ export default function ResizableVerticalSection({
                 // Commit changes
                 if (mode === 'bottom-fixed') {
                     onBottomHeightChange?.(bottomHeight);
+                } else if (mode === 'top-fixed') {
+                    onTopHeightChange?.(topHeight);
                 } else {
                     onSplitRatioChange?.(splitRatio);
                 }
@@ -132,17 +148,28 @@ export default function ResizableVerticalSection({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, mode, bottomHeight, splitRatio, minTopHeight, minBottomHeight, onBottomHeightChange, onSplitRatioChange, gap]);
+    }, [isDragging, mode, bottomHeight, topHeight, splitRatio, minTopHeight, minBottomHeight, onBottomHeightChange, onTopHeightChange, onSplitRatioChange, gap]);
+
+    // Calculate heights for rendering
+    let topStyleHeight = '0px';
+    let bottomStyleHeight = '0px';
+
+    if (mode === 'ratio') {
+        topStyleHeight = `calc((100% - ${gap}px) * ${splitRatio})`;
+        bottomStyleHeight = `calc((100% - ${gap}px) * (1 - ${splitRatio}))`;
+    } else if (mode === 'bottom-fixed') {
+        topStyleHeight = `calc(100% - ${bottomHeight}px - ${gap}px)`;
+        bottomStyleHeight = `${bottomHeight}px`;
+    } else if (mode === 'top-fixed') {
+        topStyleHeight = `${topHeight}px`;
+        bottomStyleHeight = `calc(100% - ${topHeight}px - ${gap}px)`;
+    }
 
     return (
         <div ref={containerRef} className="flex flex-col h-full w-full relative">
             {/* Top Section */}
             <div
-                style={{
-                    height: mode === 'ratio'
-                        ? `calc((100% - ${gap}px) * ${splitRatio})`
-                        : `calc(100% - ${bottomHeight}px - ${gap}px)`,
-                }}
+                style={{ height: topStyleHeight }}
                 className="flex flex-col min-h-0 relative transition-[height] duration-0 ease-linear"
             >
                 {topContent}
@@ -154,23 +181,13 @@ export default function ResizableVerticalSection({
                 style={{ height: `${gap}px` }} // Physical gap
                 onMouseDown={handleMouseDown}
             >
-                {/* 
-                   Hidden Interaction Hitbox 
-                   (Larger than the visual gap if gap is small, but if gap is big (e.g. 12px), it's fine) 
-                */}
                 <div className="absolute top-0 bottom-0 left-0 right-0" />
-
-                {/* Visual Handle (Optional hover effect) */}
                 <div className="w-8 h-1 rounded-full bg-[var(--border-default)] opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
 
             {/* Bottom Section */}
             <div
-                style={{
-                    height: mode === 'ratio'
-                        ? `calc((100% - ${gap}px) * (1 - ${splitRatio}))`
-                        : `${bottomHeight}px`
-                }}
+                style={{ height: bottomStyleHeight }}
                 className="flex flex-col min-h-0 relative transition-[height] duration-0 ease-linear"
             >
                 {bottomContent}

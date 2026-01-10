@@ -10,6 +10,7 @@ import {
   StopCircle,
   GraduationCap,
   BookOpen,
+
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -45,6 +46,7 @@ const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
 });
 
 const GlobalAudioPlayer = dynamic(() => import('@/components/GlobalAudioPlayer'), { ssr: false });
+
 
 const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
   loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Kana Mode...</div>,
@@ -699,6 +701,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       }}
     >
 
+
       {/* Mobile Header */}
       <MobileHeader />
 
@@ -707,14 +710,14 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         <ResizableLayout
           leftContent={
             <div className="h-full pt-4 pl-4 pb-4 pr-2"> {/* Padding for floating effect */}
-              <ResizableThreeSection
-                initialTopHeight={layout.leftTopHeight ?? 200}
-                initialBottomHeight={layout.leftInputHeight}
+              <ResizableVerticalSection
+                mode="top-fixed"
+                initialTopHeight={layout.leftTopHeight}
+                minTopHeight={263}
                 onTopHeightChange={(h) => setLayout({ ...layout, leftTopHeight: h })}
-                onBottomHeightChange={(h) => setLayout({ ...layout, leftInputHeight: h })}
                 gap={16}
                 topContent={
-                  /* Card 1: Logo + 機能 */
+                  /* Card 1: Logo + Navigation + Learning */
                   <div className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
                     {/* Logo Area */}
                     <div
@@ -736,8 +739,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                       </button>
                     </div>
 
-                    {/* Navigation - 機能 */}
-                    <div className="flex-1 p-4 bg-[var(--bg-elevated)] overflow-y-auto">
+                    {/* Navigation - 機能 & Learning */}
+                    <div className="flex-1 p-4 bg-[var(--bg-elevated)] overflow-y-auto space-y-6">
+
+                      {/* Functions */}
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => { setAppMode('reader'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
@@ -786,84 +791,59 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                           </span>
                         </button>
                       </div>
-                    </div>
-                  </div>
-                }
-                middleContent={
-                  /* Card 2: 学習 */
-                  <div className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
-                    <div className="flex-1 p-4 bg-[var(--bg-elevated)] overflow-y-auto">
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => { setAppMode('reader'); setCenterViewMode('vocab'); }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
-                              centerViewMode === 'vocab'
-                                ? (isDark ? "bg-white/10 shadow-md rainbow-highlight" : "bg-white shadow-md")
-                                : "hover:translate-y-[-1px] hover:shadow-sm"
-                            )}
-                            style={{
-                              border: centerViewMode === 'vocab' && isDark
-                                ? '1px solid transparent'
-                                : '1px solid var(--border-default)'
-                            }}
-                          >
-                            <BookMarked
-                              className="w-5 h-5 mb-1 transition-colors"
-                              style={{
-                                color: 'var(--scheme-primary)'
-                              }}
-                            />
-                            <div className="flex items-center gap-1">
-                              <span className="font-medium text-[16px]" style={{ color: 'var(--text-secondary)' }}>
-                                単語帳
-                              </span>
-                              {vocabList.length > 0 && (
-                                <span className="text-sm transition-colors" style={{ color: 'var(--text-faint)' }}>
-                                  ({vocabList.length})
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => { setAppMode('reader'); setCenterViewMode('grammar'); }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
-                              centerViewMode === 'grammar'
-                                ? (isDark ? "bg-white/10 shadow-md rainbow-highlight" : "bg-white shadow-md")
-                                : "hover:translate-y-[-1px] hover:shadow-sm"
-                            )}
-                            style={{
-                              border: centerViewMode === 'grammar' && isDark
-                                ? '1px solid transparent'
-                                : '1px solid var(--border-default)'
-                            }}
-                          >
-                            <GraduationCap
-                              className="w-5 h-5 mb-1 transition-colors"
-                              style={{
-                                color: 'var(--scheme-grammar)'
-                              }}
-                            />
-                            <div className="flex items-center gap-1">
-                              <span className="font-medium text-[16px]" style={{ color: 'var(--text-secondary)' }}>
-                                文法帳
-                              </span>
-                              {grammarList.length > 0 && (
-                                <span className="text-sm transition-colors" style={{ color: 'var(--text-faint)' }}>
-                                  ({grammarList.length})
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        </div>
+
+                      {/* Learning Tools (Moved from Middle) */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => { setAppMode('reader'); setCenterViewMode('vocab'); }}
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
+                            centerViewMode === 'vocab'
+                              ? (isDark ? "bg-white/10 shadow-md rainbow-highlight" : "bg-white shadow-md")
+                              : "hover:translate-y-[-1px] hover:shadow-sm"
+                          )}
+                          style={{
+                            border: centerViewMode === 'vocab' && isDark
+                              ? '1px solid transparent'
+                              : '1px solid var(--border-default)'
+                          }}
+                        >
+                          <BookMarked
+                            className="w-5 h-5 mb-1 transition-colors"
+                            style={{ color: 'var(--scheme-primary)' }}
+                          />
+                          <span className="font-medium text-[16px] text-slate-500">
+                            単語帳 <span className="text-xs opacity-60">({vocabList.length})</span>
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => { setAppMode('reader'); setCenterViewMode('grammar'); }}
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
+                            centerViewMode === 'grammar'
+                              ? (isDark ? "bg-white/10 shadow-md rainbow-highlight" : "bg-white shadow-md")
+                              : "hover:translate-y-[-1px] hover:shadow-sm"
+                          )}
+                          style={{
+                            border: centerViewMode === 'grammar' && isDark
+                              ? '1px solid transparent'
+                              : '1px solid var(--border-default)'
+                          }}
+                        >
+                          <GraduationCap
+                            className="w-5 h-5 mb-1 transition-colors"
+                            style={{ color: 'var(--scheme-grammar)' }}
+                          />
+                          <span className="font-medium text-[16px] text-slate-500">
+                            文法帳 <span className="text-xs opacity-60">({grammarList.length})</span>
+                          </span>
+                        </button>
                       </div>
                     </div>
                   </div>
                 }
                 bottomContent={
-                  /* Card 3: Input Area */
+                  /* Card 2: Input Area */
                   appMode === 'reader' ? (
                     <div
                       className={clsx(
@@ -886,50 +866,52 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   ) : <div />
                 }
               />
-            </div>
+            </div >
           }
-          centerContent={<CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} />}
+          centerContent={< CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} />}
           rightContent={
-            <div className="h-full pt-4 pr-4 pb-4 pl-2"> {/* Padding for floating effect */}
-              {appMode === 'kana' ? (
-                <div className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm bg-[var(--bg-elevated)]">
-                  <KanaSidePanel />
-                </div>
-              ) : (
-                <ResizableVerticalSection
-                  mode="bottom-fixed"
-                  initialBottomHeight={layout.rightBottomHeight}
-                  onBottomHeightChange={(h) => setLayout({ ...layout, rightBottomHeight: h })}
-                  gap={16}
-                  topContent={
-                    <div className="h-full flex flex-col relative rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
-                      <InfoPanel />
-                    </div>
-                  }
-                  bottomContent={
-                    <div
-                      className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm"
-                      style={{
-                        background: 'var(--bg-elevated)'
-                      }}
-                    >
-                      <HistoryPanel />
-                    </div>
-                  }
-                />
-              )}
-            </div>
+            < div className="h-full pt-4 pr-4 pb-4 pl-2" > {/* Padding for floating effect */}
+              {
+                appMode === 'kana' ? (
+                  <div className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm bg-[var(--bg-elevated)]">
+                    <KanaSidePanel />
+                  </div>
+                ) : (
+                  <ResizableVerticalSection
+                    mode="bottom-fixed"
+                    initialBottomHeight={layout.rightBottomHeight}
+                    onBottomHeightChange={(h) => setLayout({ ...layout, rightBottomHeight: h })}
+                    gap={16}
+                    topContent={
+                      <div className="h-full flex flex-col relative rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm">
+                        <InfoPanel />
+                      </div>
+                    }
+                    bottomContent={
+                      <div
+                        className="h-full flex flex-col rounded-2xl glass-panel border border-[var(--border-muted)] shadow-sm"
+                        style={{
+                          background: 'var(--bg-elevated)'
+                        }}
+                      >
+                        <HistoryPanel />
+                      </div>
+                    }
+                  />
+                )
+              }
+            </div >
           }
         />
-      </div>
+      </div >
 
       {/* Mobile Layout (< 1024px) */}
-      <div className="lg:hidden flex-1 overflow-hidden relative">
+      < div className="lg:hidden flex-1 overflow-hidden relative" >
         {CenterContent}
 
         <MobileDrawer>
           {LeftColumnContent}
-        </MobileDrawer>
+        </MobileDrawer >
 
         <MobileBottomSheet>
           <div className="h-full flex flex-col">
@@ -938,14 +920,14 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
             </div>
           </div>
         </MobileBottomSheet>
-      </div>
+      </div >
 
       {/* Modals */}
-      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      < SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Global Logic Components */}
       <GlobalAudioPlayer />
-    </main>
+    </main >
   );
 }
 

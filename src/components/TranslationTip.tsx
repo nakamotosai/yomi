@@ -30,11 +30,10 @@ export default function TranslationTip({ original, translation }: TranslationTip
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    {/* 中文翻译 - 始终显示 */}
+                    {/* 中文翻译 - 始终全显 */}
                     <div className={clsx(
                         "text-base leading-relaxed text-[var(--text-primary)]",
-                        isLoading && "animate-pulse text-[var(--text-faint)]",
-                        !isExpanded && "truncate"
+                        isLoading && "animate-pulse text-[var(--text-faint)]"
                     )}>
                         {displayTranslation}
                     </div>

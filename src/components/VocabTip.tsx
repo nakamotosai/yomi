@@ -132,7 +132,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const [speakingWord, setSpeakingWord] = useState<string | null>(null);
-    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar } = useAppStore();
+    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar, isSpeaking } = useAppStore();
     const { vocabList, addVocab, removeVocab, isWordSaved } = useVocabStore();
 
     const worthyTokens = useMemo(() => filterWorthyVocab(tokens), [tokens]);
@@ -188,7 +188,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
         setCurrentSentence(sentenceOriginal);
         setSelectedToken(token);
 
-        if (settings.autoReadOnClick) {
+        if (settings.autoReadOnClick && !isSpeaking) {
             ttsManager.speak(token.surface, settings, {});
         }
     };
@@ -345,6 +345,8 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                                 setSpeakingWord(null);
                                                 return;
                                             }
+
+                                            if (isSpeaking) return;
 
                                             setSpeakingWord(entry.token.surface);
                                             ttsManager.speak(entry.token.surface, settings, {
