@@ -193,6 +193,13 @@ export default function LoginPage() {
                                 mode === 'login' ? '登录' : '注册'
                             )}
                         </button>
+
+                        {/* 首次加载提示 */}
+                        {isLoading && (
+                            <div className="mt-3 text-center text-xs animate-pulse" style={{ color: 'var(--text-muted)' }}>
+                                <p>首次登录可能需要几十秒唤醒数据库，请耐心等待...</p>
+                            </div>
+                        )}
                     </form>
 
                     {/* 切换模式 */}
