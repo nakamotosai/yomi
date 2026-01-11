@@ -54,10 +54,30 @@ function extractPlainText(content: unknown[]): string {
 // 解析单个term_bank JSON文件
 async function parseTermBank(url: string): Promise<GrammarEntry[]> {
     const entries: GrammarEntry[] = [];
+    const cacheName = 'yomi-grammar-cache-v1';
 
     try {
-        const response = await fetch(url);
-        if (!response.ok) return entries;
+        let response: Response | undefined;
+        let cache: Cache | undefined;
+
+        // Try to get from Cache API first
+        if (typeof window !== 'undefined' && 'caches' in window) {
+            cache = await caches.open(cacheName);
+            response = await cache.match(url);
+        }
+
+        if (!response) {
+            console.log(`[Grammar] Downloading bank: ${url}...`);
+            useDictionaryStore.getState().incrementDownloadedUnits();
+            response = await fetch(url);
+            if (!response.ok) return entries;
+
+            if (cache) {
+                await cache.put(url, response.clone());
+            }
+        } else {
+            console.log(`[Grammar] Loading bank from cache: ${url}`);
+        }
 
         const data = await response.json();
         if (!Array.isArray(data)) return entries;

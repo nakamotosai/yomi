@@ -7,13 +7,14 @@ import { Loader2, CheckCircle2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function LoadingProgress() {
-    const { loadedUnits, totalUnits, isAllLoaded } = useDictionaryStore();
+    const { loadedUnits, totalUnits, totalDownloadedUnits, isAllLoaded } = useDictionaryStore();
     const settings = useAppStore(s => s.settings);
     const isDark = settings.theme === 'dark';
     const [isVisible, setIsVisible] = useState(false);
     const [isFadingOut, setIsFadingOut] = useState(false);
 
     const progress = Math.min(Math.round((loadedUnits / totalUnits) * 100), 100);
+    const isDownloading = totalDownloadedUnits > 0;
 
     useEffect(() => {
         if (loadedUnits > 0 && !isAllLoaded) {
@@ -47,7 +48,9 @@ export default function LoadingProgress() {
                         <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--scheme-primary)' }} />
                     )}
                     <span className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        {isAllLoaded ? '辞書データ準備完了' : `辞書データ読込中...`}
+                        {isAllLoaded
+                            ? '辞書データ準備完了'
+                            : (isDownloading ? '辞書ダウンロード中...' : '本地辞書インデックス中...')}
                     </span>
                 </div>
                 <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-faint)' }}>

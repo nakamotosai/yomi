@@ -64,6 +64,22 @@ interface EdgeMetadataResponse {
     Metadata: EdgeMetadataItem[];
 }
 
+/**
+ * Simple XML escape for SSML
+ */
+function escapeXml(unsafe: string): string {
+    return unsafe.replace(/[<>&"']/g, (c) => {
+        switch (c) {
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '&': return '&amp;';
+            case '"': return '&quot;';
+            case "'": return '&apos;';
+            default: return c;
+        }
+    });
+}
+
 export async function POST(req: NextRequest) {
     try {
         const { text, voice = 'ja-JP-NanamiNeural', rate = 0 } = await req.json();
@@ -86,24 +102,24 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
     const secMsGec = await generateSecMsGec();
     const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
 
-    console.log('[EdgeTTS] Connecting to:', wsUrl.substring(0, 100) + '...');
+    console.log('[EdgeTTS] Connecting to Edge TTS...');
 
     // Cloudflare Workers - Outgoing WebSocket connection pattern
     const response = await fetch(wsUrl, {
         headers: {
             'Upgrade': 'websocket',
             'Connection': 'Upgrade',
-            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROMIUM_MAJOR_VERSION}.0.0.0 Safari/537.36 Edg/${CHROMIUM_MAJOR_VERSION}.0.0.0`,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
             'Origin': 'chrome-extension://jdmojkciocbebbpMaphlnoooglehbebe'
         }
     });
 
     const ws: any = (response as any).webSocket;
     if (!ws) {
-        throw new Error(`Edge TTS WebSocket connection failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Edge TTS WebSocket connection failed: ${response.status} ${response.statusText}. Ensure this is running on Cloudflare Pages or a supported environment.`);
     }
 
-    ws.accept();
+    // ws.accept() is only for server-side sockets. For outgoing client-side sockets from fetch, it should not be called.
 
     return new Promise((resolve, reject) => {
         const requestId = uuidv4().replace(/-/g, '');
@@ -230,10 +246,11 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
         // 2. Send SSML
         const ratePct = Math.round(rate * 100);
         const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+        const escapedText = escapeXml(text);
         const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ja-JP'>` +
             `<voice name='${voice}'>` +
             `<prosody rate='${rateStr}'>` +
-            `${text}` +
+            `${escapedText}` +
             `</prosody>` +
             `</voice>` +
             `</speak>`;

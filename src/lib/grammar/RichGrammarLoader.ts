@@ -17,11 +17,32 @@ export class RichGrammarLoader {
     async loadDictionary() {
         if (this.dictionary || this.isOnDemandLoading) return;
 
+        const url = '/grammar/grammar_dict_zh.json';
+        const cacheName = 'yomi-rich-grammar-cache-v1';
+
         try {
             this.isOnDemandLoading = true;
-            const res = await fetch('/grammar/grammar_dict_zh.json');
-            if (res.ok) {
-                this.dictionary = await res.json();
+            let response: Response | undefined;
+            let cache: Cache | undefined;
+
+            if (typeof window !== 'undefined' && 'caches' in window) {
+                cache = await caches.open(cacheName);
+                response = await cache.match(url);
+            }
+
+            if (!response) {
+                console.log('[Grammar] Downloading rich dictionary...');
+                useDictionaryStore.getState().incrementDownloadedUnits();
+                response = await fetch(url);
+                if (response.ok) {
+                    if (cache) await cache.put(url, response.clone());
+                }
+            } else {
+                console.log('[Grammar] Loading rich dictionary from cache...');
+            }
+
+            if (response && response.ok) {
+                this.dictionary = await response.json();
                 console.log('[Grammar] Rich dictionary loaded');
                 useDictionaryStore.getState().incrementLoadedUnits();
             } else {

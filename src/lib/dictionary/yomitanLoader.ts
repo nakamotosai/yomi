@@ -81,9 +81,32 @@ class YomitanLoader {
     public async loadBank(index: number): Promise<void> {
         if (this.loadedBanks.has(index)) return;
 
+        const url = `/yomitan/term_bank_${index}.json`;
+        const cacheName = 'yomi-dictionary-cache-v1';
+
         try {
-            const response = await fetch(`/yomitan/term_bank_${index}.json`);
-            if (!response.ok) return;
+            let response: Response | undefined;
+            let cache: Cache | undefined;
+
+            // Try to get from Cache API first
+            if (typeof window !== 'undefined' && 'caches' in window) {
+                cache = await caches.open(cacheName);
+                response = await cache.match(url);
+            }
+
+            if (!response) {
+                console.log(`[Dictionary] Downloading bank ${index}...`);
+                useDictionaryStore.getState().incrementDownloadedUnits();
+                response = await fetch(url);
+                if (!response.ok) return;
+
+                // Clone and put into cache for next time
+                if (cache) {
+                    await cache.put(url, response.clone());
+                }
+            } else {
+                console.log(`[Dictionary] Loading bank ${index} from cache...`);
+            }
 
             const data = await response.json() as unknown[];
             if (!Array.isArray(data)) return;

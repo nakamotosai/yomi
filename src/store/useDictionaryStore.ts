@@ -5,15 +5,18 @@ import { create } from 'zustand';
 interface DictionaryState {
     totalUnits: number;
     loadedUnits: number;
+    totalDownloadedUnits: number;
     isAllLoaded: boolean;
     setTotalUnits: (total: number) => void;
     incrementLoadedUnits: () => void;
+    incrementDownloadedUnits: () => void;
     resetProgress: (total: number) => void;
 }
 
 export const useDictionaryStore = create<DictionaryState>((set) => ({
     totalUnits: 23, // Default total (18 yomitan + 4 grammar + 1 rich)
     loadedUnits: 0,
+    totalDownloadedUnits: 0,
     isAllLoaded: false,
     setTotalUnits: (total) => set({ totalUnits: total }),
     incrementLoadedUnits: () => set((state) => {
@@ -23,5 +26,8 @@ export const useDictionaryStore = create<DictionaryState>((set) => ({
             isAllLoaded: nextLoaded >= state.totalUnits
         };
     }),
-    resetProgress: (total) => set({ totalUnits: total, loadedUnits: 0, isAllLoaded: false }),
+    incrementDownloadedUnits: () => set((state) => ({
+        totalDownloadedUnits: state.totalDownloadedUnits + 1
+    })),
+    resetProgress: (total) => set({ totalUnits: total, loadedUnits: 0, totalDownloadedUnits: 0, isAllLoaded: false }),
 }));
