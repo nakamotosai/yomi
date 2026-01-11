@@ -775,6 +775,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             </span>
                           </button>
                           <button
+                            disabled
                             onClick={() => {
                               setAppMode('kana');
                               setCenterViewMode('reader');
@@ -783,9 +784,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             }}
                             className={clsx(
                               "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                              "opacity-40 cursor-not-allowed grayscale filter blur-[1px] hover:blur-0 transition-all",
                               !isChatOpen && centerViewMode === 'reader' && appMode === 'kana'
                                 ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-                                : "hover:scale-[1.02] shadow-sm hover:shadow-md bg-transparent"
+                                : "bg-transparent"
                             )}
                           >
                             <span
@@ -795,7 +797,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                               あ
                             </span>
                             <span className="font-medium text-[16px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
-                              {isCompact ? "仮名" : "仮名モード"}
+                              {isCompact ? "仮名" : "仮名练习(锁)"}
                             </span>
                           </button>
                         </div>

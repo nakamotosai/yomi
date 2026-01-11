@@ -5,11 +5,18 @@ export const runtime = 'edge';
 
 // 获取 D1 数据库绑定
 function getDB(request: NextRequest): D1Database | null {
-    const env = (request as unknown as { env?: { DB?: D1Database } }).env;
-    if (env?.DB) return env.DB;
+    // 1. 尝试从 process.env 获取 (Cloudflare Pages nodejs_compat 标准方式)
+    if (typeof process !== 'undefined' && process.env?.DB) {
+        return process.env.DB as unknown as D1Database;
+    }
 
-    const cf = (globalThis as unknown as { process?: { env?: { DB?: D1Database } } }).process?.env;
-    if (cf?.DB) return cf.DB;
+    // 2. 尝试从 globalThis 获取
+    const globalDB = (globalThis as any).DB;
+    if (globalDB) return globalDB;
+
+    // 3. 尝试从 request.env 获取 (部分环境支持)
+    const env = (request as any).env;
+    if (env?.DB) return env.DB;
 
     return null;
 }
@@ -25,20 +32,22 @@ export async function GET(request: NextRequest) {
 
         const db = getDB(request);
         if (!db) {
-            // 如果没有数据库绑定，直接返回未命中（开发环境如果不配置 D1 本地 dev 可能也会走到这也行）
+            console.error('[Cache API] D1 Database binding "DB" is missing in GET');
             return NextResponse.json({ success: false, error: 'Database not available' });
         }
 
         const text = await getAICache(db, key);
 
         if (text) {
+            console.log(`[Cache API] Hit for key: ${key}`);
             return NextResponse.json({ success: true, text });
         }
 
+        console.log(`[Cache API] Miss for key: ${key}`);
         return NextResponse.json({ success: false });
-    } catch (error) {
-        console.error('Cache Read Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    } catch (error: any) {
+        console.error('[Cache API] GET Error:', error.message);
+        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }
 
@@ -53,14 +62,16 @@ export async function POST(request: NextRequest) {
 
         const db = getDB(request);
         if (!db) {
+            console.error('[Cache API] D1 Database binding "DB" is missing in POST');
             return NextResponse.json({ error: 'Database not available' }, { status: 500 });
         }
 
         await setAICache(db, key, text);
+        console.log(`[Cache API] Saved key: ${key} (${text.length} chars)`);
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Cache Write Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    } catch (error: any) {
+        console.error('[Cache API] POST Error:', error.message);
+        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }

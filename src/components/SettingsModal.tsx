@@ -513,10 +513,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         return (
                                             <button
                                                 key={opt.id}
+                                                disabled={opt.id === 'voicevox'}
                                                 onClick={() => updateSettings({ ttsProvider: opt.id as 'native' | 'voicevox' })}
                                                 className={clsx(
                                                     "flex flex-col items-center justify-center gap-2 py-4 rounded-xl text-sm font-medium transition-all",
-                                                    isDark && isSelected && "rainbow-highlight"
+                                                    isDark && isSelected && "rainbow-highlight",
+                                                    opt.id === 'voicevox' && "opacity-40 cursor-not-allowed grayscale"
                                                 )}
                                                 style={{
                                                     background: isSelected
@@ -529,6 +531,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                             >
                                                 <opt.icon className="w-6 h-6 mb-1 opacity-80" />
                                                 {opt.label}
+                                                {opt.id === 'voicevox' && <span className="text-[10px] font-bold opacity-60">(敬请期待)</span>}
                                             </button>
                                         );
                                     })}
@@ -578,14 +581,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                             value={settings.voicevoxSpeakerId || 3}
                                             onChange={(e) => updateSettings({ voicevoxSpeakerId: parseInt(e.target.value) || 3 })}
                                         >
-                                            {availableVoices.length === 0 && (
-                                                <option value={settings.voicevoxSpeakerId}>{settings.voicevoxSpeakerId || 3} (Loading...)</option>
-                                            )}
                                             {availableVoices.map(v => (
                                                 <option key={v.id} value={v.id}>{v.name}</option>
                                             ))}
                                         </select>
-                                        <p className="text-xs" style={descStyle}>请确保本地 VOICEVOX 应用已启动 (端口 50021)</p>
+                                        <p className="text-xs" style={descStyle}>VOICEVOX 引擎暂时不可用 (Coming Soon)</p>
                                     </div>
                                 </div>
                             )}

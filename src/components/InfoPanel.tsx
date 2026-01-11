@@ -18,6 +18,7 @@ import { useGeminiStore } from '@/store/useGeminiStore'; // Import hook
 import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
+import { yomitanLoader, DictionaryResult as YomitanResult } from '@/lib/dictionary/yomitanLoader';
 
 interface JishoJapanese {
     reading?: string;
@@ -36,13 +37,7 @@ interface JishoResult {
 }
 
 // Yomitan 词典结果类型
-interface YomitanResult {
-    term: string;
-    reading: string;
-    partOfSpeech: string;
-    definitions: string[];
-    source: string;
-}
+type { YomitanResult };
 
 interface YomitanResponse {
     success: boolean;
@@ -745,11 +740,11 @@ export default function InfoPanel() {
     // 获取 Yomitan 词典数据 (ZH)
     const fetchYomitanDictionary = useCallback(async (word: string) => {
         try {
-            const res = await fetch(`/api/dictionary/yomitan?keyword=${encodeURIComponent(word)}`);
-            const data: YomitanResponse = await res.json();
+            // Switch to client-side loader for better performance
+            const results = await yomitanLoader.search(word);
 
-            if (data.success && data.results.length > 0) {
-                return data.results[0];
+            if (results && results.length > 0) {
+                return results[0];
             }
 
             // Fallback: Google Translate

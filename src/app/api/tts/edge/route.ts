@@ -82,159 +82,163 @@ export async function POST(req: NextRequest) {
     }
 }
 
-function generateEdgeTTS(text: string, voice: string, rate: number): Promise<{ audioBase64: string, alignment: AlignmentData[] }> {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const secMsGec = await generateSecMsGec();
-            const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
+async function generateEdgeTTS(text: string, voice: string, rate: number): Promise<{ audioBase64: string, alignment: AlignmentData[] }> {
+    const secMsGec = await generateSecMsGec();
+    const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
 
-            // Standard WebSocket does not support custom headers in constructor
-            // We hope the query parameters are enough or the server is lenient
-            const ws = new WebSocket(wsUrl);
+    console.log('[EdgeTTS] Connecting to:', wsUrl.substring(0, 100) + '...');
 
-            const requestId = uuidv4().replace(/-/g, '');
-            const audioChunks: Uint8Array[] = [];
-            const alignmentData: AlignmentData[] = [];
-            let playbackFinished = false;
-            let cursor = 0;
+    // Cloudflare Workers - Outgoing WebSocket connection pattern
+    const response = await fetch(wsUrl, {
+        headers: {
+            'Upgrade': 'websocket',
+            'Connection': 'Upgrade',
+            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROMIUM_MAJOR_VERSION}.0.0.0 Safari/537.36 Edg/${CHROMIUM_MAJOR_VERSION}.0.0.0`,
+            'Origin': 'chrome-extension://jdmojkciocbebbpMaphlnoooglehbebe'
+        }
+    });
 
-            ws.onopen = () => {
-                // 1. Send Speech Config
-                const configMessage = `X-Timestamp:${new Date().toISOString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
-                    JSON.stringify({
-                        context: {
-                            synthesis: {
-                                audio: {
-                                    metadataOptions: {
-                                        sentenceBoundaryEnabled: false,
-                                        wordBoundaryEnabled: true
-                                    },
-                                    outputFormat: 'audio-24khz-48kbitrate-mono-mp3'
-                                }
-                            }
-                        }
-                    });
-                ws.send(configMessage);
+    const ws = response.webSocket;
+    if (!ws) {
+        throw new Error(`Edge TTS WebSocket connection failed: ${response.status} ${response.statusText}`);
+    }
 
-                // 2. Send SSML
-                const rateStr = rate >= 0 ? `+${Math.round(rate * 100)}%` : `${Math.round(rate * 100)}%`;
-                const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ja-JP'>` +
-                    `<voice name='${voice}'>` +
-                    `<prosody rate='${rateStr}'>` +
-                    `${text}` +
-                    `</prosody>` +
-                    `</voice>` +
-                    `</speak>`;
+    ws.accept();
 
-                const ssmlMessage = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n` + ssml;
-                ws.send(ssmlMessage);
-            };
+    return new Promise((resolve, reject) => {
+        const requestId = uuidv4().replace(/-/g, '');
+        const audioChunks: Uint8Array[] = [];
+        const alignmentData: AlignmentData[] = [];
+        let playbackFinished = false;
+        let cursor = 0;
 
-            ws.onmessage = async (event) => {
-                const data = event.data;
+        // Message handler
+        ws.addEventListener('message', async (event) => {
+            const data = event.data;
 
-                if (data instanceof Blob) {
-                    const arrayBuffer = await data.arrayBuffer();
-                    const buffer = new Uint8Array(arrayBuffer);
+            if (data instanceof ArrayBuffer) {
+                const buffer = new Uint8Array(data);
+                if (buffer.length < 2) return;
 
-                    // Simple parsing of binary message
-                    // Header length is first 2 bytes (Big Endian)
-                    const headerLen = (buffer[0] << 8) | buffer[1];
-                    const decoder = new TextDecoder();
-                    const headerText = decoder.decode(buffer.slice(2, 2 + headerLen));
+                const headerLen = (buffer[0] << 8) | buffer[1];
+                const decoder = new TextDecoder();
+                const headerText = decoder.decode(buffer.slice(2, 2 + headerLen));
 
-                    if (headerText.includes('Path:audio\r\n')) {
-                        const audioPayload = buffer.slice(2 + headerLen);
-                        audioChunks.push(audioPayload);
-                    }
-                } else if (typeof data === 'string') {
-                    const message = data;
-                    if (message.includes('Path:audio.metadata')) {
-                        const jsonParts = message.split('\r\n\r\n');
-                        if (jsonParts.length > 1) {
-                            try {
-                                const metadata: EdgeMetadataResponse = JSON.parse(jsonParts[1]);
-                                if (metadata.Metadata && metadata.Metadata.length > 0) {
-                                    metadata.Metadata.forEach((meta: EdgeMetadataItem) => {
-                                        if (meta.Type === 'WordBoundary') {
-                                            if (meta.Data && meta.Data.text && meta.Data.text.Text) {
-                                                const word = meta.Data.text.Text;
-                                                let foundIndex = text.indexOf(word, cursor);
-                                                let matchLength = word.length;
+                if (headerText.includes('Path:audio\r\n')) {
+                    const audioPayload = buffer.slice(2 + headerLen);
+                    audioChunks.push(new Uint8Array(audioPayload));
+                }
+            } else if (typeof data === 'string') {
+                const message = data;
+                if (message.includes('Path:audio.metadata')) {
+                    const jsonParts = message.split('\r\n\r\n');
+                    if (jsonParts.length > 1) {
+                        try {
+                            const metadata: EdgeMetadataResponse = JSON.parse(jsonParts[1]);
+                            if (metadata.Metadata && metadata.Metadata.length > 0) {
+                                metadata.Metadata.forEach((meta: EdgeMetadataItem) => {
+                                    if (meta.Type === 'WordBoundary' && meta.Data?.text?.Text) {
+                                        const word = meta.Data.text.Text;
+                                        let foundIndex = text.indexOf(word, cursor);
+                                        let matchLength = word.length;
 
-                                                if (foundIndex === -1) {
-                                                    const numericMatch = text.slice(cursor).match(/^\s*([0-9０-９]+)/);
-                                                    if (numericMatch) {
-                                                        foundIndex = cursor;
-                                                        matchLength = numericMatch[0].length;
-                                                    }
-                                                }
-
-                                                if (foundIndex !== -1) {
-                                                    alignmentData.push({
-                                                        charIndex: foundIndex,
-                                                        charLength: matchLength,
-                                                        time: meta.Data.Offset / 10000,
-                                                        duration: meta.Data.Duration ? meta.Data.Duration / 10000 : undefined
-                                                    });
-                                                    cursor = foundIndex + matchLength;
-                                                }
+                                        if (foundIndex === -1) {
+                                            const numericMatch = text.slice(cursor).match(/^\s*([0-9０-９]+)/);
+                                            if (numericMatch) {
+                                                foundIndex = cursor;
+                                                matchLength = numericMatch[0].length;
                                             }
                                         }
-                                    });
-                                }
-                            } catch (e) {
-                                console.error('Error parsing metadata JSON', e);
+
+                                        if (foundIndex !== -1) {
+                                            alignmentData.push({
+                                                charIndex: foundIndex,
+                                                charLength: matchLength,
+                                                time: meta.Data.Offset / 10000,
+                                                duration: meta.Data.Duration ? meta.Data.Duration / 10000 : undefined
+                                            });
+                                            cursor = foundIndex + matchLength;
+                                        }
+                                    }
+                                });
                             }
+                        } catch (e) {
+                            console.error('[EdgeTTS] Metadata parse error', e);
                         }
-                    } else if (message.includes('Path:turn.end')) {
-                        playbackFinished = true;
-                        ws.close();
                     }
+                } else if (message.includes('Path:turn.end')) {
+                    playbackFinished = true;
+                    ws.close();
                 }
-            };
+            }
+        });
 
-            ws.onclose = () => {
-                if (audioChunks.length > 0) {
-                    // Concatenate chunks
-                    let totalLength = 0;
-                    for (const chunk of audioChunks) totalLength += chunk.length;
+        ws.addEventListener('close', () => {
+            if (audioChunks.length > 0) {
+                // Concatenate Chunks
+                const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                const fullAudio = new Uint8Array(totalLength);
+                let offset = 0;
+                for (const chunk of audioChunks) {
+                    fullAudio.set(chunk, offset);
+                    offset += chunk.length;
+                }
 
-                    const fullAudio = new Uint8Array(totalLength);
-                    let offset = 0;
-                    for (const chunk of audioChunks) {
-                        fullAudio.set(chunk, offset);
-                        offset += chunk.length;
-                    }
+                // Base64 Encoding
+                let binary = '';
+                const bytes = new Uint8Array(fullAudio);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const base64 = btoa(binary);
 
-                    // Convert to base64
-                    let binary = '';
-                    const len = fullAudio.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(fullAudio[i]);
-                    }
-                    const base64 = btoa(binary);
-
-                    resolve({
-                        audioBase64: base64,
-                        alignment: alignmentData
-                    });
+                resolve({
+                    audioBase64: base64,
+                    alignment: alignmentData
+                });
+            } else {
+                if (playbackFinished) {
+                    resolve({ audioBase64: '', alignment: [] });
                 } else {
-                    if (playbackFinished) {
-                        resolve({ audioBase64: '', alignment: [] });
-                    } else {
-                        reject(new Error('Connection closed without audio'));
+                    reject(new Error('Connection closed by server without audio data'));
+                }
+            }
+        });
+
+        ws.addEventListener('error', (err) => {
+            console.error('[EdgeTTS] WebSocket Error:', err);
+            reject(new Error('WebSocket connection error'));
+        });
+
+        // 1. Send Speech Config
+        const configMessage = `X-Timestamp:${new Date().toISOString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
+            JSON.stringify({
+                context: {
+                    synthesis: {
+                        audio: {
+                            metadataOptions: {
+                                sentenceBoundaryEnabled: false,
+                                wordBoundaryEnabled: true
+                            },
+                            outputFormat: 'audio-24khz-48kbitrate-mono-mp3'
+                        }
                     }
                 }
-            };
+            });
+        ws.send(configMessage);
 
-            ws.onerror = (err) => {
-                console.error('WebSocket Error:', err);
-                reject(err);
-            };
+        // 2. Send SSML
+        const ratePct = Math.round(rate * 100);
+        const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+        const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ja-JP'>` +
+            `<voice name='${voice}'>` +
+            `<prosody rate='${rateStr}'>` +
+            `${text}` +
+            `</prosody>` +
+            `</voice>` +
+            `</speak>`;
 
-        } catch (e) {
-            reject(e);
-        }
+        const ssmlMessage = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n` + ssml;
+        ws.send(ssmlMessage);
     });
 }
