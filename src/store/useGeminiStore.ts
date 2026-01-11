@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface ChatMessage {
     role: 'user' | 'model';
@@ -26,11 +25,8 @@ interface GeminiState {
     cancelGeneration: () => void;
 }
 
-// Initialize API Client
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(apiKey);
-// Explicitly using the user-requested model
-const modelId = "gemma-3-27b-it";
+// In the new architecture, we call the backend API which handles the SDK.
+// The public API Key is no longer strictly needed in the frontend for these calls.
 
 export const useGeminiStore = create<GeminiState>()(
     persist(
@@ -66,98 +62,87 @@ export const useGeminiStore = create<GeminiState>()(
                     const currentState = get();
                     const history = currentState.history;
 
-                    // Create a system prompt that enforces the "Japanese Teacher" persona (Fluent in Chinese)
-                    // Create a system prompt that enforces the "Japanese Teacher" persona (Fluent in Chinese)
                     const systemPrompt = `# Role
 你是一位拥有20年教学经验的**专业日语导师**。你的学生是母语为中文的初学者。
 你的核心任务是：不仅仅回答学生的问题，更要**主动引导**他们学习相关的背景知识、使用场景和注意事项。
 
 # Core Rules (铁律)
 1. **母语环境**：学生是**母语为中文的人**，完全理解并能流畅阅读汉字。
-2. **严禁中文拼音**：禁止在任何地方出现中文拼音（Hanyu Pinyin）。严禁给中文文字（开场白、标题、解释、例句翻译）标注拼音。绝对禁止写出类似 [你好(nǐ hǎo)] 的内容。
-3. **智能注音 (日语专用)**：仅为日语汉字标注假名。汉字后紧跟括号，如：私（わたし）。纯假名单词（如：おはよう）不标注。
-4. **简洁开场**：开场白要干脆利落，直接进入教学内容，不要废话。
+2. **严禁中文拼音**：禁止在任何地方出现中文拼音（Hanyu Pinyin）。严禁给中文文字标注拼音。
+3. **智能注音 (日语专用)**：仅为日语汉字标注假名。汉字后紧跟括号，如：私（わたし）。
+4. **简洁开场**：开场白要干脆利落。
 
-# Teaching Strategy (教学策略)
-1.  **核心含义**：用最通俗的中文解释意思。
-2.  **句式与场景**：阐述适用场合与注意事项。
-3.  **互动式教学**：
-    - **默认建议仅提供 1 个高质量实战例句**。
-    - 在回答末尾**必须**抛出一个能引导学生发散思考的【追问互动】。
-    - 告知学生：如需更多例句或想深入了解（如同义/反义词），请直接提出。
+# Output Format
+请严格遵守 Markdown 格式结构进行回答。`;
 
-# Output Format (回答模板)
-请严格遵守以下 Markdown 格式结构进行回答：
-
-### 【核心解答】
-(解释含义、用法与适用场景。如果有初学者易错点，请在此提醒。)
-
-### 【实战例句】
-* 日文原文 (带智能注音)
-* 中文翻译
-
-### 【追问互动】
-(引导学生进行下一步，例如：需要更多例句吗？想了解这个词的反义词吗？需要练习一下这个词的接续吗？)`;
-
-                    // Construct the full prompt context from history
-                    // We only take the last 10 messages to avoid token limits and keep context relevant
-                    const contextMessages = history.slice(-10);
-                    let fullPrompt = `${systemPrompt}\n\nCurrent Conversation:\n`;
+                    // Construct context from history
+                    const contextMessages = history.slice(-6);
+                    let contextStr = `Current Conversation Context:\n`;
                     contextMessages.forEach(msg => {
-                        fullPrompt += `${msg.role === 'user' ? 'Student' : 'Teacher'}: ${msg.content}\n`;
-                    });
-                    fullPrompt += `Student: ${text}\nTeacher:`; // Explicitly prompt for the next teacher response
-
-                    const model = genAI.getGenerativeModel({
-                        model: modelId,
-                        generationConfig: {
-                            temperature: 0.7, // Lower temperature for more factual/focused answers
-                            topP: 0.95,
-                            maxOutputTokens: 2000,
-                        }
+                        contextStr += `${msg.role === 'user' ? 'Student' : 'Teacher'}: ${msg.content}\n`;
                     });
 
-                    const signal = controller.signal;
-                    const result = await model.generateContentStream(fullPrompt);
+                    const response = await fetch('/api/ai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: text,
+                            systemPrompt: systemPrompt + "\n\n" + contextStr,
+                            temperature: 0.7
+                        }),
+                        signal: controller.signal
+                    });
+
+                    if (response.status === 429) {
+                        const data = await response.json();
+                        throw new Error(data.message || '请求过于频繁，请稍后再试。');
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`AI 服务暂时不可用 (${response.status})`);
+                    }
 
                     // Create a placeholder message for the AI response
-                    const aiMessageId = Date.now(); // Use timestamp as temp ID
                     const aiPlaceholder: ChatMessage = {
                         role: 'model',
                         content: '',
-                        timestamp: aiMessageId
+                        timestamp: Date.now()
                     };
 
                     set((state) => ({
                         history: [...state.history, aiPlaceholder]
                     }));
 
+                    const reader = response.body?.getReader();
+                    const decoder = new TextDecoder();
                     let fullResponse = "";
 
-                    for await (const chunk of result.stream) {
-                        if (signal.aborted) throw new Error("Aborted");
-                        const delta = chunk.text();
-                        fullResponse += delta;
+                    if (reader) {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
 
-                        // Update the last message (AI response) progressively
-                        set((state) => ({
-                            history: state.history.map((msg, index) =>
-                                index === state.history.length - 1 ? { ...msg, content: fullResponse } : msg
-                            )
-                        }));
+                            const chunk = decoder.decode(value, { stream: true });
+                            fullResponse += chunk;
+
+                            // Update the last message progressively
+                            set((state) => ({
+                                history: state.history.map((msg, index) =>
+                                    index === state.history.length - 1 ? { ...msg, content: fullResponse } : msg
+                                )
+                            }));
+                        }
                     }
 
                 } catch (error: any) {
-                    if (error.message === "Aborted") {
+                    if (error.name === 'AbortError') {
                         console.log("Chat Generation aborted");
                     } else {
                         console.error("Gemini Chat Error:", error);
-                        // Add error message to chat? or just toast? 
-                        // For now let's append an error note to the last message if it exists, or push a new one.
                         set((state) => ({
                             history: [...state.history, {
                                 role: 'model',
-                                content: `(Error: ${error.message || 'Something went wrong.'})`,
+                                content: `(抱歉，发生了错误: ${error.message || '连接失败'})`,
                                 timestamp: Date.now()
                             }]
                         }));
@@ -175,7 +160,6 @@ export const useGeminiStore = create<GeminiState>()(
                         if (res.ok) {
                             const data = await res.json();
                             if (data.success && data.text) {
-                                // Cache Hit
                                 console.log('[GeminiStore] Cache Hit:', options.cacheKey);
                                 if (onUpdate) onUpdate(data.text);
                                 return { text: data.text, fromCache: true };
@@ -186,44 +170,57 @@ export const useGeminiStore = create<GeminiState>()(
                     }
                 }
 
-                // Cancel previous generation if any
-                const prevController = (get() as any).abortController;
-                if (prevController) prevController.abort();
-
                 const controller = new AbortController();
                 set({ isAnalysisGenerating: true, abortController: controller } as any);
 
                 try {
-                    const signal = controller.signal;
-                    const model = genAI.getGenerativeModel({
-                        model: modelId,
-                        // Gemma-3 models usually don't support systemInstruction via API
-                        generationConfig: {
+                    const response = await fetch('/api/ai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt,
+                            systemPrompt,
                             temperature: options.temperature,
                             topP: options.top_p,
-                            maxOutputTokens: 2000,
-                        }
+                            cacheKey: options.cacheKey // Pass cacheKey to backend
+                        }),
+                        signal: controller.signal
                     });
 
-                    // Manually merge system prompt for Gemma
-                    const fullPrompt = `${systemPrompt}\n\nUser Question:\n${prompt}`;
-                    const result = await model.generateContentStream(fullPrompt);
+                    if (response.status === 429) {
+                        const data = await response.json();
+                        throw new Error(data.message || '请求过于频繁，请稍后再试。');
+                    }
 
+                    if (!response.ok) {
+                        throw new Error(`AI 服务暂时不可用 (${response.status})`);
+                    }
+
+                    // Handle backend response (could be JSON for cache hit or stream)
+                    const contentType = response.headers.get('content-type');
+                    if (contentType?.includes('application/json')) {
+                        const data = await response.json();
+                        if (data.success && data.text) {
+                            if (onUpdate) onUpdate(data.text);
+                            return { text: data.text, fromCache: !!data.fromCache };
+                        }
+                    }
+
+                    const reader = response.body?.getReader();
+                    const decoder = new TextDecoder();
                     let fullResponse = "";
                     let buffer = "";
                     const forbiddenTerms = ["核心:", "核心：", "Core:", "用法:", "用法：", "Usage:", "避坑:", "避坑：", "Pitfalls:", "注意:", "注意：", "Note:", "总结:", "总结：", "人话解读", "人话解读：", "AI解读", "AI 详解"];
 
-                    for await (const chunk of result.stream) {
-                        try {
-                            if (signal.aborted) throw new Error("Aborted");
+                    if (reader) {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
 
-                            // Get text from chunk, handle potential empty/blocked responses
-                            const delta = chunk.text();
-                            if (!delta) continue;
+                            const chunk = decoder.decode(value, { stream: true });
+                            buffer += chunk;
 
-                            buffer += delta;
-
-                            // 1. Remove complete forbidden terms from buffer
+                            // Process forbidden terms
                             let changed = true;
                             while (changed) {
                                 changed = false;
@@ -236,7 +233,7 @@ export const useGeminiStore = create<GeminiState>()(
                                 }
                             }
 
-                            // 2. Check for partial matches at the end
+                            // Check for partial matches
                             let maxPartialMatchLen = 0;
                             for (const term of forbiddenTerms) {
                                 for (let i = 1; i < term.length; i++) {
@@ -246,7 +243,6 @@ export const useGeminiStore = create<GeminiState>()(
                                 }
                             }
 
-                            // 3. Commit safe part
                             if (maxPartialMatchLen > 0) {
                                 const splitIdx = buffer.length - maxPartialMatchLen;
                                 const safePart = buffer.slice(0, splitIdx);
@@ -260,39 +256,22 @@ export const useGeminiStore = create<GeminiState>()(
                                 if (onUpdate) onUpdate(fullResponse);
                                 buffer = "";
                             }
-                        } catch (err: any) {
-                            console.warn('[GeminiStore] Chunk processing error:', err.message);
-                            // Continue to next chunk if possible
                         }
                     }
 
-                    // Flush remaining buffer
+                    // Flush remaining
                     if (buffer) {
                         fullResponse += buffer;
                         if (onUpdate) onUpdate(fullResponse);
                     }
 
-                    if (!fullResponse) {
-                        throw new Error("Empty response from AI");
-                    }
+                    if (!fullResponse) throw new Error("Empty response from AI");
 
-                    // Save to Cache if key is provided
-                    if (options.cacheKey && fullResponse) {
-                        try {
-                            await fetch('/api/cache', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ key: options.cacheKey, text: fullResponse })
-                            });
-                            console.log('[GeminiStore] Saved to cache:', options.cacheKey);
-                        } catch (e) {
-                            console.error('[GeminiStore] Cache save failed:', e);
-                        }
-                    }
+                    // No need for frontend cache save, as discussed. Backend handles it.
 
                     return { text: fullResponse, fromCache: false };
                 } catch (error: any) {
-                    if (error.message === "Aborted") {
+                    if (error.name === 'AbortError') {
                         console.log("Generation aborted");
                         return { text: "", fromCache: false };
                     }
@@ -305,9 +284,7 @@ export const useGeminiStore = create<GeminiState>()(
 
             cancelGeneration: () => {
                 const controller = (get() as any).abortController;
-                if (controller) {
-                    controller.abort();
-                }
+                if (controller) controller.abort();
                 set({ isChatGenerating: false, isAnalysisGenerating: false, abortController: null } as any);
             }
         }),

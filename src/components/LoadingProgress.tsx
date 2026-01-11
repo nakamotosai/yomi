@@ -15,61 +15,59 @@ export default function LoadingProgress() {
 
     const progress = Math.min(Math.round((loadedUnits / totalUnits) * 100), 100);
     const isDownloading = totalDownloadedUnits > 0;
+    const [isVisible, setIsVisible] = useState(true); // Changed initial state to true
+    // const [isFadingOut, setIsFadingOut] = useState(false); // Removed as per new logic
 
+    // 自动隐藏逻辑 (New visibility logic)
     useEffect(() => {
-        if (loadedUnits > 0 && !isAllLoaded) {
-            setIsVisible(true);
-            setIsFadingOut(false);
-        } else if (isAllLoaded) {
-            // Delay fade out to show completion status
-            const timer = setTimeout(() => {
-                setIsFadingOut(true);
-                const hideTimer = setTimeout(() => setIsVisible(false), 500);
-                return () => clearTimeout(hideTimer);
-            }, 2000);
+        if (isAllLoaded) {
+            const timer = setTimeout(() => setIsVisible(false), 3000);
             return () => clearTimeout(timer);
         }
-    }, [loadedUnits, isAllLoaded]);
+    }, [isAllLoaded]);
 
     if (!isVisible) return null;
 
+    const progress = Math.min(100, Math.round((loadedUnits / totalUnits) * 100)); // Changed Math.min arguments
+    const isDownloading = totalDownloadedUnits > 0 && !isAllLoaded; // Changed logic for isDownloading
+    const downloadSizeMB = (totalDownloadedBytes / (1024 * 1024)).toFixed(1); // Added downloadSizeMB
+    const totalSizeMB = (totalBytesToDownload / (1024 * 1024)).toFixed(1);
+
     return (
-        <div
-            className={clsx(
-                "px-4 py-2 mt-auto transition-all duration-500 ease-in-out border-t border-[var(--border-muted)] bg-transparent backdrop-blur-md",
-                isFadingOut ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
-            )}
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="flex flex-col gap-2 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10"
         >
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between text-[13px] font-medium text-slate-500 dark:text-slate-400">
                 <div className="flex items-center gap-2">
                     {isAllLoaded ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                     ) : (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--scheme-primary)' }} />
+                        <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                     )}
-                    <span className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <span>
                         {isAllLoaded
-                            ? '辞書データ準備完了'
-                            : (isDownloading ? '辞書ダウンロード中...' : '本地辞書インデックス中...')}
+                            ? "辞典准备就绪"
+                            : isDownloading
+                                ? `正在下载数据 (${downloadSizeMB} / ${totalSizeMB} MB)`
+                                : "正在初始化索引..."}
                     </span>
                 </div>
-                <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
-                    {progress}%
-                </span>
+                <span>{progress}%</span>
             </div>
 
-            <div className="h-1 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                <div
-                    className="h-full transition-all duration-500 ease-out rounded-full"
-                    style={{
-                        width: `${progress}%`,
-                        background: isAllLoaded
-                            ? 'var(--scheme-primary)'
-                            : 'linear-gradient(90deg, var(--scheme-primary) 0%, var(--scheme-grammar) 100%)',
-                        boxShadow: '0 0 10px var(--scheme-primary-glow)'
-                    }}
+            <div className="h-1.5 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    className={clsx(
+                        "h-full transition-all duration-500",
+                        isAllLoaded ? "bg-emerald-500" : "bg-indigo-500"
+                    )}
                 />
             </div>
-        </div>
+        </motion.div>
     );
 }

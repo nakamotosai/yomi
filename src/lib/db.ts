@@ -380,6 +380,14 @@ export async function createSystemLog(
     `).bind(id, type, message, stack || null, now).run();
 }
 
+// AI 使用统计行类型
+interface AIUsageRow {
+    model_id: string;
+    minute_key: string;
+    request_count: number;
+    token_count: number;
+}
+
 // ============================================================
 // AI 缓存相关操作
 // ============================================================
@@ -395,4 +403,41 @@ export async function setAICache(db: D1Database, key: string, value: string): Pr
         INSERT OR REPLACE INTO ai_cache (key, value, created_at)
         VALUES (?, ?, ?)
     `).bind(key, value, now).run();
+}
+
+// ============================================================
+// AI 使用统计相关操作
+// ============================================================
+
+/**
+ * 获取指定模型在特定分钟的使用统计
+ */
+export async function getAIUsageStats(
+    db: D1Database,
+    modelId: string,
+    minuteKey: string
+): Promise<AIUsageRow | null> {
+    return db.prepare(`
+        SELECT * FROM ai_usage_stats 
+        WHERE model_id = ? AND minute_key = ?
+    `).bind(modelId, minuteKey).first<AIUsageRow>();
+}
+
+/**
+ * 增加 AI 使用统计（原子操作）
+ */
+export async function incrementAIUsage(
+    db: D1Database,
+    modelId: string,
+    minuteKey: string,
+    requestInc: number,
+    tokenInc: number
+): Promise<void> {
+    await db.prepare(`
+        INSERT INTO ai_usage_stats (model_id, minute_key, request_count, token_count)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(model_id, minute_key) DO UPDATE SET
+            request_count = request_count + excluded.request_count,
+            token_count = token_count + excluded.token_count
+    `).bind(modelId, minuteKey, requestInc, tokenInc).run();
 }

@@ -85,30 +85,45 @@ class YomitanLoader {
         const cacheName = 'yomi-dictionary-cache-v1';
 
         try {
+            let data: unknown[];
             let response: Response | undefined;
             let cache: Cache | undefined;
 
             // Try to get from Cache API first
             if (typeof window !== 'undefined' && 'caches' in window) {
-                cache = await caches.open(cacheName);
+                cache = await caches.open(DICTIONARY_CACHE_NAME);
                 response = await cache.match(url);
             }
 
-            if (!response) {
-                console.log(`[Dictionary] Downloading bank ${index}...`);
-                useDictionaryStore.getState().incrementDownloadedUnits();
-                response = await fetch(url);
-                if (!response.ok) return;
-
-                // Clone and put into cache for next time
-                if (cache) {
-                    await cache.put(url, response.clone());
-                }
-            } else {
+            if (response) {
                 console.log(`[Dictionary] Loading bank ${index} from cache...`);
+                const blob = await response.blob();
+                useDictionaryStore.getState().addDownloadedBytes(blob.size);
+                data = JSON.parse(await blob.text());
+            } else {
+                console.log(`[Dictionary] Downloading bank ${index}...`);
+                response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const blob = await response.blob();
+                data = JSON.parse(await blob.text());
+
+                // Update downloaded bytes and units
+                useDictionaryStore.getState().addDownloadedBytes(blob.size);
+                useDictionaryStore.getState().incrementDownloadedUnits();
+
+                // Put into cache for next time
+                if (cache) {
+                    try {
+                        await cache.put(url, new Response(blob, {
+                            headers: { 'Content-Type': 'application/json' }
+                        }));
+                    } catch (e) {
+                        console.warn(`[YomitanLoader] Cache put failed for ${url}`, e);
+                    }
+                }
             }
 
-            const data = await response.json() as unknown[];
             if (!Array.isArray(data)) return;
 
             for (const rawEntry of data) {

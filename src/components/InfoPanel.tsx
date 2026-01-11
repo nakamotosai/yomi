@@ -128,12 +128,12 @@ function UnifiedExampleItem({
     return (
         <div className="mt-3 first:mt-1 mb-3 group animate-in slide-in-from-left-2 duration-300">
             {/* 日文行 */}
-            <div className="flex items-start gap-2">
+            <div className="flex items-baseline gap-2">
                 {/* 播放按钮 */}
                 <button
                     onClick={() => onSpeak(japanese)}
                     className={clsx(
-                        "mt-[2px] p-1.5 rounded-full transition-all shrink-0",
+                        "p-1.5 rounded-full transition-all shrink-0 translate-y-[2px]",
                         isSpeaking ? "bg-[var(--scheme-primary-bg)]" : "bg-black/5 dark:bg-white/10 opacity-70 group-hover:opacity-100"
                     )}
                     style={{ color: accentColor }}
@@ -210,9 +210,11 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
 
             {/* 原日文释义 */}
             {grammar.meaning && (
-                <div className="pt-2 border-t border-dashed border-[var(--border-muted)] opacity-80 text-[14px]">
-                    <strong className="font-bold mr-1" style={{ color: grammarColor }}>日文义项:</strong>
-                    <UnifiedHighlighter text={grammar.meaning} target={grammar.title} color={grammarColor} />
+                <div className="pt-2 border-t border-dashed border-[var(--border-muted)] opacity-80 text-[14px] flex items-baseline gap-1">
+                    <strong className="font-bold shrink-0" style={{ color: grammarColor }}>日文义项:</strong>
+                    <div className="flex-1">
+                        <UnifiedHighlighter text={grammar.meaning} target={grammar.title} color={grammarColor} />
+                    </div>
                 </div>
             )}
         </div>

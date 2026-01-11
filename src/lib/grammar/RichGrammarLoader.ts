@@ -31,14 +31,21 @@ export class RichGrammarLoader {
             }
 
             if (!response) {
-                console.log('[Grammar] Downloading rich dictionary...');
-                useDictionaryStore.getState().incrementDownloadedUnits();
+                console.log('[RichGrammar] Downloading dictionary...');
                 response = await fetch(url);
-                if (response.ok) {
-                    if (cache) await cache.put(url, response.clone());
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const blob = await response.clone().blob();
+                useDictionaryStore.getState().addDownloadedBytes(blob.size);
+                useDictionaryStore.getState().incrementDownloadedUnits();
+
+                if (cache) {
+                    await cache.put(url, response.clone());
                 }
             } else {
-                console.log('[Grammar] Loading rich dictionary from cache...');
+                console.log('[RichGrammar] Loading dictionary from cache...');
+                const blob = await response.blob();
+                useDictionaryStore.getState().addDownloadedBytes(blob.size);
             }
 
             if (response && response.ok) {
