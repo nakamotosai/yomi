@@ -1,3 +1,5 @@
+import { useDictionaryStore } from '@/store/useDictionaryStore';
+
 export class RichGrammarLoader {
     private static instance: RichGrammarLoader;
     private dictionary: Record<string, string> | null = null;
@@ -17,9 +19,11 @@ export class RichGrammarLoader {
 
         try {
             this.isOnDemandLoading = true;
-            const res = await fetch('/data/grammar_dict_zh.json');
+            const res = await fetch('/grammar/grammar_dict_zh.json');
             if (res.ok) {
                 this.dictionary = await res.json();
+                console.log('[Grammar] Rich dictionary loaded');
+                useDictionaryStore.getState().incrementLoadedUnits();
             } else {
                 console.warn('Failed to load grammar_dict_zh.json');
             }
@@ -28,6 +32,10 @@ export class RichGrammarLoader {
         } finally {
             this.isOnDemandLoading = false;
         }
+    }
+
+    async prefetch() {
+        return this.loadDictionary();
     }
 
     getExplanation(term: string, reading?: string): string | null {

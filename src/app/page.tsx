@@ -23,7 +23,11 @@ import { useGrammarStore } from '@/store/useGrammarStore';
 import { ttsManager } from '@/lib/tts/manager';
 import { translateText } from '@/lib/translate'; // Import translation function
 import { useGeminiStore } from '@/store/useGeminiStore';
+import { yomitanLoader } from '@/lib/dictionary/yomitanLoader';
+import { prefetchGrammar } from '@/lib/grammar/grammarLoader';
+import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import AIChatInput from '@/components/AIChatInput';
+import LoadingProgress from '@/components/LoadingProgress';
 import AIChatView from '@/components/AIChatView';
 import SettingsModal from '@/components/SettingsModal';
 import RefactoredInput from '@/components/RefactoredInput';
@@ -379,6 +383,19 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       }
     }
   }, [searchParams, setInputText, setIsFromExtension]);
+
+  // Background Dictionary Prefetching
+  useEffect(() => {
+    // Delay background loading to prioritize initial UI render and static resources
+    const timer = setTimeout(() => {
+      console.log('[App] Starting background dictionary prefetching...');
+      yomitanLoader.prefetch();
+      prefetchGrammar();
+      richGrammarLoader.prefetch();
+    }, 2000); // 2 second delay
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handlePlayAll = () => {
     // Logic: If current playlist is partial (e.g. single sentence), 
@@ -845,6 +862,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                         </div>
                       </div>
                     </div>
+                    <LoadingProgress />
                   </div>
                 }
 

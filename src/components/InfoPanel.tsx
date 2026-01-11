@@ -36,8 +36,6 @@ interface JishoResult {
     senses: JishoSense[];
 }
 
-// Yomitan 词典结果类型
-type { YomitanResult };
 
 interface YomitanResponse {
     success: boolean;

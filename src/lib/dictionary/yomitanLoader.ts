@@ -1,4 +1,6 @@
 
+import { useDictionaryStore } from '@/store/useDictionaryStore';
+
 interface YomitanEntry {
     term: string;
     reading: string;
@@ -105,32 +107,61 @@ class YomitanLoader {
                 }
             }
             this.loadedBanks.add(index);
+            useDictionaryStore.getState().incrementLoadedUnits();
         } catch (error) {
             console.error(`Failed to load dictionary bank ${index}:`, error);
         }
     }
 
-    // Initial load: load first 2 banks for speed
+    // Load all banks sequentially in the background
+    private async loadAllBanksSequentially(): Promise<void> {
+        const TOTAL_BANKS = 18;
+        const banksToLoad = Array.from({ length: TOTAL_BANKS }, (_, i) => i); // 0 to 17
+
+        for (const i of banksToLoad) {
+            if (this.loadedBanks.has(i)) continue;
+
+            await this.loadBank(i);
+            // Small delay between banks to avoid clogging the network
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        this.isLoaded = true;
+        console.log(`[Dictionary] Background loading complete. Total entries: ${this.dictionaryIndex.size}`);
+    }
+
+    // Initial load: Just load the first bank immediately, the rest in background
     public async init(): Promise<void> {
         if (this.isLoaded) return;
         if (this.loadingPromise) return this.loadingPromise;
 
         this.loadingPromise = (async () => {
-            // Initially load first 12 banks (most common words)
-            // 36MB total, let's load them in parallel
-            const banksToLoad = Array.from({ length: 18 }, (_, i) => i);
-            await Promise.all(banksToLoad.map(i => this.loadBank(i)));
-            this.isLoaded = true;
-            console.log(`[Dictionary] Loaded ${this.dictionaryIndex.size} entries mapping to ${this.loadedBanks.size} banks`);
+            console.log('[Dictionary] Starting background loading...');
+
+            // Load the first bank immediately (contains most common words)
+            await this.loadBank(0);
+
+            // Start loading the rest in the background without awaiting it here
+            this.loadAllBanksSequentially().catch(err => {
+                console.error('[Dictionary] Background loading failed:', err);
+            });
         })();
 
         return this.loadingPromise;
     }
 
+    // Explicit prefetch trigger (useful for global initialization)
+    public async prefetch(): Promise<void> {
+        return this.init();
+    }
+
     public async search(keyword: string): Promise<DictionaryResult[]> {
-        if (!this.isLoaded) {
+        // Ensure at least the basics are loaded if someone searches immediately
+        if (this.loadingPromise) {
+            await this.loadingPromise;
+        } else if (!this.isLoaded) {
             await this.init();
         }
+
         return this.dictionaryIndex.get(keyword) || [];
     }
 }

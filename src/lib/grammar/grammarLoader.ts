@@ -1,4 +1,5 @@
 import { GrammarEntry } from '@/types/grammar';
+import { useDictionaryStore } from '@/store/useDictionaryStore';
 
 // 语法词典索引
 const grammarIndex: Map<string, GrammarEntry[]> = new Map();
@@ -118,9 +119,13 @@ export async function loadGrammar(): Promise<void> {
 
         const allEntries: GrammarEntry[] = [];
 
+        console.log('[Grammar] Starting background loading...');
         for (const url of bankUrls) {
             const entries = await parseTermBank(url);
             allEntries.push(...entries);
+            useDictionaryStore.getState().incrementLoadedUnits();
+            // Small delay between banks
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
 
         // 构建索引：按term分组
@@ -133,7 +138,6 @@ export async function loadGrammar(): Promise<void> {
             }
 
             // 【新增】同时建立 Reading 索引 (如果 reading 和 term 不同)
-            // 这样 matchGrammar 可以通过 reading 查找到对应的 term 解释
             if (entry.reading && entry.reading !== entry.term) {
                 const existingReading = grammarIndex.get(entry.reading) || [];
                 if (!existingReading.some(e => e.title === entry.title)) {
@@ -148,6 +152,11 @@ export async function loadGrammar(): Promise<void> {
     })();
 
     return loadingPromise;
+}
+
+// 预热加载 (用于全局初始化)
+export async function prefetchGrammar(): Promise<void> {
+    return loadGrammar();
 }
 
 // 获取语法索引

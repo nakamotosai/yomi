@@ -98,7 +98,7 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
         }
     });
 
-    const ws = response.webSocket;
+    const ws: any = (response as any).webSocket;
     if (!ws) {
         throw new Error(`Edge TTS WebSocket connection failed: ${response.status} ${response.statusText}`);
     }
@@ -113,7 +113,7 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
         let cursor = 0;
 
         // Message handler
-        ws.addEventListener('message', async (event) => {
+        ws.addEventListener('message', async (event: any) => {
             const data = event.data;
 
             if (data instanceof ArrayBuffer) {
@@ -205,7 +205,7 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
             }
         });
 
-        ws.addEventListener('error', (err) => {
+        ws.addEventListener('error', (err: any) => {
             console.error('[EdgeTTS] WebSocket Error:', err);
             reject(new Error('WebSocket connection error'));
         });
