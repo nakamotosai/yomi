@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 // Using Google Translate's free API endpoint (unofficial but widely used)
 const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
 

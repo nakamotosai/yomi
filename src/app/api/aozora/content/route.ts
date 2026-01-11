@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import iconv from 'iconv-lite';
+
+export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
         }
 
         const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
 
         // Aozora uses Shift_JIS
-        const decodedText = iconv.decode(buffer, 'Shift_JIS');
+        // Edge Runtime supports TextDecoder with 'shift_jis'
+        const decoder = new TextDecoder('shift_jis');
+        const decodedText = decoder.decode(arrayBuffer);
 
         return NextResponse.json({ content: decodedText });
     } catch (error) {

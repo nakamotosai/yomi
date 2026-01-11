@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateUserLogin, D1Database } from '@/lib/db';
 import { generateToken, createAuthCookie } from '@/lib/auth';
 
+export const runtime = 'edge';
+
 interface LoginRequest {
     email: string;
     password: string;

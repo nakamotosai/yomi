@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserById, D1Database } from '@/lib/db';
 import { getTokenFromRequest, verifyToken } from '@/lib/auth';
 
+export const runtime = 'edge';
+
 // 获取 D1 数据库绑定
 function getDB(request: NextRequest): D1Database | null {
     const env = (request as unknown as { env?: { DB?: D1Database } }).env;

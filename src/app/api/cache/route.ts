@@ -1,22 +1,20 @@
-import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAICache, setAICache, D1Database } from '@/lib/db';
 
-// Define cache file path
-const CACHE_FILE_PATH = path.join(process.cwd(), 'data', 'ai_cache.json');
+export const runtime = 'edge';
 
-// Ensure directory and file exist
-const ensureCacheFile = () => {
-    const dir = path.dirname(CACHE_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(CACHE_FILE_PATH)) {
-        fs.writeFileSync(CACHE_FILE_PATH, '{}', 'utf-8');
-    }
-};
+// 获取 D1 数据库绑定
+function getDB(request: NextRequest): D1Database | null {
+    const env = (request as unknown as { env?: { DB?: D1Database } }).env;
+    if (env?.DB) return env.DB;
 
-export async function GET(request: Request) {
+    const cf = (globalThis as unknown as { process?: { env?: { DB?: D1Database } } }).process?.env;
+    if (cf?.DB) return cf.DB;
+
+    return null;
+}
+
+export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const key = searchParams.get('key');
@@ -25,12 +23,16 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Key is required' }, { status: 400 });
         }
 
-        ensureCacheFile();
-        const fileContent = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
-        const cache = JSON.parse(fileContent);
+        const db = getDB(request);
+        if (!db) {
+            // 如果没有数据库绑定，直接返回未命中（开发环境如果不配置 D1 本地 dev 可能也会走到这也行）
+            return NextResponse.json({ success: false, error: 'Database not available' });
+        }
 
-        if (cache[key]) {
-            return NextResponse.json({ success: true, text: cache[key] });
+        const text = await getAICache(db, key);
+
+        if (text) {
+            return NextResponse.json({ success: true, text });
         }
 
         return NextResponse.json({ success: false });
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { key, text } = body;
@@ -49,19 +51,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Key and text are required' }, { status: 400 });
         }
 
-        ensureCacheFile();
-        const fileContent = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
-        let cache: Record<string, string> = {};
-        try {
-            cache = JSON.parse(fileContent);
-        } catch (e) {
-            // If corrupt, start fresh
-            cache = {};
+        const db = getDB(request);
+        if (!db) {
+            return NextResponse.json({ error: 'Database not available' }, { status: 500 });
         }
 
-        cache[key] = text;
-
-        fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8');
+        await setAICache(db, key, text);
 
         return NextResponse.json({ success: true });
     } catch (error) {

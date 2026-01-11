@@ -40,3 +40,19 @@ CREATE TABLE IF NOT EXISTS user_settings (
 CREATE INDEX IF NOT EXISTS idx_vocab_user ON vocab_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_oauth ON users(oauth_provider, oauth_id);
+
+-- System Logs
+CREATE TABLE IF NOT EXISTS system_logs (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    stack TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- AI Cache
+CREATE TABLE IF NOT EXISTS ai_cache (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);

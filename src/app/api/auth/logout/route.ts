@@ -4,6 +4,8 @@
  */
 
 import { NextResponse } from 'next/server';
+
+export const runtime = 'edge';
 import { clearAuthCookie } from '@/lib/auth';
 
 export async function POST() {

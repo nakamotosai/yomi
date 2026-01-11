@@ -360,3 +360,39 @@ export async function getUserSettings(
         return null;
     }
 }
+
+// ============================================================
+// 系统日志相关操作
+// ============================================================
+
+export async function createSystemLog(
+    db: D1Database,
+    type: string,
+    message: string,
+    stack?: string
+): Promise<void> {
+    const id = generateUserId(); // Reuse UUID generation
+    const now = new Date().toISOString();
+
+    await db.prepare(`
+        INSERT INTO system_logs (id, type, message, stack, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    `).bind(id, type, message, stack || null, now).run();
+}
+
+// ============================================================
+// AI 缓存相关操作
+// ============================================================
+
+export async function getAICache(db: D1Database, key: string): Promise<string | null> {
+    const row = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(key).first<{ value: string }>();
+    return row ? row.value : null;
+}
+
+export async function setAICache(db: D1Database, key: string, value: string): Promise<void> {
+    const now = new Date().toISOString();
+    await db.prepare(`
+        INSERT OR REPLACE INTO ai_cache (key, value, created_at)
+        VALUES (?, ?, ?)
+    `).bind(key, value, now).run();
+}

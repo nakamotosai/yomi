@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 const NHK_BASE_URL = 'https://www3.nhk.or.jp/news/easy';
 
 export async function GET(request: NextRequest) {
