@@ -2,6 +2,7 @@
     "name": "YOMI | 読み",
     "short_name": "YOMI",
     "description": "日本語泛読辅助工具 - 分词、注音、词性着色、音调可视化",
+    "id": "/",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#f8fafc",
@@ -19,6 +20,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/screenshots/mobile-1.png",
+            "sizes": "1170x2532",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Home Screen"
+        },
+        {
+            "src": "/screenshots/desktop-1.png",
+            "sizes": "1920x1080",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "Desktop View"
         }
     ],
     "categories": [

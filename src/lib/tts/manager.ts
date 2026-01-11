@@ -23,7 +23,7 @@ class TtsManager {
         return this.edge;
     }
 
-    speak(text: string, settings: AppSettings, callbacks: {
+    speak(text: string, settings: AppSettings, callbacks?: {
         onStart?: () => void;
         onEnd?: () => void;
         onError?: (error: Error) => void;

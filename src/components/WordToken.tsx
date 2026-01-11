@@ -62,30 +62,30 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
     const isWafu = settings.colorScheme === 'wafu';
     const isMonochrome = settings.colorScheme === 'monochrome';
 
+    // Helper to map POS to safe CSS variable key (aligned with HistoryPanel/InfoPanel)
+    const getWafuPosKey = (pos: string) => {
+        const lower = pos.toLowerCase();
+        if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+        if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
+        if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
+        if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
+        if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词')) return 'adjective';
+        if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+        if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
+        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
+        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
+        if (lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词')) return 'interjection';
+        if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
+        if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
+        if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
+        return 'other';
+    };
+
     // Helper to get Wafu/Monochrome override styles
     const getOverrideStyle = () => {
         if ((!isWafu && !isMonochrome) || !isColorEnabled) return {};
 
-        // Helper to map POS to safe CSS variable key (aligned with HistoryPanel/InfoPanel)
-        const getPosKey = (pos: string) => {
-            const lower = pos.toLowerCase();
-            if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
-            if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
-            if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
-            if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
-            if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词')) return 'adjective';
-            if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
-            if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
-            if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
-            if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
-            if (lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词')) return 'interjection';
-            if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
-            if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
-            if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
-            return 'other';
-        };
-
-        const key = getPosKey(token.pos);
+        const key = getWafuPosKey(token.pos);
 
         // For monochrome, we can reuse the same wafu-prefixed variables because we defined them in the [data-color-scheme="monochrome"] block
         // to point to the grayscale vars. This keeps the JS clean.
@@ -105,7 +105,8 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
 
     // 文字颜色：始终使用主题颜色（即使背景透明）
     // If Wafu or Monochrome is active, standard textClass is ignored in favor of style override
-    const textClass = (!isWafu && !isMonochrome && isColorEnabled) ? themeColors.text : ((isWafu || isMonochrome) && isColorEnabled ? '' : 'text-[var(--text-muted)]');
+    const textClass = (!isWafu && !isMonochrome && isColorEnabled) ? themeColors.text : ((isWafu || isMonochrome) && isColorEnabled ? '' : '');
+    const textStyle = (!isWafu && !isMonochrome && isColorEnabled) ? {} : ((isWafu || isMonochrome) && isColorEnabled ? {} : { color: 'var(--text-muted)' });
 
     // Logic: Show Furigana?
     const isEnglish = /^[a-zA-Z0-9\s.,!?'"()-]+$/.test(token.surface);
@@ -125,7 +126,7 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
 
     const dynamicGlowColor = (!isWafu && !isMonochrome && themeColors?.text)
         ? (extractHexColor(themeColors.text) || POS_GLOW_COLORS[token.pos])
-        : (isMonochrome ? '#4b5563' : POS_GLOW_COLORS[token.pos]); // Use gray for monochrome glow
+        : (isMonochrome ? '#4b5563' : (isWafu ? `var(--wafu-${getWafuPosKey(token.pos)}-text)` : POS_GLOW_COLORS[token.pos]));
 
     return (
         <div
@@ -147,7 +148,7 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
         >
             {/* Pitch Accent Visualization */}
             {settings.showPitchAccent && token.pitch && token.pitch.length > 0 && !isHiddenParticle && (
-                <span style={{ color: '#AA5555' }}>
+                <span style={{ color: 'var(--color-pitch)' }}>
                     <PitchAccent pattern={token.pitch} />
                 </span>
             )}
@@ -187,15 +188,16 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
                 )}
                 style={{
                     ...overrideStyle, // Apply Wafu/Monochrome overrides
+                    ...textStyle,
                     boxShadow: isSpeaking && settings.karaokeMode && (settings.karaokeStyle === 'glow-scale' || settings.karaokeStyle === 'glow-only')
-                        ? `0 0 18px 8px ${dynamicGlowColor}55, 0 0 8px 4px ${dynamicGlowColor}40`
+                        ? `0 0 18px 8px color-mix(in srgb, ${dynamicGlowColor}, transparent 66%), 0 0 8px 4px color-mix(in srgb, ${dynamicGlowColor}, transparent 75%)`
                         : undefined,
                     // Gradient fill animation
                     ...(isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'border' ? {
                         // Use box-shadow to simulate border ensuring no layout shift (jitter)
-                        boxShadow: `0 0 0 2px ${dynamicGlowColor}, 0 0 8px ${dynamicGlowColor}40`,
+                        boxShadow: `0 0 0 2px ${dynamicGlowColor}, 0 0 8px color-mix(in srgb, ${dynamicGlowColor}, transparent 75%)`,
                         borderRadius: '4px',
-                        background: `${dynamicGlowColor}10`,
+                        background: `color-mix(in srgb, ${dynamicGlowColor}, transparent 94%)`,
                         transition: 'all 0.2s ease',
                         transform: 'scale(1.02)',
                         willChange: 'transform, box-shadow' // Hardware acceleration

@@ -33,12 +33,12 @@ export default function HistoryPanel() {
     return (
         <div
             className="flex flex-col h-full relative group/panel"
-            style={{ background: 'var(--bg-elevated)' }}
+            style={{ background: 'transparent' }}
         >
             {/* Floating Clear Button */}
             <button
                 onClick={clearHistory}
-                className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-full transition-all bg-white/50 dark:bg-white/5 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 hover:text-rose-500 text-[var(--text-muted)] dark:text-slate-500 backdrop-blur-sm"
+                className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-full transition-all bg-white/50 dark:bg-white/5 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 hover:text-rose-500 text-[var(--text-muted)] backdrop-blur-sm"
                 title="履歴を削除"
             >
                 <Trash2 className="w-4 h-4" />

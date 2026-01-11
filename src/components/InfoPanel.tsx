@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Volume2, Bookmark, ArrowRight, BookOpen, BookMarked, Sparkles } from 'lucide-react';
+import { Collapsible } from './Collapsible';
+import { Volume2, Bookmark, ArrowRight, BookOpen, BookMarked, Sparkles, ChevronRight, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WordToken, DictionaryEntry, PartOfSpeech, AppSettings } from '@/types';
 import { GrammarEntry } from '@/types/grammar';
@@ -10,10 +11,10 @@ import { useVocabStore } from '@/store/useVocabStore';
 import { useGrammarStore } from '@/store/useGrammarStore';
 import { getDeinflectedForm } from '@/lib/nlp/analyzer';
 import { ttsManager } from '@/lib/tts/manager';
-import { COLOR_THEMES } from '@/lib/colorThemes';
+import { COLOR_THEMES, POS_GLOW_COLORS } from '@/lib/colorThemes';
 
 import clsx from 'clsx';
-import { useWebLLM } from '@/store/useWebLLM'; // Import hook
+import { useGeminiStore } from '@/store/useGeminiStore'; // Import hook
 import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
@@ -79,155 +80,90 @@ const translatePOS = (pos: string[], lang: 'en' | 'jp' | 'zh'): string[] => {
     });
 };
 
-// 语法例句组件 - 带翻译和关键词高亮功能
-function ExampleWithTranslation({
-    example,
-    onSpeak,
-    grammarColor,
-    grammarPattern
-}: {
-    example: string;
-    onSpeak: (text: string) => void;
-    grammarColor: string;
-    settings: AppSettings;
-    grammarPattern?: string; // 语法标题/读音，用于高亮匹配
-}) {
-    const [translation, setTranslation] = useState<string>('');
-    const [isTranslating, setIsTranslating] = useState(false);
+// 核心文本高亮组件：支持多关键词自动识别、加粗并染色
+function UnifiedHighlighter({ text, target, color, isChinese = false }: { text: string; target: string; color: string; isChinese?: boolean }) {
+    if (!text || !target) return <>{text}</>;
 
-    useEffect(() => {
-        let cancelled = false;
-        const translate = async () => {
-            setIsTranslating(true);
-            try {
-                const result = await translateText(example, 'zh-CN', 'ja');
-                if (!cancelled) {
-                    setTranslation(result);
-                }
-            } catch (error) {
-                console.error('翻译失败:', error);
-            } finally {
-                if (!cancelled) {
-                    setIsTranslating(false);
-                }
-            }
-        };
-        translate();
-        return () => { cancelled = true; };
-    }, [example]);
+    // 预处理目标词：移除 ～、括号注释、序号等
+    const baseTarget = target.replace(/[～〜~]/g, '').replace(/[（(][^）)]*[）)]/g, '').replace(/[①-⑩]/g, '').trim();
+    if (!baseTarget) return <>{text}</>;
 
-    // 从语法模式中提取可能的关键词进行匹配
-    const extractKeywords = (pattern: string): string[] => {
-        if (!pattern) return [];
-        const results: string[] = [];
+    // 提取可能的关键词（处理含有 ・ 或中日文括号的情况）
+    const keywords = [baseTarget];
+    if (baseTarget.includes('・')) {
+        keywords.push(...baseTarget.split('・').map(k => k.trim()));
+    }
 
-        // 移除序号等
-        const cleaned = pattern
-            .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g, '')
-            .replace(/[（()][^）)]*[）)]/g, '') // 移除括号及其内容
-            .trim();
+    // 排序：优先匹配长词
+    const sortedKeywords = keywords.filter(k => k.length > 0).sort((a, b) => b.length - a.length);
 
-        // 处理 ～XXX 格式 - 保留核心部分
-        // 例如: ～によると・～によれば → によると, によれば
-        // 例如: ～以上・～以上は → 以上, 以上は
-        // 例如: ～ままに～する → ままに
+    // 构建正则 (转义特殊字符)
+    const escaped = sortedKeywords.map(k => k.replace(/[./*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const regex = new RegExp(`(${escaped})`, 'g');
 
-        // 按 ・、 分割成多个变体
-        const variants = cleaned.split(/[・、]/);
-
-        for (const variant of variants) {
-            // 移除开头和结尾的 ～〜~ 
-            const core = variant.trim().replace(/^[～〜~]+/, '').replace(/[～〜~]+$/, '');
-            // 如果中间有 ～ (如 ～ままに～する), 取第一部分
-            if (core.includes('～') || core.includes('〜')) {
-                const parts = core.split(/[～〜]/);
-                for (const part of parts) {
-                    if (part.trim().length > 1) {
-                        results.push(part.trim());
-                    }
-                }
-            } else if (core.length > 1) {
-                results.push(core);
-            }
-        }
-
-        // 去重并按长度排序（优先匹配较长的）
-        const unique = [...new Set(results)].sort((a, b) => b.length - a.length);
-        return unique;
-    };
-
-    // 高亮渲染例句中的语法关键词
-    const renderHighlightedExample = (text: string, keywords: string[]): React.ReactNode => {
-        if (keywords.length === 0) return text;
-
-        // 尝试在文本中找到任意一个关键词
-        for (const keyword of keywords) {
-            const index = text.indexOf(keyword);
-            if (index !== -1) {
-                const before = text.substring(0, index);
-                const match = text.substring(index, index + keyword.length);
-                const after = text.substring(index + keyword.length);
-                return (
-                    <>
-                        {before}
-                        <strong style={{ color: grammarColor }}>{match}</strong>
-                        {after}
-                    </>
-                );
-            }
-        }
-        // 没找到匹配，返回原文
-        return text;
-    };
-
-    const keywords = extractKeywords(grammarPattern || '');
+    const parts = text.split(regex);
 
     return (
-        <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span className={clsx(
-                "flex items-center justify-center w-5 h-5 text-[11px] font-bold rounded-[5px] border shadow-sm backdrop-blur-md mt-[2px] shrink-0",
-                "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]",
-                "dark:bg-black/20 dark:text-gray-400 dark:border-white/10"
-            )}>
-                例
-            </span>
-            <div style={{ flex: 1 }}>
-                {/* 日语例句 - 带关键词高亮 */}
-                <div style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    <span>{renderHighlightedExample(example, keywords)}</span>
-                    <button
-                        onClick={() => onSpeak(example)}
-                        style={{
-                            flexShrink: 0,
-                            width: '20px',
-                            height: '20px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: '50%',
-                            border: 'none',
-                            backgroundColor: 'transparent',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                            marginLeft: '4px',
-                            verticalAlign: 'middle'
-                        }}
-                        title="朗读例句"
-                    >
-                        <Volume2 style={{ width: '14px', height: '14px' }} />
-                    </button>
-                </div>
-                {/* 中文翻译 */}
-                <div style={{ fontSize: '14px', color: grammarColor, marginTop: '4px', opacity: 0.85 }}>
-                    {isTranslating ? (
-                        <span style={{ color: 'var(--text-faint)' }}>翻译中...</span>
-                    ) : translation ? (
-                        translation
-                    ) : null}
+        <>
+            {parts.map((part, i) => {
+                const isMatch = sortedKeywords.some(k => k === part);
+                if (isMatch) {
+                    return <strong key={i} className="font-bold" style={{ color }}>{part}</strong>;
+                }
+                return <span key={i}>{part}</span>;
+            })}
+        </>
+    );
+}
+
+// 统一例句组件 (方案 3)：[例] + 播放键 + 日文 / > + 翻译
+function UnifiedExampleItem({
+    japanese,
+    chinese,
+    onSpeak,
+    accentColor,
+    targetWord,
+    isSpeaking = false
+}: {
+    japanese: string;
+    chinese?: string;
+    onSpeak: (text: string) => void;
+    accentColor: string;
+    targetWord: string;
+    isSpeaking?: boolean;
+}) {
+    return (
+        <div className="mt-3 first:mt-1 mb-3 group animate-in slide-in-from-left-2 duration-300">
+            {/* 日文行 */}
+            <div className="flex items-start gap-2">
+                {/* 播放按钮 */}
+                <button
+                    onClick={() => onSpeak(japanese)}
+                    className={clsx(
+                        "mt-[2px] p-1.5 rounded-full transition-all shrink-0",
+                        isSpeaking ? "bg-[var(--scheme-primary-bg)]" : "bg-black/5 dark:bg-white/10 opacity-70 group-hover:opacity-100"
+                    )}
+                    style={{ color: accentColor }}
+                >
+                    <Volume2 className="w-3.5 h-3.5" />
+                </button>
+
+                {/* 文字内容 - 日文 */}
+                <div className="flex-1 text-[16px] leading-relaxed break-words font-medium text-[var(--text-muted)]">
+                    <UnifiedHighlighter text={japanese} target={targetWord} color={accentColor} />
                 </div>
             </div>
-        </div >
+
+            {/* 中文行 - 靠左对齐，去除多余缩进 */}
+            {chinese && (
+                <div className="flex items-start gap-1 mt-1 ml-[1px]">
+                    <ChevronRight className="w-3.5 h-3.5 mt-[5px] shrink-0 opacity-40" style={{ color: accentColor }} />
+                    <div className="flex-1 text-[14px] leading-snug text-[var(--text-muted)] opacity-90 italic">
+                        <UnifiedHighlighter text={chinese} target={targetWord} color={accentColor} isChinese />
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 // 渲染富文本语法解释（Distilled Data）
@@ -244,155 +180,46 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
         load();
     }, [grammar.title]);
 
-    // Example translation effect
     useEffect(() => {
         if (!grammar.example) return;
         const translate = async () => {
             try {
                 const res = await translateText(grammar.example!, 'zh-CN', 'ja');
                 setExampleTranslation(res);
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         };
         translate();
     }, [grammar.example]);
 
-
     if (!explanation) return null;
 
-    // Split by newlines to handle paragraph breaks naturally
     const lines = explanation.split('\n').filter(line => line.trim());
 
-    const handleContentClick = (e: React.MouseEvent) => {
-        // Prevent triggering if clicking the example speaker button or a specific interactive element
-        if ((e.target as HTMLElement).closest('button')) return;
-
-        // Speak the explanations (lines joined)
-        if (isGlobalSpeaking) return;
-        const textToSpeak = lines.join(' ').replace(/\*\*/g, '');
-        onSpeak(textToSpeak);
-    };
-
-    // Helper to highlight grammar in example
-    const renderExample = () => {
-        if (!grammar.example) return null;
-
-        let titleParts = [grammar.title];
-        // Clean title for matching (remove ~, parens etc)
-        const cleanTitle = grammar.title.replace(/[~～]/g, '').replace(/[（(].*?[）)]/g, '').trim();
-        titleParts.push(cleanTitle);
-
-        // Also try reading if available (sometimes example uses hiragana instead of kanji)
-        if (grammar.reading) {
-            titleParts.push(grammar.reading.replace(/[~～]/g, ''));
-        }
-
-        // Filter unique and valid parts, sort by length desc to match longest first
-        titleParts = [...new Set(titleParts)].filter(t => t && t.length > 0).sort((a, b) => b.length - a.length);
-
-        // Escape regex special characters
-        const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        // Create a combined regex pattern
-        const pattern = new RegExp(`(${titleParts.map(escapeRegExp).join('|')})`, 'g');
-
-        // Simple split by the term
-        const parts = grammar.example.split(pattern);
-
-        return (
-            <span>
-                {parts.map((part, i) => {
-                    // Check if this part matches any of our target titles
-                    if (titleParts.includes(part)) {
-                        return <strong key={i} style={{ color: grammarColor }}>{part}</strong>;
-                    }
-                    return <span key={i}>{part}</span>;
-                })}
-            </span>
-        );
-    };
-
     return (
-        <div
-            onClick={handleContentClick}
-            className="space-y-4 text-[16px] leading-relaxed animate-in fade-in zoom-in-95 duration-300 cursor-pointer hover:opacity-95 transition-opacity select-text"
-            style={{ color: 'var(--text-primary)' }}
-            title="点击朗读讲解"
-        >
-            {lines.map((line, idx) => {
-                // Parse bold **text**
-                const parts = line.split(/(\*\*.*?\*\*)/g);
-
-                // Prepare highlighting logic (same as renderExample but scoped here for reuse if needed, 
-                // or we can just compute it once outside loop if optimized, but this is fine for small text)
-                let titleParts = [grammar.title];
-                const cleanTitle = grammar.title.replace(/[~～]/g, '').replace(/[（(].*?[）)]/g, '').trim();
-                titleParts.push(cleanTitle);
-                if (grammar.reading) {
-                    titleParts.push(grammar.reading.replace(/[~～]/g, ''));
-                }
-                // Filter and sort for regex
-                titleParts = [...new Set(titleParts)].filter(t => t && t.length > 0).sort((a, b) => b.length - a.length);
-                const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const pattern = new RegExp(`(${titleParts.map(escapeRegExp).join('|')})`, 'g');
-
-                return (
-                    <div key={idx}>
-                        {parts.map((part, i) => {
-                            // If it's effectively a bold block (**...**)
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                                return <strong key={i} className="font-bold" style={{ color: grammarColor }}>{part.slice(2, -2)}</strong>;
-                            }
-
-                            // If plain text, try to highlight grammar terms inside it
-                            const subParts = part.split(pattern);
-                            return (
-                                <span key={i}>
-                                    {subParts.map((subPart, j) => {
-                                        if (titleParts.includes(subPart)) {
-                                            // Auto-highlight recognized grammar term
-                                            return <strong key={j} style={{ color: grammarColor }}>{subPart}</strong>;
-                                        }
-                                        return <span key={j}>{subPart}</span>;
-                                    })}
-                                </span>
-                            );
-                        })}
-                    </div>
-                );
-            })}
-
-            {/* Example Section */}
-            {grammar.example && (
-                <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="mb-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <strong className="font-bold shrink-0" style={{ color: grammarColor }}>例句：</strong>
-                            <button
-                                onClick={() => onSpeak(grammar.example!)}
-                                className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
-                                style={{ color: grammarColor }}
-                                title="朗读例句"
-                            >
-                                <Volume2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                        {renderExample()}
-                    </div>
-                    {exampleTranslation && (
-                        <div className="opacity-80 text-[15px] mt-1">
-                            {exampleTranslation}
-                        </div>
-                    )}
+        <div className="space-y-4 text-[16px] leading-relaxed cursor-default select-text" style={{ color: 'var(--text-primary)' }}>
+            {/* 正文解读 - 应用全量高亮 */}
+            {lines.map((line, idx) => (
+                <div key={idx}>
+                    <UnifiedHighlighter text={line.replace(/\*\*/g, '')} target={grammar.title} color={grammarColor} />
                 </div>
+            ))}
+
+            {/* 例句部分 - 使用方案 3 */}
+            {grammar.example && (
+                <UnifiedExampleItem
+                    japanese={grammar.example}
+                    chinese={exampleTranslation}
+                    onSpeak={onSpeak}
+                    accentColor={grammarColor}
+                    targetWord={grammar.title}
+                />
             )}
 
-            {/* Original Meaning Section */}
+            {/* 原日文释义 */}
             {grammar.meaning && (
-                <div className="pt-2" onClick={(e) => e.stopPropagation()}>
-                    <strong className="font-bold" style={{ color: grammarColor }}>日文：</strong>
-                    <span>{grammar.meaning}</span>
+                <div className="pt-2 border-t border-dashed border-[var(--border-muted)] opacity-80 text-[14px]">
+                    <strong className="font-bold mr-1" style={{ color: grammarColor }}>日文义项:</strong>
+                    <UnifiedHighlighter text={grammar.meaning} target={grammar.title} color={grammarColor} />
                 </div>
             )}
         </div>
@@ -402,32 +229,55 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
 // 渲染语法详情 - 样式与单词卡片保持一致
 function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: GrammarEntry; settings: AppSettings; isGlobalSpeaking: boolean }) {
     const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
-    const { generateText, initializeEngine, isModelLoaded, isLoading, progress, unloadModel } = useWebLLM(); /* UPDATED */
+    const { generateText, isAnalysisGenerating, cancelGeneration } = useGeminiStore();
     const isSaved = isGrammarSaved(grammar.id);
 
+
     // 语法颜色使用 CSS 变量
+    const isWafu = settings.colorScheme === 'wafu';
     const isMonochrome = settings.colorScheme === 'monochrome';
-    // For monochrome, we use the grayscale variable, but --scheme-grammar is already set to gray in globals.css
-    // However, if we want to ensure it uses the variable and not some hardcoded fallback
-    const grammarColor = 'var(--scheme-grammar)';
+    const grammarColor = isMonochrome ? 'var(--text-muted)' : 'var(--scheme-grammar)';
 
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    // Cleanup on window close/refresh
-    useEffect(() => {
-        const handleUnload = () => {
-            unloadModel();
-        };
-        window.addEventListener('beforeunload', handleUnload);
-        return () => {
-            window.removeEventListener('beforeunload', handleUnload);
-        };
-    }, [unloadModel]);
 
     // AI State
     const [aiResult, setAiResult] = useState<string>('');
     const [aiResultTitle, setAiResultTitle] = useState<string>('');
-    const [isGenerating, setIsGenerating] = useState(false);
+    const [isCached, setIsCached] = useState(false);
+    const [isAIExpanded, setIsAIExpanded] = useState(false);
+
+    // Clear AI result when switching grammar (Auto-load cache)
+    useEffect(() => {
+        // Cancel any pending generation
+        if (isAnalysisGenerating) cancelGeneration();
+        setAiResult('');
+        setAiResultTitle('');
+        setIsCached(false);
+        setIsAIExpanded(false);
+
+        // Auto-check cache
+        if (grammar.id) {
+            const checkCache = async () => {
+                try {
+                    const cacheKey = `grammar:${grammar.title}`;
+                    const res = await fetch(`/api/cache?key=${encodeURIComponent(cacheKey)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && data.text) {
+                            setAiResult(data.text);
+                            setAiResultTitle('AI老师在线解读');
+                            setIsCached(true);
+                            setIsAIExpanded(true);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore silent failures
+                }
+            };
+            checkCache();
+        }
+    }, [grammar.id]);
 
     // Resume TTS Handler
     const handleSpeak = (text: string) => {
@@ -465,69 +315,87 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
         }
     };
 
-    const handleAIExplain = async () => {
-        if (isGenerating) return;
+    const handleAIExplain = async (forceRefresh = false) => {
+        if (isAnalysisGenerating) return;
 
         // Prepare context
         // Ensure model is loaded
-        if (!isModelLoaded) {
-            await initializeEngine();
-        }
 
-        setIsGenerating(true);
+
         setAiResult('');
-        setAiResultTitle('AI 老师详解');
+        setAiResultTitle('AI老师在线解读');
+        setIsCached(false);
+        setIsAIExpanded(true); // Auto-expand when manually triggering
 
         try {
             await richGrammarLoader.loadDictionary();
-            const explanation = `【Target Grammar】${grammar.title}\n\n【Reference Data】${richGrammarLoader.getExplanation(grammar.title, grammar.reading) || grammar.meaning || "暂无解释"}`;
+            const refData = richGrammarLoader.getExplanation(grammar.title, grammar.reading) || grammar.meaning || "暂无解释";
 
-            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解语法：『${grammar.title}』。
+            // Debugging log
+            console.log('[Grammar AI] Generating request for:', grammar.title);
 
-【资料说明】
-下方的【Referece Data】仅供你参考语法的正确含义。**千万不要照抄参考资料的语气**！参考资料是枯燥的教科书，你的任务是把它“翻译”成风趣的人话。
+            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解语法：${grammar.title}。
 
-【严格执行步骤】
+【重要风格指南】
+- 严禁使用『』或「」来包裹目标语法。
+- 内容必须通俗、接地气，像是在微信聊天。
+
+【任务要求】
 第1步 - 人话解读：
-- 用最通俗、接地气的方式解释『${grammar.title}』。
-- 严禁使用“核心：”、“用法：”等标题。开门见山直接说。
-- 必须指出这个语法的“情绪潜台词”。
+- 直接点出精髓，指出其“情绪潜台词”。
+- 严禁使用任何标题。
 
 第2步 - 换行：
 - 解读写完后，**必须输出一个空行**。
+- **紧接着输出一行标题：例句：** (不要加任何符号)。
 
-第3步 - 神例句：
-- 创作 3 组**全新**的例句（绝对不要和参考资料重复）。
+第3步 - 场景例句：
+- 创作 3 组**全新**的例句。
 - 每一组必须包含：一行日文、一行中文。
 - 格式如下：
   日文句子1
-  (中文翻译1)
+  *中文翻译1*
   日文句子2
-  (中文翻译2)
+  *中文翻译2*
   日文句子3
-  (中文翻译3)
+  *中文翻译3*
 
 【警告】
-如果没有输出3个例句，任务即为失败。不要输出任何“总结”或“注意”废话。
-`;
+如果没有输出3个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
 
-            await generateText(
-                explanation,
+            // Use simple user prompt like Word Interpretation
+            const { fromCache } = await generateText(
+                `Target Grammar: ${grammar.title}`,
                 systemPrompt,
                 (text) => setAiResult(text),
-                { temperature: 0.85, top_p: 0.95 }
+                {
+                    temperature: 0.85,
+                    top_p: 0.95,
+                    cacheKey: `grammar:${grammar.title}`,
+                    forceRefresh
+                }
             );
+
+            setIsCached(fromCache);
 
         } catch (error) {
             console.error("AI Generation failed", error);
             setAiResult("AI 老师好像在休息，请稍后再试...");
         } finally {
-            setIsGenerating(false);
+            // isGenerating handled by store
         }
     };
 
+    const handleAIToggle = () => {
+        if (aiResult) {
+            setIsAIExpanded(!isAIExpanded);
+            return;
+        }
+        handleAIExplain();
+    };
+
     return (
-        <div className="flex flex-col h-full" style={{ background: 'var(--bg-elevated)' }}>
+        <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
             {/* Header - 与单词卡片相同布局 */}
             <div className="p-4" style={{ borderBottom: '1px solid var(--border-default)' }}>
                 <div className="flex justify-between items-start gap-4">
@@ -572,7 +440,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                     isSpeaking ? "bg-[var(--scheme-grammar)]/10 text-[var(--scheme-grammar)] scale-95" : "bg-transparent text-[var(--text-muted)]"
                                 )}
                                 title="朗读"
-                                style={isSpeaking ? { color: grammarColor, backgroundColor: `${grammarColor}1a` } : {}}
+                                style={isSpeaking ? { color: grammarColor, backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)` } : {}}
                             >
                                 <Volume2 className="w-5 h-5" />
                             </button>
@@ -584,29 +452,118 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                     isSaved ? "bg-[var(--scheme-grammar)]/10 text-[var(--scheme-grammar)]" : "bg-transparent text-[var(--text-muted)]"
                                 )}
                                 title={isSaved ? "取消收藏" : "收藏"}
-                                style={isSaved ? { color: grammarColor, backgroundColor: `${grammarColor}1a` } : {}}
+                                style={isSaved ? { color: grammarColor, backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)` } : {}}
                             >
                                 <Bookmark className={clsx("w-5 h-5", isSaved && "fill-current")} />
                             </button>
                         </div>
-                        {/* Tag - AI Grammar Badge */}
+                        {/* Tag - Grammar Badge */}
                         <span className={clsx(
-                            "px-2 py-0.5 text-xs font-bold rounded-md border shadow-sm backdrop-blur-sm",
-                            "bg-white/10 border-white/10"
+                            "px-2.5 py-1 text-[16px] font-bold rounded-lg border shadow-sm backdrop-blur-sm",
+                            (!isWafu && !isMonochrome) ? "bg-white/10 border-white/10" : ""
                         )}
                             style={{
                                 color: grammarColor,
                                 borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
-                                backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)`
+                                backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`
                             }}>
-                            AI 文法
+                            文法
                         </span>
                     </div>
                 </div>
             </div>
 
             {/* Content - 使用与单词卡片相同的内容样式 */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-4 py-4 floating-scrollbar" style={{ scrollbarGutter: 'stable' }}>
+                {/* AI Teacher Trigger & Results - Moved to Top */}
+                <div className="mb-4">
+                    <button
+                        onClick={handleAIToggle}
+                        className="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:opacity-80 active:scale-[0.98] border shadow-sm mb-4"
+                        style={{
+                            backgroundColor: aiResultTitle === 'AI老师在线解读' ? `color-mix(in srgb, ${grammarColor}, transparent 92%)` : `color-mix(in srgb, ${grammarColor}, transparent 96%)`,
+                            borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
+                            color: grammarColor,
+                        }}
+                        disabled={isAnalysisGenerating}
+                    >
+                        {isAnalysisGenerating ? (
+                            <Sparkles className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <>
+                                <Sparkles className="w-4 h-4" />
+                                <span className="font-bold text-sm">AI老师在线解读</span>
+                            </>
+                        )}
+                    </button>
+
+                    {/* AI Results Section */}
+                    <Collapsible isOpen={isAIExpanded && !!aiResult} variant="default">
+                        <div className="p-4 rounded-xl border border-dashed"
+                            style={{
+                                backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`,
+                                borderColor: `color-mix(in srgb, ${grammarColor}, transparent 80%)`,
+                            }}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <Sparkles className="w-4 h-4" style={{ color: grammarColor }} />
+                                <div className="flex-1 text-sm font-bold" style={{ color: grammarColor }}>{aiResultTitle}</div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAIExplain(true);
+                                    }}
+                                    className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                    style={{ color: grammarColor }}
+                                    title="重新生成"
+                                >
+                                    <RotateCw className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                                {(() => {
+                                    const lines = aiResult.split('\n');
+                                    let isExampleSection = false;
+
+                                    return lines.map((line, lineIdx) => {
+                                        const trimmed = line.trim();
+                                        if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
+                                            isExampleSection = true;
+                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
+                                        }
+
+                                        // 如果是例句部分：检测日文和翻译对
+                                        const nextLine = lines[lineIdx + 1]?.trim() || '';
+                                        const isTranslation = trimmed.startsWith('*') && trimmed.endsWith('*');
+                                        const nextIsTranslation = nextLine.startsWith('*');
+
+                                        if (trimmed && !isTranslation && nextIsTranslation) {
+                                            return (
+                                                <UnifiedExampleItem
+                                                    key={lineIdx}
+                                                    japanese={trimmed}
+                                                    chinese={nextLine.slice(1, -1)}
+                                                    onSpeak={handleSpeak}
+                                                    accentColor={grammarColor}
+                                                    targetWord={grammar.title}
+                                                />
+                                            );
+                                        }
+
+                                        // 跳过已被包含在 UnifiedExampleItem 的翻译行
+                                        if (isTranslation && lines[lineIdx - 1]?.trim() && !lines[lineIdx - 1]?.trim().startsWith('*')) return null;
+
+                                        return (
+                                            <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
+                                                <UnifiedHighlighter text={trimmed} target={grammar.title} color={grammarColor} />
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    </Collapsible>
+                </div>
+
                 <div className="space-y-3 pb-2">
                     {/* Rich AI Explanation (Dynamic) */}
                     <RichGrammarContent
@@ -617,74 +574,9 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                     />
                 </div>
 
-                {/* AI Results Section */}
-                {aiResult && (
-                    <div className="mt-4 p-4 rounded-xl border border-dashed animate-in fade-in slide-in-from-bottom-2 duration-300"
-                        style={{
-                            backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`,
-                            borderColor: `color-mix(in srgb, ${grammarColor}, transparent 80%)`,
-                        }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Sparkles className="w-4 h-4" style={{ color: grammarColor }} />
-                            <span className="text-sm font-bold" style={{ color: grammarColor }}>{aiResultTitle}</span>
-                        </div>
-                        <div className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                            {aiResult}
-                        </div>
-                    </div>
-                )}
 
-
-                {/* AI Teacher Trigger */}
-                <div className="mt-3 pt-3 border-t border-dashed border-[var(--border-muted)]">
-                    {/* Progress Bar Section - Only show when initializing/loading model */}
-                    {/* We use isLoading from store which is true during initialization */}
-                    {(isLoading) && (
-                        <div className="mb-3 animate-in fade-in zoom-in-95 duration-300">
-                            <div className="flex justify-between items-end mb-1">
-                                <span className="text-[10px] font-medium opacity-70" style={{ color: grammarColor }}>
-                                    第一次加载比较慢，由于模型较大，请耐心等待...
-                                </span>
-                                <span className="text-[10px] font-bold" style={{ color: grammarColor }}>
-                                    {Math.round((progress || 0) * 100)}%
-                                </span>
-                            </div>
-                            <div className="h-1.5 w-full rounded-full overflow-hidden bg-black/5 dark:bg-white/5">
-                                <div
-                                    className="h-full rounded-full transition-all duration-300 ease-out"
-                                    style={{
-                                        width: `${Math.round((progress || 0) * 100)}%`,
-                                        backgroundColor: grammarColor
-                                    }}
-                                />
-                            </div>
-                            <p className="text-[10px] mt-1 opacity-50 text-center">
-                                (后续使用将无需下载，速度飞快)
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="flex w-full">
-                        <button
-                            onClick={handleAIExplain}
-                            className="flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:opacity-80 active:scale-[0.98] border shadow-sm"
-                            style={{
-                                backgroundColor: aiResultTitle === 'AI 老师详解' ? `color-mix(in srgb, ${grammarColor}, transparent 80%)` : `color-mix(in srgb, ${grammarColor}, transparent 90%)`,
-                                borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
-                                color: grammarColor,
-                            }}
-                            disabled={isGenerating || isLoading}
-                        >
-                            {isGenerating ? (
-                                <Sparkles className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <span className="font-bold text-sm">AI 详解</span>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
 
@@ -697,6 +589,116 @@ export default function InfoPanel() {
     const [yomitanEntry, setYomitanEntry] = useState<YomitanResult | null>(null);
     const [dictLang] = useState<'en' | 'jp' | 'zh'>('zh'); // 默认中文
     const [isLoadingDict, setIsLoadingDict] = useState(false);
+
+    // AI State for Words
+    const { generateText, isAnalysisGenerating, cancelGeneration } = useGeminiStore();
+    const [aiResult, setAiResult] = useState<string>('');
+    const [aiResultTitle, setAiResultTitle] = useState<string>('');
+    const [isCached, setIsCached] = useState(false);
+    const [isAIExpanded, setIsAIExpanded] = useState(false);
+
+    // Clear AI result when switching words (Auto-load cache if available)
+    useEffect(() => {
+        // Cancel any pending generation
+        if (isAnalysisGenerating) cancelGeneration();
+        setAiResult('');
+        setAiResultTitle('');
+        setIsCached(false);
+        setIsAIExpanded(false);
+
+        // Auto-check cache
+        if (token) {
+            const checkCache = async () => {
+                try {
+                    const cacheKey = `word:${token.surface}`;
+                    const res = await fetch(`/api/cache?key=${encodeURIComponent(cacheKey)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && data.text) {
+                            setAiResult(data.text);
+                            setAiResultTitle('AI老师在线解读');
+                            setIsCached(true);
+                            setIsAIExpanded(true);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Silent cache check failed', e);
+                }
+            };
+            checkCache();
+        }
+    }, [token?.surface, token?.reading]);
+
+    const handleAIToggle = () => {
+        if (aiResult) {
+            setIsAIExpanded(!isAIExpanded);
+            return;
+        }
+        handleAIExplain();
+    };
+
+    const handleAIExplain = async (forceRefresh = false) => {
+        if (isAnalysisGenerating || !token) return;
+
+        setAiResult('');
+        setAiResultTitle('AI老师在线解读');
+        setIsCached(false);
+        setIsAIExpanded(true);
+
+        try {
+            // Fetch reference data from dictionary if possible
+            const refDef = yomitanEntry?.definitions[0] || "";
+
+            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解单词：${token.surface}。
+
+【重要风格指南】
+- 严禁使用『』或「」来包裹目标单词。
+- 将这个词“翻译”成风趣的人话。
+
+【任务要求】
+第1步 - 人话解读：
+- 解释单词的含义，并指出它的“语感”或“潜台词”。
+- 严禁任何标题。
+如果有特殊的“潜台词”一定要指出来。
+
+第2步 - 换行：
+- 解读写完后，只输出一个空行。
+- **紧接着输出一行标题：例句：** (不要加任何符号)。
+
+第3步 - 场景例句：
+- 创作 5 个**全新**的生活化例句。
+- 每一组必须包含：一行日文、一行中文（中文必须用 *斜体* 包裹）。
+- **每组例句之间只空一行**。
+- 格式如下：
+  日文句子1
+  *中文翻译1*
+  (空一行)
+  日文句子2
+  *中文翻译2*
+
+【警告】
+严禁输出 <br>、--- 或其他分隔符，请直接使用换行符。
+如果没有输出5个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
+
+            const { fromCache } = await generateText(
+                `Target Word: ${token.surface}`,
+                systemPrompt,
+                (text) => setAiResult(text),
+                {
+                    temperature: 0.85,
+                    top_p: 0.95,
+                    cacheKey: `word:${token.surface}`,
+                    forceRefresh
+                }
+            );
+
+            setIsCached(fromCache);
+
+        } catch (error) {
+            console.error("AI Generation failed", error);
+            setAiResult("AI 老师好像在休息，请稍后再试...");
+        }
+    };
 
     // 当 token 变化时，重置朗读状态（不停止 TTS，让自动朗读正常工作）
     useEffect(() => {
@@ -877,248 +879,85 @@ export default function InfoPanel() {
         }
     };
 
-    // 线性解析所有定义并渲染（Yomitan 中文模式）
+    // 统一渲染单词定义的逻辑
     const renderYomitanDefinitions = () => {
-        if (!yomitanEntry) {
-            return (
-                <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-faint)' }}>
-                    <p className="text-xs">未找到释义</p>
-                </div>
-            );
-        }
+        if (!yomitanEntry) return null;
 
-        // 1. 打散所有定义为单行
         const allLines: string[] = [];
         yomitanEntry.definitions.forEach(def => {
             def.split('\n').filter(line => line.trim()).forEach(line => allLines.push(line));
         });
 
-        // 2. 解析每行并统计类型
-        type ParsedLine = {
-            type: 'definition' | 'example' | 'reference' | 'supplement' | 'etymology' | 'skip';
-            content: string;
-            primary: string;
-            translation: string | null;
-        };
-
-        const parsedLines: ParsedLine[] = allLines.map(line => {
-            // 过滤词头行
-            if (line.includes('【') && line.includes('】')) {
-                return { type: 'skip', content: '', primary: '', translation: null };
-            }
-
-            let type: ParsedLine['type'] = 'definition';
-            let content = line.trim();
-
-            // 识别引用/参考
-            if (/^[⇨→]|^\(反\)|^\(同\)|^\(参\)/.test(content)) {
-                type = 'reference';
-                content = content.replace(/^[⇨→]\s*/, '').trim();
-            }
-            // 识别例句
-            else if (content.startsWith('▲') || content.startsWith('・') || content.startsWith('「')) {
-                type = 'example';
-                content = content.replace(/^[▲・]\s*/, '').trim();
-            }
-            // 识别词源
-            else if (content.startsWith('ᐅ') || content.startsWith('▷')) {
-                type = 'etymology';
-                content = content.replace(/^[ᐅ▷]\s*/, '').trim();
-            }
-            // 识别补充说明
-            else if (content.startsWith('〔') || content.includes('〔')) {
-                type = 'supplement';
-            }
-            // 默认定义
-            else {
-                type = 'definition';
-                content = content.replace(/^[◯①-⑩]|^\d+[.、]\s*/, '').trim();
-            }
-
-            // 分离中日文
-            let hasTranslationSplit = content.includes('。/');
-            let parts = hasTranslationSplit ? content.split('。/') : [content];
-
-            // For examples, also check for 「...」 pattern followed by Chinese
-            if (type === 'example' && !hasTranslationSplit && content.includes('」')) {
-                // Find the last 」 and split there
-                const lastBracketIndex = content.lastIndexOf('」');
-                if (lastBracketIndex > 0 && lastBracketIndex < content.length - 1) {
-                    const japanesePart = content.substring(0, lastBracketIndex + 1).trim();
-                    const chinesePart = content.substring(lastBracketIndex + 1).trim();
-                    if (chinesePart.length > 0) {
-                        hasTranslationSplit = true;
-                        parts = [japanesePart, chinesePart];
-                    }
-                }
-            }
-
-            const primary = parts[0];
-            const translation = parts.length > 1 ? parts.slice(1).join('。/') : null;
-            const finalPrimary = (hasTranslationSplit && content.includes('。/')) ? `${primary}。` : primary;
-
-            return { type, content, primary: finalPrimary, translation };
-        });
-
-        // 3. 统计定义数量
-        const definitionCount = parsedLines.filter(p => p.type === 'definition').length;
-        let defIndex = 0;
-
-        // Resolve theme colors (Dynamic based on POS)
-        const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
-        const isMonochrome = settings.colorScheme === 'monochrome';
-        const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
-
-        // Use monochrome gray for accent text if in monochrome mode
-        const accentTextClass = isMonochrome ? 'text-[var(--text-primary)]' : themeColors.text;
-
-        // 渲染例句文本（内联高亮）
-        const renderExampleWithHighlight = (text: string) => {
-            const parts = text.split(/[～〜]/);
-            if (parts.length === 1) return text;
-            return parts.map((part, i) => (
-                <React.Fragment key={i}>
-                    {part}
-                    {i < parts.length - 1 && (
-                        <span className={clsx(accentTextClass, "font-bold")} style={{ margin: '0 2px' }}>{baseForm}</span>
-                    )}
-                </React.Fragment>
-            ));
-        };
-
-        // TTS helper for individual lines (only Japanese)
-        const speakLine = (text: string, lineIndex: number) => {
-            // Extract only Japanese text (remove Chinese characters)
-            // Japanese text is in item.primary which contains the original Japanese
-            setSpeakingLineIndex(lineIndex);
-            ttsManager.speak(
-                text.replace(/[～〜]/g, baseForm), // Replace placeholder with actual word
-                settings,
-                {
-                    onStart: () => setSpeakingLineIndex(lineIndex),
-                    onEnd: () => setSpeakingLineIndex(null)
-                }
-            );
-        };
-
-        // Play button component
-        const PlayButton = ({ text, lineIndex }: { text: string; lineIndex: number }) => (
-            <button
-                onClick={() => speakLine(text, lineIndex)}
-                style={{
-                    flexShrink: 0,
-                    width: '20px',
-                    height: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '50%',
-                    border: 'none',
-                    backgroundColor: speakingLineIndex === lineIndex ? 'var(--scheme-primary-bg)' : 'transparent',
-                    color: speakingLineIndex === lineIndex ? 'var(--scheme-primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginLeft: '4px'
-                }}
-                title="朗读日文"
-            >
-                <Volume2 style={{ width: '14px', height: '14px' }} />
-            </button>
-        );
-
+        // 解析并渲染每一行
         return (
-            <div className="space-y-3 pb-8">
-                {parsedLines.map((item, i) => {
-                    if (item.type === 'skip') return null;
+            <div className="space-y-4 pb-8">
+                {allLines.map((line, i) => {
+                    const trimmed = line.trim();
+                    if (trimmed.includes('【') && trimmed.includes('】')) return null;
 
-                    if (item.type === 'definition') {
-                        defIndex++;
+                    // 识别是否是例句：通常以 ▲, ・, 「 开头
+                    const isExample = trimmed.startsWith('▲') || trimmed.startsWith('・') || trimmed.startsWith('「');
+
+                    // 增强的分隔逻辑
+                    let japanese = '';
+                    let chinese = '';
+
+                    if (isExample) {
+                        // 1. 先剥离装饰符号
+                        let content = trimmed.replace(/^[▲・◯]\s*/, '').trim();
+
+                        // 2. 尝试多种分隔符
+                        if (content.includes('。/')) {
+                            const p = content.split('。/');
+                            japanese = p[0].trim();
+                            chinese = p.slice(1).join('。/').trim();
+                        } else if (content.includes('」 ')) {
+                            // 针对 「...」 翻译 模式：右引号+空格通常是界限
+                            const sepIdx = content.indexOf('」 ');
+                            japanese = content.substring(0, sepIdx + 1).trim();
+                            chinese = content.substring(sepIdx + 1).trim();
+                        } else if (content.includes(' ')) {
+                            // 最后的手段：普通空格分隔
+                            const firstSpaceIdx = content.indexOf(' ');
+                            japanese = content.substring(0, firstSpaceIdx).trim();
+                            chinese = content.substring(firstSpaceIdx + 1).trim();
+                        } else {
+                            japanese = content;
+                        }
+
+                        // 如果拆分失败（比如 chinese 还是空的，但 japanese 包含了很多空格）
+                        // 这种处理是为了容错
+                        if (japanese && !chinese && japanese.length > 10 && japanese.includes(' ')) {
+                            const lastSpace = japanese.lastIndexOf(' ');
+                            chinese = japanese.substring(lastSpace + 1);
+                            japanese = japanese.substring(0, lastSpace);
+                        }
+
                         return (
-                            <div key={i} className="flex gap-3 mb-3">
-                                {/* 编号（多释义时显示）*/}
-                                {definitionCount > 1 && (
-                                    <span className={clsx("shrink-0 font-bold text-base mt-[2px] font-mono select-none", accentTextClass)}>
-                                        {defIndex}.
-                                    </span>
-                                )}
-                                <div className="flex-1">
-                                    {/* 中文翻译（在上，大/粗）*/}
-                                    {item.translation ? (
-                                        <>
-                                            <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                                                {item.translation}
-                                            </div>
-                                            <div style={{ fontSize: '16px', fontWeight: 'normal', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.85, display: 'flex', alignItems: 'center' }}>
-                                                <span>{item.primary}</span>
-                                                <PlayButton text={item.primary} lineIndex={i} />
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-muted)', lineHeight: 1.4, display: 'flex', alignItems: 'center' }}>
-                                            <span>{item.primary}</span>
-                                            <PlayButton text={item.primary} lineIndex={i} />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <UnifiedExampleItem
+                                key={i}
+                                japanese={japanese}
+                                chinese={chinese}
+                                onSpeak={(text) => {
+                                    setSpeakingLineIndex(i);
+                                    ttsManager.speak(text.replace(/[～〜]/g, baseForm), settings, {
+                                        onStart: () => setSpeakingLineIndex(i),
+                                        onEnd: () => setSpeakingLineIndex(null)
+                                    });
+                                }}
+                                accentColor={wordAccentColor}
+                                targetWord={token.surface}
+                                isSpeaking={speakingLineIndex === i}
+                            />
                         );
                     }
 
-                    if (item.type === 'example') {
-                        return (
-                            <div key={i} style={{ marginLeft: definitionCount > 1 ? '24px' : '0', marginTop: '8px', marginBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                {/* 立体阴影白色毛玻璃胶囊 */}
-                                <span className={clsx(
-                                    "flex items-center justify-center w-5 h-5 text-[11px] font-bold rounded-[5px] border shadow-sm backdrop-blur-md mt-[2px] shrink-0",
-                                    "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]",
-                                    "dark:bg-black/20 dark:text-gray-400 dark:border-white/10"
-                                )}>
-                                    例
-                                </span>
-                                <div style={{ flex: 1 }}>
-                                    {/* Japanese example with play button */}
-                                    <div style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', alignItems: 'center' }}>
-                                        <span>{renderExampleWithHighlight(item.primary)}</span>
-                                        <PlayButton text={item.primary} lineIndex={i} />
-                                    </div>
-                                    {/* Chinese translation on new line */}
-                                    {item.translation && (
-                                        <div style={{ fontSize: '16px', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
-                                            {item.translation}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    }
-
-                    if (item.type === 'reference') {
-                        return (
-                            <div key={i} style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px' }}>
-                                ⇨ {item.primary}
-                                {item.translation && <span style={{ marginLeft: '4px', color: 'var(--text-faint)' }}>({item.translation})</span>}
-                            </div>
-                        );
-                    }
-
-                    if (item.type === 'etymology') {
-                        return (
-                            <div key={i} style={{ fontSize: '16px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '8px', lineHeight: 1.5 }}>
-                                ᐅ {item.content}
-                            </div>
-                        );
-                    }
-
-                    if (item.type === 'supplement') {
-                        return (
-                            <div key={i} className="mt-1"
-                                style={{ fontSize: '16px', fontWeight: 'normal', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                                {item.content}
-                            </div>
-                        );
-                    }
-
-                    return null;
+                    // 普通正文行
+                    return (
+                        <div key={i} className="text-[16px] leading-relaxed text-[var(--text-muted)]">
+                            <UnifiedHighlighter text={trimmed} target={token.surface} color={wordAccentColor} />
+                        </div>
+                    );
                 })}
             </div>
         );
@@ -1173,6 +1012,7 @@ export default function InfoPanel() {
     const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-muted)]';
 
     const isWafu = settings.colorScheme === 'wafu';
+    const isMonochrome = settings.colorScheme === 'monochrome';
 
     // Helper to map POS to safe CSS variable key
     const getWafuPosKey = (pos: string) => {
@@ -1192,9 +1032,16 @@ export default function InfoPanel() {
         if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
         return 'other';
     };
-
     const posKey = getWafuPosKey(token.pos);
-    const isMonochrome = settings.colorScheme === 'monochrome';
+
+    // Resolve accent color for UI elements (like AI button)
+    // Use the glow color as the base brand color for this POS
+    const wordAccentColor = isMonochrome
+        ? 'var(--text-muted)'
+        : isWafu
+            ? `var(--wafu-${posKey}-text)`
+            : (POS_GLOW_COLORS[token.pos] || POS_GLOW_COLORS[PartOfSpeech.OTHER]);
+
     const wafuStyle = (isWafu || isMonochrome) ? {
         background: `var(--wafu-${posKey}-bg)`,
         color: `var(--wafu-${posKey}-text)`,
@@ -1202,7 +1049,7 @@ export default function InfoPanel() {
     } : {};
 
     return (
-        <div className="flex flex-col h-full" style={{ background: 'var(--bg-elevated)' }}>
+        <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
             {/* Header / Word Info - Compact Version for Right Column */}
             <div className="p-4" style={{ borderBottom: '1px solid var(--border-default)' }}>
                 <div className="flex justify-between items-start gap-4">
@@ -1215,13 +1062,15 @@ export default function InfoPanel() {
                                     <PitchAccent pattern={token.pitch} />
                                 </div>
                             )}
-                            <h2
-                                onClick={handleSpeak}
-                                title="点击朗读"
-                                className={clsx("text-3xl font-black tracking-tight leading-none break-words w-full cursor-pointer hover:opacity-80 transition-opacity", (!isWafu && !isMonochrome) && textClass)} style={(isWafu || isMonochrome) ? { color: `var(--wafu-${posKey}-text)` } : {}}
-                            >
-                                {token.surface}
-                            </h2>
+                            <div className="flex flex-wrap items-end gap-x-3 w-full">
+                                <h2
+                                    onClick={handleSpeak}
+                                    title="点击朗读"
+                                    className={clsx("text-3xl font-black tracking-tight leading-none break-words cursor-pointer hover:opacity-80 transition-opacity", (!isWafu && !isMonochrome) && textClass)} style={(isWafu || isMonochrome) ? { color: `var(--wafu-${posKey}-text)` } : {}}
+                                >
+                                    {token.surface}
+                                </h2>
+                            </div>
                         </div>
 
                         {/* Reading & Meta - Allow wrapping */}
@@ -1233,6 +1082,30 @@ export default function InfoPanel() {
                                 {token.romaji}
                             </span>
                         </div>
+
+                        {/* Base Form Link (Capsule Style) */}
+                        {isInflected && (
+                            <button
+                                onClick={() => {
+                                    const baseToken: WordToken = {
+                                        ...token,
+                                        surface: baseForm,
+                                        reading: '',
+                                        romaji: '',
+                                    };
+                                    useAppStore.getState().setSelectedToken(baseToken);
+                                }}
+                                className="flex items-center gap-1 mt-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all hover:opacity-80 active:scale-[0.95]"
+                                style={{
+                                    backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 92%)`,
+                                    borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
+                                    color: wordAccentColor
+                                }}
+                            >
+                                <span>原形: {baseForm}</span>
+                                <span className="opacity-60 ml-0.5">→</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Right Content: Actions & POS */}
@@ -1242,10 +1115,14 @@ export default function InfoPanel() {
                             <button
                                 onClick={handleSpeak}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300",
-                                    "hover:bg-[var(--scheme-accent-bg)] hover:text-[var(--scheme-accent)]",
-                                    isSpeaking ? "bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)] scale-95" : "bg-transparent text-[var(--text-muted)]"
+                                    "p-2 rounded-lg transition-all duration-300 active:scale-95",
+                                    !isSpeaking && "text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5"
                                 )}
+                                style={isSpeaking ? {
+                                    backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 85%)`,
+                                    color: wordAccentColor,
+                                    boxShadow: `0 0 10px ${wordAccentColor}33`
+                                } : {}}
                                 title="朗读"
                             >
                                 <Volume2 className="w-5 h-5" />
@@ -1253,73 +1130,143 @@ export default function InfoPanel() {
                             <button
                                 onClick={handleSaveVocab}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300",
-                                    "hover:bg-[var(--scheme-accent-bg)] hover:text-[var(--scheme-accent)]",
-                                    isSaved ? "bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)]" : "bg-transparent text-[var(--text-muted)]"
+                                    "p-2 rounded-lg transition-all duration-300 active:scale-95",
+                                    !isSaved && "text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5"
                                 )}
+                                style={isSaved ? {
+                                    backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 85%)`,
+                                    color: wordAccentColor,
+                                    boxShadow: `0 0 10px ${wordAccentColor}33`
+                                } : {}}
                                 title={isSaved ? "已收藏" : "收藏单词"}
                             >
                                 <Bookmark className={clsx("w-5 h-5", isSaved && "fill-current")} />
                             </button>
                         </div>
 
-                        {/* POS Tag - Minimalist */}
-                        <div className="flex flex-col items-end">
-                            <span className={clsx(
-                                "text-xs font-bold px-2 py-0.5 rounded border tracking-wide",
-                                !isWafu && "bg-[var(--bg-subtle)]"
-                            )} style={isWafu ? wafuStyle : { color: textClass, borderColor: `${textClass}40` }}>
-                                {token.pos}
-                            </span>
-                            {token.posDetail && !['*', 'Common'].includes(token.posDetail) && (
-                                <span className="text-[10px] text-[var(--text-faint)] mt-0.5 text-right max-w-[100px] leading-tight opacity-70">
-                                    {token.posDetail}
-                                </span>
-                            )}
-                        </div>
+                        {/* POS Tag - Fixed at bottom-right of header */}
+                        <span className={clsx(
+                            "px-2.5 py-1 text-[16px] font-bold rounded-lg border shadow-sm backdrop-blur-sm",
+                            (!isWafu && !isMonochrome) ? "bg-white/10 border-white/10" : ""
+                        )}
+                            style={{
+                                color: wordAccentColor,
+                                borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
+                                backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`
+                            }}>
+                            {token.pos}
+                        </span>
                     </div>
                 </div>
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-4 py-4 floating-scrollbar" style={{ scrollbarGutter: 'stable' }}>
 
-                {/* Inflection Link */}
-                {isInflected && (
+                {/* AI Section for Words */}
+                <div className="mb-4">
                     <button
-                        onClick={() => {
-                            const baseToken: WordToken = {
-                                ...token,
-                                surface: baseForm,
-                                reading: '',
-                                romaji: '',
-                            };
-                            useAppStore.getState().setSelectedToken(baseToken);
+                        onClick={handleAIToggle}
+                        className="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:opacity-80 active:scale-[0.98] border shadow-sm mb-4"
+                        style={{
+                            backgroundColor: aiResultTitle === 'AI老师在线解读' ? `color-mix(in srgb, ${wordAccentColor}, transparent 92%)` : `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`,
+                            borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
+                            color: wordAccentColor,
                         }}
-                        className={clsx(
-                            "flex items-center gap-2 text-[16px] px-4 py-2 rounded-lg border transition-colors cursor-pointer w-full mb-4 justify-center",
-                            (!isWafu && !isMonochrome) && [colorScheme.text, colorScheme.bg, colorScheme.border],
-                            "hover:brightness-95"
-                        )}
-                        style={(isWafu || isMonochrome) ? wafuStyle : {}}
+                        disabled={isAnalysisGenerating}
                     >
-                        <ArrowRight className="w-4 h-4" />
-                        <span>查看原形: <span className="font-bold">{baseForm}</span></span>
+                        {isAnalysisGenerating ? (
+                            <Sparkles className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <>
+                                <Sparkles className="w-4 h-4" />
+                                <span className="font-bold text-sm">AI老师在线解读</span>
+                            </>
+                        )}
                     </button>
-                )}
 
-                {isLoadingDict ? (
-                    <div className="space-y-3 animate-pulse">
-                        <div className="h-3 bg-gray-100 rounded w-2/3"></div>
-                        <div className="h-3 bg-gray-100 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-100 rounded w-5/6"></div>
-                    </div>
-                ) : (
-                    renderYomitanDefinitions()
-                )}
+                    {/* AI Results Section */}
+                    {/* AI Results Section */}
+                    <Collapsible isOpen={isAIExpanded && !!aiResult} variant="default">
+                        <div className="p-4 rounded-xl border border-dashed"
+                            style={{
+                                backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`,
+                                borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 80%)`,
+                            }}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <Sparkles className="w-4 h-4" style={{ color: wordAccentColor }} />
+                                <div className="flex-1 text-sm font-bold" style={{ color: wordAccentColor }}>{aiResultTitle}</div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAIExplain(true);
+                                    }}
+                                    className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                    style={{ color: wordAccentColor }}
+                                    title="重新生成"
+                                >
+                                    <RotateCw className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                                {(() => {
+                                    const lines = aiResult.split('\n');
+                                    let isExampleSection = false;
+
+                                    return lines.map((line, lineIdx) => {
+                                        const trimmed = line.trim();
+
+                                        if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
+                                            isExampleSection = true;
+                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
+                                        }
+
+                                        // 检测例句模式
+                                        const nextLine = lines[lineIdx + 1]?.trim() || '';
+                                        const isTranslation = trimmed.startsWith('*') && trimmed.endsWith('*');
+                                        const nextIsTranslation = nextLine.startsWith('*');
+
+                                        if (trimmed && !isTranslation && nextIsTranslation) {
+                                            return (
+                                                <UnifiedExampleItem
+                                                    key={lineIdx}
+                                                    japanese={trimmed}
+                                                    chinese={nextLine.slice(1, -1)}
+                                                    onSpeak={handleSpeak}
+                                                    accentColor={wordAccentColor}
+                                                    targetWord={token.surface}
+                                                />
+                                            );
+                                        }
+
+                                        if (isTranslation && lines[lineIdx - 1]?.trim() && !lines[lineIdx - 1]?.trim().startsWith('*')) return null;
+
+                                        return (
+                                            <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
+                                                <UnifiedHighlighter text={trimmed} target={token.surface} color={wordAccentColor} />
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    </Collapsible>
+                </div>
+
+                <div>
+                    {isLoadingDict ? (
+                        <div className="space-y-3 animate-pulse">
+                            <div className="h-3 bg-gray-100 rounded w-2/3"></div>
+                            <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                            <div className="h-3 bg-gray-100 rounded w-5/6"></div>
+                        </div>
+                    ) : (
+                        renderYomitanDefinitions()
+                    )}
+                </div>
 
                 {/* Pitch Footer Removed */}
             </div>
-        </div>
+        </div >
     );
 }

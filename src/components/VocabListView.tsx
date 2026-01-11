@@ -8,6 +8,7 @@ import { COLOR_THEMES } from '@/lib/colorThemes';
 import { ttsManager } from '@/lib/tts/manager';
 
 import { PartOfSpeech, WordToken, VocabItem } from '@/types';
+import clsx from 'clsx';
 
 export default function VocabListView() {
     const { vocabList, removeVocab, clearVocab } = useVocabStore();
@@ -204,7 +205,7 @@ export default function VocabListView() {
                     className="h-14 flex items-center px-4 justify-between rounded-2xl glass-panel transition-all"
                     style={{
                         border: `1px solid var(--border-default)`,
-                        background: isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.65)',
+                        background: (settings.colorScheme === 'wafu') ? 'transparent' : (isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.65)'),
                         boxShadow: 'var(--shadow-sm)'
                     }}
                 >
@@ -225,13 +226,13 @@ export default function VocabListView() {
                             <>
                                 <button
                                     onClick={handleExportCSV}
-                                    className="px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border bg-white dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20"
+                                    className={`px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white'} dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20`}
                                 >
                                     保存 CSV
                                 </button>
                                 <button
                                     onClick={handleExportDOCX}
-                                    className="px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border bg-white dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20"
+                                    className={`px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white'} dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20`}
                                 >
                                     保存 Word
                                 </button>
@@ -324,22 +325,61 @@ export default function VocabListView() {
                                             </div>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                 {items.map((item) => {
-                                                    // Force use STANDARD theme for colorful display
+                                                    const isWafu = settings.colorScheme === 'wafu';
+                                                    const isMonochrome = settings.colorScheme === 'monochrome';
+
+                                                    // Force use STANDARD theme for colorful display if not in special modes
                                                     const activeTheme = COLOR_THEMES['standard'];
                                                     const colorScheme = activeTheme.colors[item.pos as PartOfSpeech] || activeTheme.colors[PartOfSpeech.OTHER];
+
+                                                    // Helper to map POS to safe CSS variable key
+                                                    const getWafuPosKey = (pos: string) => {
+                                                        const lower = pos.toLowerCase();
+                                                        if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+                                                        if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
+                                                        if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
+                                                        if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
+                                                        if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词')) return 'adjective';
+                                                        if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+                                                        if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
+                                                        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
+                                                        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
+                                                        if (lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词')) return 'interjection';
+                                                        if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
+                                                        if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
+                                                        if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
+                                                        return 'other';
+                                                    };
+                                                    const posKey = getWafuPosKey(item.pos);
+
+                                                    // Final styles
+                                                    const cardStyle = (isWafu || isMonochrome) ? {
+                                                        background: `var(--wafu-${posKey}-bg)`,
+                                                        color: `var(--wafu-${posKey}-text)`,
+                                                        borderColor: `var(--wafu-${posKey}-border)`
+                                                    } : {};
+
+                                                    const cardClass = (isWafu || isMonochrome)
+                                                        ? "group relative px-4 py-3 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col gap-1"
+                                                        : `group relative px-4 py-3 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col gap-1 ${colorScheme.bg} ${colorScheme.border}`;
+
+                                                    const textClass = (isWafu || isMonochrome)
+                                                        ? "" // Colors already handled by style object
+                                                        : colorScheme.text;
 
                                                     return (
                                                         <div
                                                             key={item.id}
                                                             onClick={() => handleVocabClick(item)}
-                                                            className={`group relative px-4 py-3 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col gap-1 ${colorScheme.bg} ${colorScheme.border}`}
+                                                            className={cardClass}
+                                                            style={cardStyle}
                                                         >
                                                             <div className="flex items-baseline gap-2">
-                                                                <span className={`text-lg font-bold ${colorScheme.text}`}>{item.word}</span>
-                                                                <span className={`text-xs ${colorScheme.text} opacity-70`}>{item.reading}</span>
+                                                                <span className={clsx("text-lg font-bold", textClass)}>{item.word}</span>
+                                                                <span className={clsx("text-xs opacity-70", textClass)}>{item.reading}</span>
                                                             </div>
 
-                                                            <div className={`text-sm opacity-80 line-clamp-2 ${colorScheme.text}`}>
+                                                            <div className={clsx("text-sm opacity-80 line-clamp-2", textClass)}>
                                                                 {item.meaning}
                                                             </div>
 
@@ -348,7 +388,7 @@ export default function VocabListView() {
                                                                     e.stopPropagation();
                                                                     removeVocab(item.id);
                                                                 }}
-                                                                className="absolute top-2 right-2 w-6 h-6 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 transition-all hover:bg-amber-500/20 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                                                className="absolute top-2 right-2 w-6 h-6 bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)] rounded-md border border-[var(--scheme-accent)]/10 transition-all hover:bg-[var(--scheme-accent-bg)]/80 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
                                                                 title="取消收藏"
                                                             >
                                                                 <Star className="w-3.5 h-3.5 fill-current" />

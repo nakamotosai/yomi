@@ -239,15 +239,13 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     return (
                         <div
                             key={sentence.id}
-                            className="rounded-xl shadow-sm relative transition-shadow glass-card overflow-hidden"
+                            className="rounded-xl shadow-sm relative transition-shadow border border-[var(--border-muted)] backdrop-blur-xl overflow-hidden"
                             style={{
-                                background: 'var(--bg-elevated)',
-                                border: '1px solid var(--border-default)',
                                 boxShadow: 'var(--shadow-sm)'
                             }}
                         >
                             {/* Zone 1: Reading Area */}
-                            <div className="p-5 relative">
+                            <div className="p-5 relative bg-white/20 dark:bg-black/20">
                                 {/* Sentence number (Watermark style) */}
                                 <div
                                     className="absolute bottom-0 right-4 text-5xl font-black italic tracking-tighter leading-none select-none pointer-events-none"
@@ -362,8 +360,9 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                             "ml-2 w-7 h-7 flex items-center justify-center rounded-full transition-all self-end mb-1",
                                             isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id
                                                 ? "bg-emerald-100 text-emerald-600 scale-110 shadow-sm"
-                                                : "text-slate-300 hover:text-emerald-600 hover:bg-emerald-50"
+                                                : "hover:text-emerald-600 hover:bg-emerald-50"
                                         )}
+                                        style={{ color: isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id ? undefined : 'var(--text-muted)' }}
                                         title="この文を再生"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -379,7 +378,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
 
                             {/* Zone 2: Learning Panel */}
                             <div
-                                className="px-5 py-4 border-t border-[var(--border-muted)] bg-gray-50/50 dark:bg-black/20"
+                                className="px-5 py-4 border-t border-black/5 dark:border-white/5 bg-transparent"
                             >
                                 <div className="space-y-4">
                                     {/* Translation */}

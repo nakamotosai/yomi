@@ -275,7 +275,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                     ].map((scheme) => (
                                         <button
                                             key={scheme.id}
-                                            onClick={() => updateSettings({ colorScheme: scheme.id as 'morandi' | 'wafu' })}
+                                            onClick={() => updateSettings({ colorScheme: scheme.id as 'morandi' | 'wafu' | 'monochrome' })}
                                             className={clsx(
                                                 "flex flex-col items-center justify-center p-3 rounded-xl border transition-all relative overflow-hidden",
                                                 settings.colorScheme === scheme.id ? "ring-2 ring-offset-1 ring-blue-500/50" : ""

@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
     Languages,
     PlayCircle,
@@ -6,6 +7,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAppStore } from '@/store/useAppStore';
 
 interface ReaderHeaderProps {
     isTranslationVisible: boolean;
@@ -26,15 +28,19 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     onPlay,
     onStop,
 }) => {
-    const isDark = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+    const [mounted, setMounted] = useState(false);
+    const { settings } = useAppStore();
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    const isDark = mounted && settings.theme === 'dark';
 
     return (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 w-full h-16 px-4 shrink-0 select-none">
-            {/* Left Placeholder (to balance the grid) */}
-            <div className="h-full" />
-
-            {/* Middle Column: Fixed Center Pair */}
-            <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none">
+            {/* Left Column: Fixed Left Pair */}
+            <div className="flex-1 flex items-center justify-start gap-3 min-w-0">
                 {/* Translate Button */}
                 <button
                     onClick={(e) => {
@@ -42,42 +48,44 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
                         onToggleTranslation();
                     }}
                     className={clsx(
-                        "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-44 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border",
+                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
                         // Active State
-                        isTranslationVisible && (isDark ? "rainbow-highlight" : "ring-2 ring-[var(--scheme-primary)]/20 bg-[var(--scheme-primary)]/5"),
-                        // Theme Styles
-                        isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
+                        isTranslationVisible
+                            ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
+                            : "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                     )}
+                    style={{ color: 'var(--text-muted)' }}
                     title={isTranslationVisible ? "翻訳を闭じる" : "翻訳を表示"}
                 >
                     {isLoadingTranslation ? (
                         <RefreshCw className="w-5 h-5 animate-spin" />
                     ) : (
-                        <Languages className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
+                        <Languages className="w-5 h-5" />
                     )}
-                    <span className="text-[14px] font-medium tracking-wide">全文翻訳</span>
+                    <span className="text-[14px] font-medium tracking-wide truncate">全文翻訳</span>
                 </button>
 
                 {/* Play/Pause Button */}
                 <button
                     onClick={(e) => { e.stopPropagation(); onPlay(); }}
                     className={clsx(
-                        "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-44 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border",
+                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
                         // Active State
-                        (isSpeaking && !isPaused) && (isDark ? "rainbow-highlight" : "ring-2 ring-[var(--scheme-primary)]/20 bg-[var(--scheme-primary)]/5"),
-                        // Theme Styles
-                        isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
+                        (isSpeaking && !isPaused)
+                            ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
+                            : "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                     )}
+                    style={{ color: 'var(--text-muted)' }}
                 >
                     {isSpeaking && !isPaused ? (
                         <>
                             <PauseCircle className="w-5 h-5" />
-                            <span className="text-[14px] font-medium tracking-wide">一时停止</span>
+                            <span className="text-[14px] font-medium tracking-wide truncate">一时停止</span>
                         </>
                     ) : (
                         <>
-                            <PlayCircle className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
-                            <span className="text-[14px] font-medium tracking-wide">
+                            <PlayCircle className="w-5 h-5" />
+                            <span className="text-[14px] font-medium tracking-wide truncate">
                                 {isPaused ? "再開" : "全文朗读"}
                             </span>
                         </>
@@ -91,9 +99,10 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
                     <button
                         onClick={(e) => { e.stopPropagation(); onStop(); }}
                         className={clsx(
-                            "flex items-center justify-center gap-2 p-2 rounded-2xl transition-all duration-300 w-24 h-10 shadow-sm active:scale-95 active:shadow-none whitespace-nowrap border animate-in fade-in slide-in-from-left-2",
-                            isDark ? "bg-[var(--bg-muted)] border-white/10 text-[var(--text-muted)]" : "bg-white border-[var(--border-default)] text-[var(--text-secondary)]"
+                            "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 w-24 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10 animate-in fade-in slide-in-from-left-2",
+                            "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                         )}
+                        style={{ color: 'var(--text-muted)' }}
                         title="停止"
                     >
                         <StopCircle className="w-5 h-5" />

@@ -3,8 +3,12 @@
  * 处理密码哈希、JWT Token 生成/验证
  */
 
-// JWT 密钥（生产环境应使用环境变量）
-const JWT_SECRET = 'yomi-jwt-secret-change-in-production';
+// JWT 密钥
+const JWT_SECRET = process.env.JWT_SECRET || 'yomi-jwt-secret-dev-only';
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.warn('WARNING: JWT_SECRET is not set in production environment!');
+}
 const JWT_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 天
 
 export interface User {

@@ -175,7 +175,7 @@ export const useAppStore = create<AppState>()(
             layout: {
                 leftSidebarWidth: 360, // ~25% of 1440px
                 rightSidebarWidth: 360, // ~25% of 1440px
-                leftTopHeight: 263, // Height of top card
+                leftTopHeight: 250, // Height of top card
                 leftInputHeight: 180, // Height of input card
                 rightBottomHeight: 240, // symmetrical height
             },

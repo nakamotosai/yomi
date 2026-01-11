@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Eraser, ImagePlus, Languages, Loader2 } from 'lucide-react';
-import { VoiceInput } from '@/components/InputMethods';
 import clsx from 'clsx';
 import { createWorker, PSM } from 'tesseract.js';
 import { translateText } from '@/lib/translate';
@@ -158,25 +157,12 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
     return (
         <div
             ref={containerRef}
-            className={clsx(
-                "group relative rounded-xl p-3 transition-all flex flex-col h-full",
-                isDark && "rainbow-highlight"
-            )}
-            style={{
-                background: isDark
-                    ? 'var(--bg-muted)'
-                    : 'var(--glass-bg)',
-                border: isDark
-                    ? 'none'
-                    : '1px solid var(--border-default)',
-            }}
+            className="group relative p-3 transition-all flex flex-col h-full bg-transparent border-none shadow-none"
         >
             <textarea
                 ref={textareaRef}
-                className="w-full flex-1 p-1 rounded-lg resize-none outline-none text-sm bg-transparent custom-scrollbar border-none"
-                style={{
-                    color: 'var(--text-primary)',
-                }}
+                className="w-full flex-1 p-1 rounded-lg resize-none !outline-none text-sm bg-transparent custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none"
+                style={{ color: 'var(--text-muted)' }}
                 placeholder="Ctrl+V で画像貼り付け..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
@@ -189,7 +175,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                 className="flex items-center justify-between pt-2 mt-1"
                 style={{ borderTop: `1px solid var(--border-muted)` }}
             >
-                <div className="text-[10px] font-mono flex items-center gap-2" style={{ color: 'var(--text-faint)' }}>
+                <div className="text-[10px] font-mono flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
                     <span>{inputText.length}字</span>
 
                     {/* Translation Button */}
@@ -199,8 +185,8 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                             disabled={isTranslating}
                             className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs transition-colors disabled:opacity-50"
                             style={{
-                                background: isDark ? 'rgba(251, 191, 36, 0.15)' : 'var(--bg-elevated)',
-                                color: isDark ? '#fbbf24' : 'var(--text-primary)',
+                                background: isDark ? 'rgba(100, 116, 139, 0.15)' : 'var(--bg-elevated)',
+                                color: 'var(--text-muted)',
                                 border: isDark ? 'none' : '1px solid var(--border-default)'
                             }}
                         >
@@ -224,7 +210,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                     />
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-1.5 rounded-md transition-all"
+                        className="p-1.5 rounded-md transition-all hover:bg-black/5 dark:hover:bg-white/5"
                         style={{ color: 'var(--text-muted)' }}
                         title="画像OCR"
                     >
@@ -232,12 +218,11 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                     </button>
 
                     {/* Voice */}
-                    <VoiceInput onResult={(text) => setInputText(inputText + text)} />
 
                     {/* Clear */}
                     <button
                         onClick={onClear}
-                        className="p-1.5 rounded-md transition-all"
+                        className="p-1.5 rounded-md transition-all hover:bg-black/5 dark:hover:bg-white/5"
                         style={{ color: 'var(--text-muted)' }}
                         title="クリア"
                     >

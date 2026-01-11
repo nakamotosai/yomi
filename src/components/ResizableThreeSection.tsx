@@ -10,6 +10,8 @@ interface ResizableThreeSectionProps {
     initialBottomHeight?: number;
     onTopHeightChange?: (height: number) => void;
     onBottomHeightChange?: (height: number) => void;
+    minTopHeight?: number;
+    minBottomHeight?: number;
     minSectionHeight?: number;
     gap?: number;
 }
@@ -23,6 +25,8 @@ export default function ResizableThreeSection({
     onTopHeightChange,
     onBottomHeightChange,
     minSectionHeight = 80,
+    minTopHeight,
+    minBottomHeight,
     gap = 16
 }: ResizableThreeSectionProps) {
     const [topHeight, setTopHeight] = useState(initialTopHeight);
@@ -30,13 +34,17 @@ export default function ResizableThreeSection({
     const [dragging, setDragging] = useState<'top' | 'bottom' | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        setTopHeight(initialTopHeight);
-    }, [initialTopHeight]);
+    // Default specific mins to generic min if not provided
+    const effectiveMinTop = minTopHeight ?? minSectionHeight;
+    const effectiveMinBottom = minBottomHeight ?? minSectionHeight;
 
     useEffect(() => {
-        setBottomHeight(initialBottomHeight);
-    }, [initialBottomHeight]);
+        setTopHeight(Math.max(initialTopHeight, effectiveMinTop));
+    }, [initialTopHeight, effectiveMinTop]);
+
+    useEffect(() => {
+        setBottomHeight(Math.max(initialBottomHeight, effectiveMinBottom));
+    }, [initialBottomHeight, effectiveMinBottom]);
 
     const handleMouseDown = useCallback((splitter: 'top' | 'bottom') => (e: React.MouseEvent) => {
         e.preventDefault();
@@ -58,7 +66,7 @@ export default function ResizableThreeSection({
                 let newTopHeight = relativeY - gap / 2;
 
                 // Ensure minimum top height
-                newTopHeight = Math.max(minSectionHeight, newTopHeight);
+                newTopHeight = Math.max(effectiveMinTop, newTopHeight);
 
                 // Ensure middle section has minimum height
                 const remainingForMiddleAndBottom = containerHeight - newTopHeight - 2 * gap - bottomHeight;
@@ -66,13 +74,13 @@ export default function ResizableThreeSection({
                     newTopHeight = containerHeight - 2 * gap - bottomHeight - minSectionHeight;
                 }
 
-                setTopHeight(Math.max(minSectionHeight, newTopHeight));
+                setTopHeight(Math.max(effectiveMinTop, newTopHeight));
             } else if (dragging === 'bottom') {
                 // Dragging the second splitter (between middle and bottom)
                 let newBottomHeight = containerHeight - relativeY - gap / 2;
 
                 // Ensure minimum bottom height
-                newBottomHeight = Math.max(minSectionHeight, newBottomHeight);
+                newBottomHeight = Math.max(effectiveMinBottom, newBottomHeight);
 
                 // Ensure middle section has minimum height
                 const remainingForMiddle = containerHeight - topHeight - 2 * gap - newBottomHeight;
@@ -80,7 +88,7 @@ export default function ResizableThreeSection({
                     newBottomHeight = containerHeight - topHeight - 2 * gap - minSectionHeight;
                 }
 
-                setBottomHeight(Math.max(minSectionHeight, newBottomHeight));
+                setBottomHeight(Math.max(effectiveMinBottom, newBottomHeight));
             }
         };
 

@@ -5,13 +5,16 @@ compatibility_date = "2024-01-01"
 command = "npm run build"
 
 [site]
-bucket = ".next/static"
+bucket = ".vercel/output/static"
+
+[vars]
+JWT_SECRET = "dev-secret-do-not-use-in-prod"
 
 # Cloudflare D1 数据库绑定
 [[d1_databases]]
 binding = "DB"
 database_name = "yomi-db"
-database_id = "YOUR_DATABASE_ID_HERE"
+database_id = "YOUR_DATABASE_ID_HERE" # 请替换为真实的 Cloudflare D1 Database ID
 
 # Cloudflare Pages specific settings
 # Note: When using GitHub integration, most settings are auto-detected

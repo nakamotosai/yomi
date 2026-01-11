@@ -5,13 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "preview": "npm run pages:build && wrangler pages dev .vercel/output/static",
     "start": "next start",
     "lint": "eslint src --max-warnings 100",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {
-    "@mlc-ai/web-llm": "^0.2.80",
+    "@google/generative-ai": "^0.24.1",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "axios": "^1.13.2",
@@ -41,6 +43,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.16",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

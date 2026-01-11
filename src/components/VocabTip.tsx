@@ -8,6 +8,7 @@ import { ttsManager } from '@/lib/tts/manager';
 import { Star } from 'lucide-react';
 import { COLOR_THEMES } from '@/lib/colorThemes';
 import clsx from 'clsx';
+import { Collapsible } from './Collapsible';
 
 interface VocabTipProps {
     tokens: WordToken[];
@@ -135,6 +136,10 @@ export default function VocabTip({ tokens }: VocabTipProps) {
     const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar, isSpeaking } = useAppStore();
     const { vocabList, addVocab, removeVocab, isWordSaved } = useVocabStore();
 
+    // Dynamic Noun Color Logic:
+    const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
+    const nounBarColor = isMorandi ? '#498B74' : 'var(--color-noun)';
+
     const worthyTokens = useMemo(() => filterWorthyVocab(tokens), [tokens]);
 
     // 组件加载时获取释义
@@ -200,7 +205,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
-                    <span className="w-[3px] h-3 bg-[var(--scheme-primary)] rounded-sm mr-2 block"></span>
+                    <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: nounBarColor }}></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         生词
                     </h3>
@@ -251,9 +256,9 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                         "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border cursor-pointer hover:brightness-110",
                                         // If Wafu or Monochrome is active, we disable standard classes
                                         // However, inline style always wins.
-                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && bgClass,
-                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && textClass,
-                                        (!isWafu && !settings.colorScheme?.includes('monochrome')) && borderClass
+                                        (!isWafu && settings.colorScheme !== 'monochrome') && bgClass,
+                                        (!isWafu && settings.colorScheme !== 'monochrome') && textClass,
+                                        (!isWafu && settings.colorScheme !== 'monochrome') && borderClass
                                     )}
                                     style={isWafu || settings.colorScheme === 'monochrome' ? wafuStyle : undefined}
                                 >
@@ -279,7 +284,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
             </div>
 
             {/* List Content (Visible when expanded) - Placed below header with indentation */}
-            {isExpanded && (
+            <Collapsible isOpen={isExpanded} variant="default">
                 <div className="flex flex-col gap-1 mt-2 ml-[60px] border-l-2 border-[var(--border-muted)] pl-2">
                     {vocabEntries.map((entry, idx) => {
                         const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
@@ -324,8 +329,8 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                         className={clsx(
                                             "shrink-0 w-4 h-4 transition-all focus:outline-none flex items-center justify-center -ml-1 mr-1",
                                             isSaved
-                                                ? "text-amber-400 fill-amber-400"
-                                                : "text-slate-300 hover:text-amber-400 hover:fill-amber-400" // Very subtle gray by default
+                                                ? "text-[var(--scheme-accent)] fill-[var(--scheme-accent)]"
+                                                : "text-[var(--text-faint)] hover:text-[var(--scheme-accent)] hover:fill-[var(--scheme-accent)]" // Very subtle gray by default
                                         )}
                                         title={isSaved ? "保存済み（クリックして削除）" : "単語帳に保存"}
                                     >
@@ -358,8 +363,8 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                         className={clsx(
                                             "inline-flex items-center justify-center w-5 h-5 rounded-full transition-all ml-1",
                                             speakingWord === entry.token.surface
-                                                ? "bg-emerald-100 text-emerald-600 scale-110" // Active state
-                                                : "text-slate-300 hover:text-emerald-600 hover:bg-emerald-50" // Default subtle state
+                                                ? "bg-[var(--scheme-primary-bg)] text-[var(--scheme-primary)] scale-110" // Active state
+                                                : "text-[var(--text-faint)] hover:text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary-bg)]" // Default subtle state
                                         )}
                                         title="朗读"
                                     >
@@ -394,7 +399,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                         );
                     })}
                 </div>
-            )}
+            </Collapsible>
         </div>
     );
 }

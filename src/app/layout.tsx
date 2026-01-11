@@ -36,7 +36,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="YOMI" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="format-detection" content="telephone=no" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="manifest" href="/manifest.json" />
 
         {/* Google Fonts */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

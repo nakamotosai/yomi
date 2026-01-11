@@ -25,7 +25,7 @@ export default function GrammarListView() {
                     className="h-14 flex items-center px-4 justify-between rounded-2xl glass-panel transition-all"
                     style={{
                         border: `1px solid var(--border-default)`,
-                        background: isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.65)',
+                        background: (settings.colorScheme === 'wafu') ? 'transparent' : (isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.65)'),
                         boxShadow: 'var(--shadow-sm)'
                     }}
                 >
@@ -102,7 +102,7 @@ export default function GrammarListView() {
                                             e.stopPropagation();
                                             removeGrammar(item.id);
                                         }}
-                                        className="absolute top-2 right-2 w-6 h-6 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 transition-all hover:bg-amber-500/20 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                        className="absolute top-2 right-2 w-6 h-6 bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)] rounded-md border border-[var(--scheme-accent)]/10 transition-all hover:bg-[var(--scheme-accent-bg)]/80 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
                                         title="取消收藏"
                                     >
                                         <Star className="w-3.5 h-3.5 fill-current" />

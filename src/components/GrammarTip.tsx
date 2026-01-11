@@ -18,6 +18,10 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
     const settings = useAppStore(s => s.settings);
     const isSpeaking = useAppStore(s => s.isSpeaking);
 
+    // Dynamic Grammar Color Logic:
+    const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
+    const grammarBarColor = isMorandi ? '#2D6D8B' : 'var(--scheme-grammar)';
+
     useEffect(() => {
         let cancelled = false;
 
@@ -51,7 +55,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
         <div className="py-1">
             <div className="flex items-start gap-3">
                 <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
-                    <span className="w-[3px] h-3 rounded-sm mr-2 block bg-[var(--scheme-grammar)]"></span>
+                    <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: grammarBarColor }}></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         文法
                     </h3>
