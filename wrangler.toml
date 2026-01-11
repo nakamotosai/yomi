@@ -4,8 +4,7 @@ compatibility_date = "2024-01-01"
 [build]
 command = "npm run build"
 
-[site]
-bucket = ".vercel/output/static"
+pages_build_output_dir = ".vercel/output/static"
 
 [vars]
 JWT_SECRET = "dev-secret-do-not-use-in-prod"
@@ -14,7 +13,7 @@ JWT_SECRET = "dev-secret-do-not-use-in-prod"
 [[d1_databases]]
 binding = "DB"
 database_name = "yomi-db"
-database_id = "YOUR_DATABASE_ID_HERE" # 请替换为真实的 Cloudflare D1 Database ID
+database_id = "39f241c9-1be7-4dad-89c2-457e1695947f" # 请替换为真实的 Cloudflare D1 Database ID
 
 # Cloudflare Pages specific settings
 # Note: When using GitHub integration, most settings are auto-detected
