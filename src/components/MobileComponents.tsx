@@ -65,10 +65,7 @@ export function MobileDrawer({ children }: MobileDrawerProps) {
 
                     {/* Drawer Content */}
                     <motion.div
-                        initial={{ x: '-100%' }}
-                        animate={{ x: 0 }}
                         exit={{ x: '-100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                         className="fixed top-0 bottom-0 left-0 w-[85%] max-w-[320px] shadow-xl z-50 lg:hidden flex flex-col"
                         style={{
                             background: isDark ? 'var(--bg-elevated)' : 'white'

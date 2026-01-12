@@ -10,7 +10,7 @@ import {
   StopCircle,
   GraduationCap,
   BookOpen,
-
+  X
 } from 'lucide-react';
 import Image from 'next/image';
 import clsx from 'clsx';
@@ -39,6 +39,7 @@ import ResizableLayout from '@/components/ResizableLayout';
 import ResizableVerticalSection from '@/components/ResizableVerticalSection';
 import ResizableThreeSection from '@/components/ResizableThreeSection';
 import { MobileHeader, MobileDrawer, MobileBottomSheet } from '@/components/MobileComponents';
+import MobileNavigator from '@/components/MobileNavigator';
 import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import { Collapsible } from '@/components/Collapsible';
 // Dynamic imports
@@ -724,8 +725,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
     >
 
 
-      {/* Mobile Header */}
-      <MobileHeader />
+      {/* Mobile Header Removed - Replaced by MobileNavigator/BottomBar */}
 
       {/* Desktop Layout (> 1024px) */}
       <div className="hidden lg:block h-full w-full">
@@ -936,21 +936,158 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       </div>
 
       {/* Mobile Layout (< 1024px) */}
-      < div className="lg:hidden flex-1 overflow-hidden relative" >
-        {CenterContent}
-
-        <MobileDrawer>
-          {LeftColumnContent}
-        </MobileDrawer >
-
-        <MobileBottomSheet>
-          <div className="h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto">
-              <InfoPanel />
+      <div className="lg:hidden h-full relative overflow-hidden">
+        <MobileNavigator
+          mainContent={CenterContent}
+          infoContent={
+            <div className="h-full flex flex-col bg-[var(--bg-base)]">
+              <div className="flex-1 overflow-y-auto floating-scrollbar p-2">
+                <InfoPanel />
+              </div>
             </div>
-          </div>
-        </MobileBottomSheet>
-      </div >
+          }
+          aiContent={
+            <div className="h-full flex flex-col bg-[var(--bg-base)]">
+              <AIChatView hideHeader={true} />
+            </div>
+          }
+          vocabContent={
+            <div className="h-full flex flex-col bg-[var(--bg-base)]">
+              <div className="flex-1 overflow-y-auto floating-scrollbar p-2">
+                <VocabListView />
+              </div>
+            </div>
+          }
+          grammarContent={
+            <div className="h-full flex flex-col bg-[var(--bg-base)]">
+              <div className="flex-1 overflow-y-auto floating-scrollbar p-2">
+                <GrammarListView />
+              </div>
+            </div>
+          }
+          menuContent={
+            <div className="flex flex-col h-full bg-[var(--bg-base)]">
+              {/* Menu Header with Logo */}
+              <div className="h-14 flex items-center px-5 shrink-0 border-b border-[var(--border-default)]">
+                <div className="relative w-6 h-6 mr-2">
+                  <Image src="/logo.png" alt="Logo" fill className="object-contain" unoptimized />
+                </div>
+                <h1 className="text-base font-bold text-[var(--text-secondary)]">
+                  YOMI | 菜单
+                </h1>
+                <button
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="ml-auto p-2 -mr-2 text-[var(--text-muted)]"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-widest pl-1 mb-2">主菜单</div>
+
+                {/* 1. Reader Mode */}
+                <button
+                  onClick={() => { setAppMode('reader'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
+                  className={clsx(
+                    "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
+                    appMode === 'reader' && centerViewMode === 'reader'
+                      ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                  )}
+                >
+                  <div className={clsx(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    appMode === 'reader' && centerViewMode === 'reader' ? "bg-[var(--scheme-primary-bg)] text-[var(--scheme-primary)]" : "bg-[var(--bg-muted)] text-[var(--text-muted)]"
+                  )}>
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col items-start overflow-hidden">
+                    <span className={clsx("font-bold text-sm", appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>读解模式</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">分析日文文章与句子</span>
+                  </div>
+                </button>
+
+                {/* 2. Kana Practice */}
+                <button
+                  disabled
+                  className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border bg-transparent border-transparent opacity-40 grayscale"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-muted)] text-[var(--text-muted)] flex items-center justify-center shrink-0">
+                    <span className="text-lg font-serif font-bold">あ</span>
+                  </div>
+                  <div className="flex flex-col items-start overflow-hidden">
+                    <span className="font-bold text-sm text-[var(--text-secondary)]">假名练习</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">基础五十音学习(即将开放)</span>
+                  </div>
+                </button>
+
+                {/* 3. Vocab List */}
+                <button
+                  onClick={() => { setCenterViewMode('vocab'); setIsMobileDrawerOpen(false); }}
+                  className={clsx(
+                    "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
+                    centerViewMode === 'vocab'
+                      ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                  )}
+                >
+                  <div className={clsx(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    centerViewMode === 'vocab' ? "bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)]" : "bg-[var(--bg-muted)] text-[var(--text-muted)]"
+                  )}>
+                    <BookMarked className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col items-start">
+                    <div className="flex items-center gap-2">
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'vocab' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>单词本</span>
+                      {vocabList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{vocabList.length}</span>}
+                    </div>
+                    <span className="text-[10px] text-[var(--text-muted)]">查看已保存的生词</span>
+                  </div>
+                </button>
+
+                {/* 4. Grammar List */}
+                <button
+                  onClick={() => { setCenterViewMode('grammar'); setIsMobileDrawerOpen(false); }}
+                  className={clsx(
+                    "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
+                    centerViewMode === 'grammar'
+                      ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                  )}
+                >
+                  <div className={clsx(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    centerViewMode === 'grammar' ? "bg-[var(--scheme-grammar-bg)] text-[var(--scheme-grammar)]" : "bg-[var(--bg-muted)] text-[var(--text-muted)]"
+                  )}>
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col items-start overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'grammar' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>语法本</span>
+                      {grammarList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{grammarList.length}</span>}
+                    </div>
+                    <span className="text-[10px] text-[var(--text-muted)]">掌握深度语法知识</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Settings at Bottom */}
+              <div className="p-4 border-t border-[var(--border-default)]">
+                <button
+                  onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--bg-muted)] text-[var(--text-secondary)] transition-colors"
+                >
+                  <Settings2 className="w-5 h-5" />
+                  <span className="font-medium text-sm">应用设置</span>
+                </button>
+              </div>
+            </div>
+          }
+        />
+      </div>
 
       {/* Modals */}
       < SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />

@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { ChevronLeft, User, Bot, Send, Loader2, Trash2, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-export default function AIChatView() {
+export default function AIChatView({ hideHeader = false }: { hideHeader?: boolean }) {
     const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration } = useGeminiStore();
     const settings = useAppStore(s => s.settings);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -58,27 +58,29 @@ export default function AIChatView() {
     return (
         <div className={`flex flex-col h-full rounded-2xl shadow-sm border border-[var(--border-default)] overflow-hidden ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'glass-panel'}`}>
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-muted)] bg-transparent backdrop-blur-md z-10">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setChatOpen(false)}
-                        className="p-2 -ml-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-secondary)] transition-colors"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <div className="flex flex-col">
-                        <h2 className="font-bold text-[var(--text-primary)] text-sm md:text-base">向 AI 日语老师提问任何关于日语学习的问题</h2>
+            {!hideHeader && (
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-muted)] bg-transparent backdrop-blur-md z-10">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setChatOpen(false)}
+                            className="p-2 -ml-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-secondary)] transition-colors"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <div className="flex flex-col">
+                            <h2 className="font-bold text-[var(--text-primary)] text-sm md:text-base">向 AI 日语老师提问任何关于日语学习的问题</h2>
+                        </div>
                     </div>
-                </div>
 
-                <button
-                    onClick={handleClear}
-                    className="p-2 rounded-lg hover:bg-rose-500/10 text-[var(--text-muted)] hover:text-rose-500 transition-all group"
-                    title="清空聊天记录"
-                >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110" />
-                </button>
-            </div>
+                    <button
+                        onClick={handleClear}
+                        className="p-2 rounded-lg hover:bg-rose-500/10 text-[var(--text-muted)] hover:text-rose-500 transition-all group"
+                        title="清空聊天记录"
+                    >
+                        <Trash2 className="w-4 h-4 group-hover:scale-110" />
+                    </button>
+                </div>
+            )}
 
             {/* Chat Content */}
             <div

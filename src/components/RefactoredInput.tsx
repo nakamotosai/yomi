@@ -199,7 +199,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                         </button>
                     )}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-3">
                     {/* Upload */}
                     <input
                         ref={fileInputRef}
@@ -210,23 +210,21 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                     />
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-1.5 rounded-md transition-all hover:bg-black/5 dark:hover:bg-white/5"
-                        style={{ color: 'var(--text-muted)' }}
+                        className="p-3 rounded-xl transition-all bg-[var(--bg-muted)] border border-[var(--border-default)] shadow-sm active:scale-90"
+                        style={{ color: 'var(--text-primary)' }}
                         title="画像OCR"
                     >
-                        <ImagePlus className="w-4 h-4" />
+                        <ImagePlus className="w-6 h-6" />
                     </button>
-
-                    {/* Voice */}
 
                     {/* Clear */}
                     <button
                         onClick={onClear}
-                        className="p-1.5 rounded-md transition-all hover:bg-black/5 dark:hover:bg-white/5"
-                        style={{ color: 'var(--text-muted)' }}
+                        className="p-3 rounded-xl transition-all bg-[var(--bg-muted)] border border-[var(--border-default)] shadow-sm active:scale-90"
+                        style={{ color: 'var(--text-primary)' }}
                         title="クリア"
                     >
-                        <Eraser className="w-4 h-4" />
+                        <Eraser className="w-6 h-6" />
                     </button>
                 </div>
             </div>

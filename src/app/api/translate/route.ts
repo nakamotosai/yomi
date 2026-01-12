@@ -60,10 +60,10 @@ async function translateSingle(baseUrl: string, text: string, sl: string, tl: st
         sl,
         tl,
         q: text,
-        dt: isSingle ? 't' : undefined, // Only needed for /single
         ie: 'UTF-8',
         oe: 'UTF-8'
     });
+    if (isSingle) params.append('dt', 't');
 
     // Randomize User-Agent to reduce blocking chance
     const userAgents = [

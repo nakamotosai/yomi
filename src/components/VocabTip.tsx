@@ -182,17 +182,17 @@ export default function VocabTip({ tokens }: VocabTipProps) {
         return () => { cancelled = true; };
     }, [worthyTokens]);
 
-    // 自动选中第一个生词（当 InfoPanel 为空时）
-    useEffect(() => {
-        if (!isLoading && vocabEntries.length >= 3 && !selectedToken && !selectedGrammar) {
-            const firstEntry = vocabEntries[0];
-            if (firstEntry) {
-                const sentenceOriginal = tokens.map(t => t.surface).join('');
-                setCurrentSentence(sentenceOriginal);
-                setSelectedToken(firstEntry.token);
-            }
-        }
-    }, [isLoading, vocabEntries, selectedToken, selectedGrammar, tokens, setCurrentSentence, setSelectedToken]);
+    // Auto-selection removed to prevent hijacking mobile navigation
+    // useEffect(() => {
+    //     if (!isLoading && vocabEntries.length >= 3 && !selectedToken && !selectedGrammar) {
+    //         const firstEntry = vocabEntries[0];
+    //         if (firstEntry) {
+    //             const sentenceOriginal = tokens.map(t => t.surface).join('');
+    //             setCurrentSentence(sentenceOriginal);
+    //             setSelectedToken(firstEntry.token);
+    //         }
+    //     }
+    // }, [isLoading, vocabEntries, selectedToken, selectedGrammar, tokens, setCurrentSentence, setSelectedToken]);
 
     // 生词最少3个才显示
     if (isLoading || vocabEntries.length < 3) return null;
