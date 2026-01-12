@@ -108,16 +108,51 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
     console.log('[EdgeTTS] Connecting to Edge TTS...');
 
     // standard WebSocket connection
-    // IMPORTANT: The User-Agent must match the version used in Sec-MS-GEC calculation
-    // and Origin must be exactly correct to avoid 403/Reset packets.
-    const ws = new WebSocket(wsUrl, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
-            'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept-Language': 'en-US,en;q=0.9'
+    let ws: WebSocket;
+
+    try {
+        // Method 1: Fetch with Upgrade (For Cloudflare Workers / Edge Runtime)
+        // Standard WebSocket constructor in Edge Runtime doesn't allow custom headers.
+        const fetchUrl = wsUrl.replace('wss://', 'https://');
+
+        const connectResp = await fetch(fetchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+                'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Upgrade': 'websocket',
+                'Connection': 'Upgrade',
+                'Sec-WebSocket-Key': btoa(globalThis.crypto.randomUUID().substring(0, 16)),
+                'Sec-WebSocket-Version': '13'
+            }
+        });
+
+        if (connectResp.status !== 101) {
+            throw new Error(`Fetch upgrade failed with status: ${connectResp.status}`);
         }
-    } as any);
+
+        const socket = (connectResp as any).webSocket as WebSocket;
+        if (!socket) {
+            throw new Error('Server did not return a WebSocket via fetch');
+        }
+        ws = socket;
+        console.log('[EdgeTTS] Connected via fetch upgrade');
+
+    } catch (e) {
+        console.warn('[EdgeTTS] Fetch upgrade failed, falling back to new WebSocket()', e);
+        // Method 2: Standard WebSocket Constructor (Fallback for Local/Node.js)
+        ws = new WebSocket(wsUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+                'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        } as any);
+    }
+
+    // NOTE: 'ws.accept()' is for Server-Side only. For client connections via fetch, we just use the socket.
 
     return new Promise((resolve, reject) => {
         const requestId = uuidv4().replace(/-/g, '');
