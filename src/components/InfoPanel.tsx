@@ -745,18 +745,50 @@ export default function InfoPanel() {
     }, []);
 
     // 获取 Yomitan 词典数据 (ZH)
-    const fetchYomitanDictionary = useCallback(async (word: string) => {
+    const fetchYomitanDictionary = useCallback(async (word: string, fallbackWord?: string) => {
         try {
-            // Switch to client-side loader for better performance
-            const results = await yomitanLoader.search(word);
+            // Helpers
+            const tryFetch = async (query: string): Promise<YomitanResult[] | null> => {
+                // 1. Try Local Loader (Non-blocking check)
+                const resLocal = await yomitanLoader.search(query);
+                if (resLocal && resLocal.length > 0) return resLocal;
+
+                // 2. Try API Fallback
+                try {
+                    const resApi = await fetch(`/api/dictionary/yomitan?keyword=${encodeURIComponent(query)}`);
+                    const data = await resApi.json();
+                    if (data.success && data.results && data.results.length > 0) {
+                        return data.results;
+                    }
+                } catch (e) {
+                    console.warn('API fallback error', e);
+                }
+                return null;
+            };
+
+            // Strategy: 
+            // 1. Try Primary Word (Base Form)
+            let results = await tryFetch(word);
+
+            // 2. Try Fallback Word (Surface) if primary failed
+            if (!results && fallbackWord && fallbackWord !== word) {
+                results = await tryFetch(fallbackWord);
+            }
 
             if (results && results.length > 0) {
                 return results[0];
             }
 
-            // Fallback: Google Translate
+            // 3. Fallback: Google Translate (with timeout to prevent hanging)
             // 格式化为 "原文。/译文" 以匹配渲染逻辑
-            const translation = await translateText(word, 'zh-CN', 'ja');
+            const translation = await Promise.race([
+                translateText(word, 'zh-CN', 'ja'),
+                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Translation Timeout')), 5000))
+            ]).catch((err) => {
+                console.warn('Translation fallback skipped:', err);
+                return '';
+            });
+
             if (translation) {
                 const fallbackEntry: YomitanResult = {
                     term: word,
@@ -795,12 +827,14 @@ export default function InfoPanel() {
         // 根据语言选择不同的词典
         if (dictLang === 'zh') {
             // 中文模式：使用 Yomitan (明鏡日汉双解辞典)
-            fetchYomitanDictionary(base).then(entry => {
+            fetchYomitanDictionary(base, token.surface).then(entry => {
                 if (isMounted) {
                     setYomitanEntry(entry);
                     setDictEntry(null);
                     setIsLoadingDict(false);
                 }
+            }).catch(() => {
+                if (isMounted) setIsLoadingDict(false);
             });
         } else {
             // EN/JP 模式：使用 Jisho

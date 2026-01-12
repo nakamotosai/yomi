@@ -103,6 +103,17 @@ function extractChineseMeaning(definitions: string[]): string {
 
 async function fetchShortMeaning(word: string): Promise<string> {
     try {
+        // Try client-side loader first (Zero network latency if loaded)
+        // Optimization: Use the local dictionary index that InfoPanel is already loading
+        const { yomitanLoader } = await import('@/lib/dictionary/yomitanLoader');
+        const results = await yomitanLoader.search(word);
+
+        if (results && results.length > 0) {
+            const meaning = extractChineseMeaning(results[0].definitions);
+            if (meaning) return meaning;
+        }
+
+        // Only if local fails (e.g. not loaded yet), fallback to API (which is now optimized)
         const res = await fetch(`/api/dictionary/yomitan?keyword=${encodeURIComponent(word)}`);
         const data = await res.json();
 

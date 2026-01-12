@@ -10,9 +10,10 @@ import { Collapsible } from './Collapsible';
 interface TranslationTipProps {
     original: string;
     translation: string | undefined;
+    onTranslate?: () => void;
 }
 
-export default function TranslationTip({ original, translation }: TranslationTipProps) {
+export default function TranslationTip({ original, translation, onTranslate }: TranslationTipProps) {
     const { settings, isSpeaking } = useAppStore();
     const [isExpanded, setIsExpanded] = useState(false);
     // Dynamic Verb Color Logic:
@@ -20,10 +21,25 @@ export default function TranslationTip({ original, translation }: TranslationTip
     // Wafu/Monochrome use var(--color-verb) which are properly mapped in globals.css.
     const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
     const verbColor = isMorandi ? '#C8733A' : 'var(--color-verb)';
-    const displayTranslation = translation || '翻译中...';
-    const isLoading = !translation;
+
+    // Only show loading state if explicitly loading (but we don't have that prop yet, so disable fake loading)
+    const isLoading = false;
+
+    // Use explicit translation or fallback placeholder
+    const displayTranslation = translation || '（点击翻译）';
 
     const handleToggle = () => {
+        // If no translation and collapsed, trigger translation on expand? 
+        // Or simply if user clicks text.
+        // If translation missing, treat click as "Translate"
+        if (!translation && onTranslate) {
+            onTranslate();
+            // Don't expand yet? Or expand to show "Loading..."? 
+            // Better: update displayTranslation to "Translating..." inside parent? 
+            // Since we lack parent state passing, we just trigger it.
+            return;
+        }
+
         const newState = !isExpanded;
         setIsExpanded(newState);
         if (newState && !isSpeaking) {

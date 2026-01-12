@@ -83,6 +83,24 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         }
     };
 
+    // Per-sentence translation trigger
+    const handleSentenceTranslation = async (sentenceId: string, text: string) => {
+        if (!text) return;
+
+        try {
+            const translated = await translateText(text);
+            if (isMountedRef.current && translated) {
+                setTranslations(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(sentenceId, translated);
+                    return newMap;
+                });
+            }
+        } catch (e) {
+            console.error("Sentence translation failed", e);
+        }
+    };
+
     // Build token map when result changes
     useEffect(() => {
         if (!result) {
@@ -174,13 +192,33 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         }
     }, [result, setPlaylist]);
 
-    // We don't need isSpeakingRef anymore or the effect listening to isSpeaking
+    // Sequential Auto-Translation Queue
+    // This ensures cards translate one-by-one to avoid API blocking/congestion
+    useEffect(() => {
+        if (!result || !result.sentences || result.sentences.length === 0) return;
+        if (!isMountedRef.current) return;
 
-    // Removed old TTS logic (playSentence, useEffects, etc.)
-    // Cleanup of internal state not needed anymore as store handles it.
+        // Find first sentence that is NOT translated yet
+        const pendingSentence = result.sentences.find(s => !translations.has(s.id));
 
+        if (pendingSentence) {
+            // Found a pending one. Translate it.
+            // We use a small timeout to act as a "queue pacer" and prevent tight loops
+            const timer = setTimeout(() => {
+                if (!isMountedRef.current) return;
 
-    // Debounced Auto-analyze on text change
+                // Double check if it's still needed
+                if (!translations.has(pendingSentence.id)) {
+                    console.log(`[Auto-Translate] Processing: ${pendingSentence.id}`);
+                    handleSentenceTranslation(pendingSentence.id, pendingSentence.original);
+                }
+            }, 300); // 300ms delay between items to be safe
+
+            return () => clearTimeout(timer);
+        }
+    }, [result, translations]);
+
+    // Analyze text with debounce
     useEffect(() => {
         // Reset state immediately on typing
         if (text.trim()) {
@@ -429,6 +467,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                         <TranslationTip
                                             original={sentence.original}
                                             translation={translations.get(sentence.id)}
+                                            onTranslate={() => handleSentenceTranslation(sentence.id, sentence.original)}
                                         />
                                     )}
 

@@ -88,47 +88,59 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        // Assume files are term_bank_1.json to term_bank_17.json based on previous file listing
-        // In a real optimized scenario, we would use an index. For now, we unfortunately have to fetch all or use a pre-built index.
-        // Fetching 17 files on every request is SLOW. 
-        // BETTER APPROACH: The user probably only searches for one word. 
-        // Ideally, we should have a KV or D1 index. 
-        // fallback: fetch just a few main banks or use the index.json if it exists.
-
-        // Let's try to load index.json or just the first few banks for now to prove concept, 
-        // or attempt to fetch concurrently. 
-        // The previous listing showed 'term_bank_1.json' ... 'term_bank_17.json'.
-
         const origin = request.nextUrl.origin;
-        const bankFiles = Array.from({ length: 17 }, (_, i) => `term_bank_${i + 1}.json`);
-
-        // Parallel fetch - Cloudflare Edge is fast at this
-        const fetchPromises = bankFiles.map(async (file) => {
-            try {
-                const res = await fetch(`${origin}/yomitan/${file}`);
-                if (!res.ok) return [];
-                return await res.json() as unknown[];
-            } catch (e) {
-                console.error(`Failed to fetch ${file}`, e);
-                return [];
-            }
-        });
-
-        const allBanks = await Promise.all(fetchPromises);
         const results: DictionaryResult[] = [];
         const seen = new Set<string>();
 
-        for (const bank of allBanks) {
-            for (const rawEntry of bank) {
-                const entry = parseEntry(rawEntry as unknown[]);
-                if (entry.term === keyword || entry.reading === keyword) {
-                    const res = convertToResult(entry);
-                    const key = `${res.term}-${res.reading}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        results.push(res);
+        // Optimization 1: Sequential batch fetching + Early exit
+        // Instead of fetching all 17 at once, we fetch in batches or sequentially to avoid hitting subrequest limits.
+        // Since we are looking for a specific keyword, we can stop AS SOON AS WE FIND IT.
+        // Files are term_bank_1.json to term_bank_18.json (based on loader checks).
+        const maxBanks = 20; // Safety limit
+
+        // Optimistic Strategy: Check banks sequentially. 
+        // Note: In a real production app without an index, this is still O(N) but better than 17 parallels crashing the worker.
+        // We will do small batches of 3 to balance speed and stability.
+
+        for (let i = 1; i <= maxBanks; i += 4) {
+            const batch = [i, i + 1, i + 2, i + 3].filter(n => n <= maxBanks);
+            const batchPromises = batch.map(async (bankIndex) => {
+                try {
+                    const res = await fetch(`${origin}/yomitan/term_bank_${bankIndex}.json`, {
+                        // Add internal cache tag if available in CF
+                        cf: { cacheTtl: 86400, cacheEverything: true }
+                    } as any);
+                    if (!res.ok) return null;
+                    return await res.json() as unknown[];
+                } catch {
+                    return null;
+                }
+            });
+
+            const bankDataList = await Promise.all(batchPromises);
+            let foundInBatch = false;
+
+            for (const bankData of bankDataList) {
+                if (!bankData) continue;
+                for (const rawEntry of bankData) {
+                    const entry = parseEntry(rawEntry as unknown[]);
+                    if (entry.term === keyword || entry.reading === keyword) {
+                        const res = convertToResult(entry);
+                        const key = `${res.term}-${res.reading}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            results.push(res);
+                            foundInBatch = true;
+                        }
                     }
                 }
+            }
+
+            // Optimization 2: Early Exit
+            // If we found the word, we stop looking. (Assuming exact match is redundant or we only need top results)
+            // If search needs complete exhaustion, remove this break. But for "hover tip", first match is usually sufficient.
+            if (foundInBatch && results.length >= 1) {
+                break;
             }
         }
 
@@ -136,7 +148,14 @@ export async function GET(request: NextRequest) {
             success: true,
             keyword,
             results: results,
-            source: '明鏡日汉双解辞典 (Edge)'
+            source: '明鏡日汉双解辞典 (Edge Optimized)'
+        }, {
+            headers: {
+                // Optimization 3: Aggressive Caching
+                // Cache this specific keyword result for 1 hour at CDN level
+                'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+                'CDN-Cache-Control': 'max-age=3600'
+            }
         });
 
     } catch (error) {

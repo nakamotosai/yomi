@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// Using Google Translate's free API endpoint (unofficial but widely used)
-const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
+// Using clients5.google.com which is historically more reliable for server-side requests
+const GOOGLE_TRANSLATE_URL = 'https://clients5.google.com/translate_a/t';
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,8 +13,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Text is required' }, { status: 400 });
         }
 
-        // Call Google Translate API
-        // Use POST for larger payloads
+        // Call Google Translate API (clients5)
         const fetchOptions = {
             method: 'POST',
             headers: {
@@ -22,10 +21,9 @@ export async function POST(request: NextRequest) {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
             body: new URLSearchParams({
-                client: 'gtx',
+                client: 'dict-chrome-ex',
                 sl: sourceLang,
                 tl: targetLang,
-                dt: 't',
                 q: text
             }).toString()
         };
@@ -33,18 +31,28 @@ export async function POST(request: NextRequest) {
         const response = await fetch(GOOGLE_TRANSLATE_URL, fetchOptions);
 
         if (!response.ok) {
-            throw new Error('Translation API request failed');
+            // Log status for debugging
+            console.error(`GT API failed with status: ${response.status}`);
+            throw new Error(`Translation API request failed: ${response.status}`);
         }
 
         const data = await response.json();
 
-        // Parse response - format is [[["translation","original",null,null,10],...],null,"ja",...]
+        // Parse response - clients5 returns: ["Translated text"] or [["Translated 1", "Translatred 2"]]?
+        // Actually for dict-chrome-ex it returns an array of strings or nested arrays depending on input.
+        // Usually: ["Translated Text"]
+        // Let's handle both string array and nested.
         let translation = '';
-        if (data && data[0]) {
-            translation = data[0]
-                .filter((item: unknown[]) => item && item[0])
-                .map((item: unknown[]) => item[0])
-                .join('');
+
+        if (Array.isArray(data)) {
+            // Check if it's array of strings [ "Trans", "lation" ]
+            if (typeof data[0] === 'string') {
+                translation = data.join('');
+            }
+            // Check if it's nested (rare for this client but possible)
+            else if (Array.isArray(data[0])) {
+                translation = data.map((item: any) => (Array.isArray(item) ? item[0] : item)).join('');
+            }
         }
 
         return NextResponse.json({

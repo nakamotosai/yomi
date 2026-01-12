@@ -192,12 +192,16 @@ class YomitanLoader {
         return this.init();
     }
 
-    public async search(keyword: string): Promise<DictionaryResult[]> {
-        // Ensure at least the basics are loaded if someone searches immediately
-        if (this.loadingPromise) {
-            await this.loadingPromise;
-        } else if (!this.isLoaded) {
-            await this.init();
+    public async search(keyword: string): Promise<DictionaryResult[] | null> {
+        // Non-blocking strategy:
+        // If not loaded, return null immediately to allow fallback to API.
+        // Do NOT await loadingPromise, as it blocks UI during large downloads.
+        if (!this.isLoaded) {
+            // Check if we happen to have it in memory anyway (partial load)?
+            const result = this.dictionaryIndex.get(keyword);
+            if (result) return result;
+
+            return null;
         }
 
         return this.dictionaryIndex.get(keyword) || [];
