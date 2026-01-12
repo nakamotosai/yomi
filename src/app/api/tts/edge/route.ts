@@ -33,7 +33,7 @@ async function generateSecMsGec(): Promise<string> {
     // Convert to 100-nanosecond intervals (Windows File Time)
     // 1 second = 10,000,000 ticks (10^7)
     // Using BigInt to prevent overflow
-    const ticks = BigInt(ticksSeconds) * 10_000_000n;
+    const ticks = BigInt(ticksSeconds) * BigInt(10000000);
 
     // Trusted Client Token (Hardcoded in Edge Browser)
     const strToHash = ticks.toString() + TRUSTED_CLIENT_TOKEN;
@@ -117,7 +117,7 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept-Language': 'en-US,en;q=0.9'
         }
-    });
+    } as any);
 
     return new Promise((resolve, reject) => {
         const requestId = uuidv4().replace(/-/g, '');

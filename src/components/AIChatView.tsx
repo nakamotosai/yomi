@@ -174,7 +174,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                         } as any}
                     />
                     <button
-                        onClick={isChatGenerating ? cancelGeneration : handleSend}
+                        onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
                         disabled={!input.trim() && !isChatGenerating}
                         className="p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 mb-0.5 border border-[var(--border-default)] shadow-sm hover:shadow-md active:scale-95 group"
                         style={{
