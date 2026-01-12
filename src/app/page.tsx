@@ -68,7 +68,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
   const isDark = isMounted && settings.theme === 'dark';
 
   // Translation State
-  const [showTranslation, setShowTranslation] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(true);
   const [fullTranslation, setFullTranslation] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
 
@@ -183,13 +183,13 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
 
   return (
     <div
-      className="h-full flex flex-col w-full"
+      className="h-full flex flex-col w-full max-w-3xl mx-auto"
       style={{
         background: 'transparent',
       }}
     >
       {analyzedText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
-        <div className="shrink-0 z-10 pl-2 pr-1 pt-2 pb-1">
+        <div className="shrink-0 z-10 pl-2 pr-5 pt-2 pb-1">
           <div
             className="flex flex-col relative transition-all duration-300 ease-spring"
           >
@@ -207,11 +207,11 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
 
             {/* Content Section (Animated Grid) */}
             <Collapsible isOpen={showTranslation} variant="default">
-              <div className="overflow-hidden px-0 pb-2 mt-4">
+              <div className="overflow-hidden px-0 pb-1 mt-1">
                 <div
-                  className="px-5 py-5 rounded-xl glass-panel border border-[var(--border-muted)] shadow-sm"
+                  className="px-2 py-0"
                   style={{
-                    background: isDark ? 'var(--bg-elevated)' : 'rgba(255, 255, 255, 0.8)'
+                    background: 'transparent'
                   }}
                 >
                   <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
@@ -222,7 +222,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
                       </div>
                     ) : fullTranslation ? (
                       <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                        {fullTranslation}
+                        <span className="font-bold opacity-70 mr-1 select-none">全文翻译：</span>{fullTranslation}
                       </p>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-2 opacity-50 gap-2">
@@ -901,7 +901,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
           }
           centerContent={
             <div className="h-full py-4 px-2"> {/* Minimal padding for center content */}
-              <div className="h-full w-full max-w-5xl mx-auto bg-transparent backdrop-blur-xl rounded-2xl shadow-sm overflow-hidden relative">
+              <div className="h-full w-full bg-transparent backdrop-blur-xl rounded-2xl shadow-sm overflow-hidden relative">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 z-[-1] opacity-50 pointer-events-none"
                   style={{

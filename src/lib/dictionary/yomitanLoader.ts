@@ -212,7 +212,7 @@ class YomitanLoader {
 
                 // Update UI state to "Done"
                 const store = useDictionaryStore.getState();
-                const totalBytesGuess = 85 * 1024 * 1024; // ~85MB
+                const totalBytesGuess = 42 * 1024 * 1024; // ~42MB (根据实际情况调整)
 
                 store.addDownloadedBytes(totalBytesGuess);
                 store.setTotalBytesToDownload(totalBytesGuess);

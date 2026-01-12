@@ -76,7 +76,7 @@ export default function AIChatInput() {
                         placeholder="向AI老师提问。"
                         rows={1}
                         disabled={isChatGenerating}
-                        className="flex-1 h-9 py-2 resize-none bg-transparent text-sm !border-none !outline-none !ring-0 !shadow-none focus:!ring-0 focus:!outline-none focus:!border-none focus-visible:!ring-0 focus-visible:!outline-none focus-visible:!border-none appearance-none floating-scrollbar placeholder:italic leading-normal min-w-0"
+                        className="flex-1 h-9 py-2 resize-none bg-transparent text-base !border-none !outline-none !ring-0 !shadow-none focus:!ring-0 focus:!outline-none focus:!border-none focus-visible:!ring-0 focus-visible:!outline-none focus-visible:!border-none appearance-none floating-scrollbar placeholder:italic leading-normal min-w-0"
                         style={{
                             color: 'var(--text-primary)',
                             minHeight: '36px',

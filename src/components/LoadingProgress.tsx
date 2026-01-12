@@ -22,8 +22,8 @@ export default function LoadingProgress() {
     // Auto-hide logic
     useEffect(() => {
         if (isAllLoaded) {
-            const timer = setTimeout(() => setIsVisible(false), 3000);
-            return () => clearTimeout(timer);
+            // Hide immediately when loaded as requested
+            setIsVisible(false);
         }
     }, [isAllLoaded]);
 
@@ -39,10 +39,10 @@ export default function LoadingProgress() {
     return (
         <div
             className={clsx(
-                "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100]",
+                "fixed bottom-24 lg:bottom-8 left-1/2 -translate-x-1/2 z-[100]",
                 "w-full max-w-md px-6 py-4 rounded-2xl transition-all duration-700",
                 "backdrop-blur-2xl border shadow-2xl overflow-hidden",
-                "animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-out",
+                "animate-in fade-in slide-in-from-bottom-16 duration-1000 ease-out",
                 isDark
                     ? "bg-black/60 border-white/10 shadow-black/40"
                     : "bg-white/70 border-black/5 shadow-black/10"

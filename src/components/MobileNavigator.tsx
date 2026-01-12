@@ -33,7 +33,7 @@ export default function MobileNavigator({
     const [isInputModalOpen, setIsInputModalOpen] = useState(false);
 
     // Store access
-    const { settings, selectedToken, setSelectedToken, inputText, setInputText, centerViewMode, setCenterViewMode } = useAppStore();
+    const { settings, selectedToken, setSelectedToken, selectedGrammar, setSelectedGrammar, inputText, setInputText, centerViewMode, setCenterViewMode } = useAppStore();
     const { isChatOpen, setChatOpen } = useGeminiStore();
     const isDark = settings.theme === 'dark';
 
@@ -43,12 +43,12 @@ export default function MobileNavigator({
         useGeminiStore.setState({ isChatOpen: false });
     }, []);
 
-    // Sync: Selected Token -> Info View
+    // Sync: Selected Token/Grammar -> Info View
     useEffect(() => {
-        if (selectedToken) {
+        if (selectedToken || selectedGrammar) { // Use deconstructed state
             setCurrentView('info');
         }
-    }, [selectedToken]);
+    }, [selectedToken, selectedGrammar]); // Use proper dependency
 
     // Sync: Chat Open -> AI View
     useEffect(() => {
@@ -79,6 +79,7 @@ export default function MobileNavigator({
         // Reset Stores based on what we are leaving
         if (prevView === 'info') {
             setSelectedToken(null);
+            setSelectedGrammar(null); // Clear grammar too
         }
         if (prevView === 'ai') {
             setChatOpen(false);

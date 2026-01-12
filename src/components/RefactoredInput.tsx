@@ -161,7 +161,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
         >
             <textarea
                 ref={textareaRef}
-                className="w-full flex-1 p-1 rounded-lg resize-none !outline-none text-sm bg-transparent custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none"
+                className="w-full flex-1 p-1 rounded-lg resize-none !outline-none text-base bg-transparent custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none"
                 style={{ color: 'var(--text-muted)' }}
                 placeholder="Ctrl+V で画像貼り付け..."
                 value={inputText}

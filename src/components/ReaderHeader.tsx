@@ -31,9 +31,9 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     const { settings } = useAppStore();
 
     return (
-        <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none">
+        <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none justify-center">
             {/* Left Column: Fixed Left Pair */}
-            <div className="flex-1 flex items-center justify-start gap-3 min-w-0">
+            <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
                 {/* Translate Button */}
                 <button
                     onClick={(e) => {

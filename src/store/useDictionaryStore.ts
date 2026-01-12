@@ -23,7 +23,7 @@ export const useDictionaryStore = create<DictionaryState>((set) => ({
     loadedUnits: 1, // Start at 1 for rich grammar
     totalDownloadedUnits: 0,
     totalDownloadedBytes: 0, // Added
-    totalBytesToDownload: 25 * 1024 * 1024, // 默认预估 25MB
+    totalBytesToDownload: 42 * 1024 * 1024, // 默认预估 42MB (根据实际下载情况调整)
     isAllLoaded: false,
 
     setTotalUnits: (total) => set({ totalUnits: total }),
