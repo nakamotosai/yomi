@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
     Languages,
     PlayCircle,
@@ -28,14 +28,7 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     onPlay,
     onStop,
 }) => {
-    const [mounted, setMounted] = useState(false);
     const { settings } = useAppStore();
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    const isDark = mounted && settings.theme === 'dark';
 
     return (
         <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none">

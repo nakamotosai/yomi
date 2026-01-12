@@ -102,91 +102,47 @@ export async function POST(req: NextRequest, ctx: any) {
         // 流式调用
         const result = await model.generateContentStream(fullPrompt);
 
-        // 准备流式响应
+        // 5. 准备流式响应
         const encoder = new TextEncoder();
         let fullText = "";
-        let clientDisconnected = false;
 
-        // finalUsagePromise 负责在后台收集完整的文本、更新使用量和缓存，
-        // 即使客户端断开连接，这个 Promise 也会继续执行。
-        const finalUsagePromise = (async () => {
-            try {
-                // 消耗流并通过 Try-Catch 确保即使客户端断开也能跑完
-                // 注意：这里不能再次迭代 result.stream，因为它只能被消费一次。
-                // 实际的文本收集发生在下面的 responseStream 中。
-                // 这个 Promise 负责等待 responseStream 完成后，处理统计和缓存。
-                // 为了确保 fullText 完整，我们需要等待 responseStream 结束后再处理。
-                // 或者，如果 stream 是可多重消费的，则可以在这里独立消费。
-                // 但通常情况下，Gemini API 的 stream 是一次性的。
-                // 因此，我们将 fullText 的收集和 usage/cache 的处理放在 responseStream 的 close 之后。
-                // 这里的 finalUsagePromise 实际上是等待 responseStream 结束后，
-                // 拿到最终的 fullText 和 usageMetadata 进行处理。
-                // 原始逻辑中 finalUsagePromise 是在 stream 结束后才赋值的，
-                // 现在需要调整为在 stream 结束后触发。
-
-                // 这里的 finalUsagePromise 应该是一个占位符，
-                // 实际的逻辑会在 responseStream 结束后被触发。
-                // 为了满足 waitUntil 的要求，我们先定义一个 Promise，
-                // 并在 responseStream 内部 resolve/reject 它。
-            } catch (e) {
-                console.error('[AI API] Background Task Error:', e);
-            }
-        })();
-
-        // 使用 ctx.waitUntil 确保 worker 在后台运行
-        // 这里的 waitUntil 应该等待的是一个包含所有后台清理工作的 Promise
-        let resolveFinalUsage: (value: void | PromiseLike<void>) => void;
-        let rejectFinalUsage: (reason?: any) => void;
-        const backgroundCleanupPromise = new Promise<void>((resolve, reject) => {
-            resolveFinalUsage = resolve;
-            rejectFinalUsage = reject;
-        });
-
-        if (ctx && typeof ctx.waitUntil === 'function') {
-            ctx.waitUntil(backgroundCleanupPromise);
-        }
+        // 用于控制流的状态
+        let isStreamClosed = false;
 
         const responseStream = new ReadableStream({
             async start(controller) {
-                try {
-                    for await (const chunk of result.stream) {
-                        const text = chunk.text();
-                        if (text) {
-                            fullText += text;
-                            if (!clientDisconnected) { // 只有客户端未断开时才尝试 enqueue
-                                try {
-                                    controller.enqueue(encoder.encode(text));
-                                } catch (e) {
-                                    // 客户端断开，标记并继续，不再尝试 enqueue
-                                    clientDisconnected = true;
-                                    console.warn('[AI API] Client disconnected during enqueue, stopping further enqueues.');
-                                }
-                            }
-                        }
-                    }
-
-                    // 流结束，处理统计和缓存
-                    // 后台任务：完整消耗 stream 并处理入库
-                    const backgroundTask = (async () => {
-                        try {
-                            for await (const chunk of result.stream) {
-                                const text = chunk.text();
-                                if (text) {
-                                    fullText += text;
-                                    if (!isControllerClosed) {
-                                        try {
-                                            controller.enqueue(encoder.encode(text));
-                                        } catch (e) {
-                                            // 前端可能已断开，标记并不再尝试推流
-                                            isControllerClosed = true;
-                                        }
+                // 定义后台处理逻辑 (唯一的一次流消费)
+                const processStream = async () => {
+                    try {
+                        for await (const chunk of result.stream) {
+                            const text = chunk.text();
+                            if (text) {
+                                fullText += text;
+                                // 如果客户端未断开，发送数据
+                                if (!isStreamClosed) {
+                                    try {
+                                        controller.enqueue(encoder.encode(text));
+                                    } catch (e) {
+                                        // 可能是客户端已断开
+                                        console.warn('[AI API] Client disconnected, marking stream closed.');
+                                        isStreamClosed = true;
                                     }
                                 }
                             }
+                        }
 
-                            // 生成结束后处理统计和缓存
+                        // 流结束，关闭控制器
+                        if (!isStreamClosed) {
+                            controller.close();
+                            isStreamClosed = true;
+                        }
+
+                        // 6. 后台统计与缓存 (在流结束后执行)
+                        try {
                             const response = await result.response;
                             const usage = response.usageMetadata;
+
+                            // 更新 Token 统计
                             if (usage) {
                                 const actualTotal = usage.totalTokenCount;
                                 const correction = actualTotal - estInputTokens;
@@ -196,41 +152,43 @@ export async function POST(req: NextRequest, ctx: any) {
                                 console.log(`[AI Usage] Minute: ${minuteKey}, Actual total: ${actualTotal} (est was ${estInputTokens})`);
                             }
 
+                            // 写入缓存
                             if (cacheKey && fullText) {
                                 await db.prepare(`
-                                INSERT OR REPLACE INTO ai_cache (key, value, created_at)
-                                VALUES (?, ?, ?)
-                            `).bind(cacheKey, fullText, new Date().toISOString()).run();
+                                    INSERT OR REPLACE INTO ai_cache (key, value, created_at)
+                                    VALUES (?, ?, ?)
+                                `).bind(cacheKey, fullText, new Date().toISOString()).run();
                                 console.log(`[AI API] Background Cache Saved: ${cacheKey}`);
                             }
-
-                            if (!isControllerClosed) {
-                                controller.close();
-                                isControllerClosed = true;
-                            }
-                        } catch (err: any) {
-                            console.error('[AI API] Background Worker Error:', err);
-                            if (!isControllerClosed) {
-                                controller.error(err);
-                                isControllerClosed = true;
-                            }
+                        } catch (statsError) {
+                            console.error('[AI API] Stats/Cache Error:', statsError);
                         }
-                    })();
 
-                    // 核心：使用 waitUntil 确保即便 HTTP 响应结束，worker 也会继续运行 backgroundTask
-                    if (ctx && typeof ctx.waitUntil === 'function') {
-                        ctx.waitUntil(backgroundTask);
-                    } else {
-                        // 如果不是 Cloudflare 环境，也稍微等待一下（虽然 Node.js 可能直接掐断）
-                        await backgroundTask;
+                    } catch (err: any) {
+                        console.error('[AI API] Stream Processing Error:', err);
+                        if (!isStreamClosed) {
+                            controller.error(err);
+                            isStreamClosed = true;
+                        }
                     }
-                },
-                cancel() {
-                    // 前端取消（如点击别的单词或关闭面板），标记不再推流，但 backgroundTask 会继续消耗并存入缓存
-                    isControllerClosed = true;
-                    console.log('[AI API] Client cancelled stream, continuing in background...');
+                };
+
+                // 启动处理任务
+                const task = processStream();
+
+                // 使用 waitUntil 保持后台运行
+                if (ctx && typeof ctx.waitUntil === 'function') {
+                    ctx.waitUntil(task);
+                } else {
+                    // 非 Cloudflare 环境下等待任务完成 (防止过早终止)
+                    await task;
                 }
-            });
+            },
+            cancel() {
+                isStreamClosed = true;
+                console.log('[AI API] Stream cancelled by client.');
+            }
+        });
 
         return new Response(responseStream, {
             headers: {

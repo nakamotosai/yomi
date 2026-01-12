@@ -6,13 +6,15 @@ interface DictionaryState {
     totalUnits: number;
     loadedUnits: number;
     totalDownloadedUnits: number;
+    totalDownloadedBytes: number; // Added to interface
+    totalBytesToDownload: number; // Added to interface
     isAllLoaded: boolean;
     setTotalUnits: (total: number) => void;
     incrementLoadedUnits: () => void;
     incrementDownloadedUnits: () => void;
-    addDownloadedBytes: (bytes: number) => void; // Added
-    setTotalBytesToDownload: (bytes: number) => void; // Added
-    setAllLoaded: (loaded: boolean) => void; // Added
+    addDownloadedBytes: (bytes: number) => void;
+    setTotalBytesToDownload: (bytes: number) => void;
+    setAllLoaded: (loaded: boolean) => void;
     resetProgress: (total: number) => void;
 }
 

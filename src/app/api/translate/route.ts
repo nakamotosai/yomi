@@ -14,19 +14,23 @@ export async function POST(request: NextRequest) {
         }
 
         // Call Google Translate API
-        const params = new URLSearchParams({
-            client: 'gtx',
-            sl: sourceLang,    // Source language
-            tl: targetLang,    // Target language
-            dt: 't',           // Return translation
-            q: text
-        });
-
-        const response = await fetch(`${GOOGLE_TRANSLATE_URL}?${params.toString()}`, {
+        // Use POST for larger payloads
+        const fetchOptions = {
+            method: 'POST',
             headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        });
+            },
+            body: new URLSearchParams({
+                client: 'gtx',
+                sl: sourceLang,
+                tl: targetLang,
+                dt: 't',
+                q: text
+            }).toString()
+        };
+
+        const response = await fetch(GOOGLE_TRANSLATE_URL, fetchOptions);
 
         if (!response.ok) {
             throw new Error('Translation API request failed');

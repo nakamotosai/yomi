@@ -517,12 +517,10 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                 {(() => {
                                     const lines = aiResult.split('\n');
-                                    let isExampleSection = false;
 
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
                                         if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
-                                            isExampleSection = true;
                                             return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
                                         }
 
@@ -596,10 +594,16 @@ export default function InfoPanel() {
     useEffect(() => {
         // Cancel any pending generation
         if (isAnalysisGenerating) cancelGeneration();
-        setAiResult('');
-        setAiResultTitle('');
-        setIsCached(false);
-        setIsAIExpanded(false);
+        // Cancel any pending generation
+        if (isAnalysisGenerating) cancelGeneration();
+
+        // Wrap state updates in setTimeout to avoid "setState synchronously" warning
+        setTimeout(() => {
+            setAiResult('');
+            setAiResultTitle('');
+            setIsCached(false);
+            setIsAIExpanded(false);
+        }, 0);
 
         // Auto-check cache
         if (token) {
@@ -696,9 +700,12 @@ export default function InfoPanel() {
     };
 
     // 当 token 变化时，重置朗读状态（不停止 TTS，让自动朗读正常工作）
+    // 当 token 变化时，重置朗读状态（不停止 TTS，让自动朗读正常工作）
     useEffect(() => {
-        setIsSpeaking(false);
-        setSpeakingLineIndex(null);
+        setTimeout(() => {
+            setIsSpeaking(false);
+            setSpeakingLineIndex(null);
+        }, 0);
     }, [token]);
 
     // 获取 Jisho 词典数据 (EN/JP)
@@ -773,12 +780,16 @@ export default function InfoPanel() {
         let isMounted = true;
 
         if (!token) {
-            setDictEntry(null);
-            setYomitanEntry(null);
+            setTimeout(() => {
+                setDictEntry(null);
+                setYomitanEntry(null);
+            }, 0);
             return;
         }
 
-        setIsLoadingDict(true);
+        setTimeout(() => {
+            setIsLoadingDict(true);
+        }, 0);
         const base = getDeinflectedForm(token);
 
         // 根据语言选择不同的词典
@@ -899,7 +910,7 @@ export default function InfoPanel() {
 
                     if (isExample) {
                         // 1. 先剥离装饰符号
-                        let content = trimmed.replace(/^[▲・◯]\s*/, '').trim();
+                        const content = trimmed.replace(/^[▲・◯]\s*/, '').trim();
 
                         // 2. 尝试多种分隔符
                         if (content.includes('。/')) {
@@ -1206,13 +1217,10 @@ export default function InfoPanel() {
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                 {(() => {
                                     const lines = aiResult.split('\n');
-                                    let isExampleSection = false;
-
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
 
                                         if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
-                                            isExampleSection = true;
                                             return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
                                         }
 

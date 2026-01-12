@@ -14,28 +14,52 @@ export async function translateText(text: string, targetLang: string = 'zh-CN', 
     }
 
     try {
-        const response = await fetch('/api/translate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text, targetLang, sourceLang }),
-        });
+        const MAX_RETRIES = 3;
+        let delay = 1000;
 
-        if (!response.ok) {
-            throw new Error('Translation request failed');
+        for (let i = 0; i < MAX_RETRIES; i++) {
+            try {
+                const response = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text, targetLang, sourceLang }),
+                    signal: AbortSignal.timeout(10000) // 10s timeout per attempt
+                });
+
+                if (response.status === 429 || response.status >= 500) {
+                    // Server error or rate limit, throw to trigger retry
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                if (!response.ok) {
+                    // Client error (400, 401, etc), do not retry
+                    throw new Error('Translation request failed');
+                }
+
+                const data = await response.json();
+                const translation = data.translation || '';
+
+                // Cache the result
+                translationCache[cacheKey] = translation;
+                return translation;
+
+            } catch (error) {
+                console.warn(`Translation attempt ${i + 1} failed:`, error);
+                if (i === MAX_RETRIES - 1) return ''; // Give up
+
+                // Wait with exponential backoff
+                await new Promise(r => setTimeout(r, delay));
+                delay *= 2;
+            }
         }
+        return ''; // Should not be reached
 
-        const data = await response.json();
-        const translation = data.translation || '';
 
-        // Cache the result
-        translationCache[cacheKey] = translation;
-
-        return translation;
     } catch (error) {
         console.error('Translation error:', error);
-        return ''; // Return empty string on error
+        return '';
     }
 }
 

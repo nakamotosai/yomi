@@ -1,0 +1,147 @@
+﻿
+> yomi@0.1.0 lint
+> eslint src --max-warnings 100
+
+
+C:\Users\sai\yomi\src\app\api\ai\chat\route.ts
+   19:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:46  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  167:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  200:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\app\api\cache\route.ts
+  14:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\app\api\tts\edge\route.ts
+   10:7   warning  'CHROMIUM_MAJOR_VERSION' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  120:54  warning  Unexpected any. Specify a different type                     @typescript-eslint/no-explicit-any
+  212:44  warning  Unexpected any. Specify a different type                     @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\app\page.tsx
+   40:8   warning  'ResizableThreeSection' is defined but never used   @typescript-eslint/no-unused-vars
+   62:7   warning  'KanaSidePanel' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  322:9   warning  'isMonochrome' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  921:40  warning  'h' is defined but never used                       @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\AIChatInput.tsx
+   3:35  warning  'useEffect' is defined but never used              @typescript-eslint/no-unused-vars
+  14:11  warning  'isDark' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  15:11  warning  'isCompact' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  17:11  warning  'isWafu' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  18:11  warning  'isMonochrome' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\AIChatView.tsx
+    6:40  warning  'Loader2' is defined but never used       @typescript-eslint/no-unused-vars
+  172:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\sai\yomi\src\components\InfoPanel.tsx
+     5:29  warning  'ArrowRight' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+     5:51  warning  'BookMarked' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+     6:10  warning  'motion' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+     6:18  warning  'AnimatePresence' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+    40:11  warning  'YomitanResponse' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+    77:52  warning  'isChinese' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+   163:63  warning  'isGlobalSpeaking' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   174:8   warning  React Hook useEffect has a missing dependency: 'grammar.reading'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+   242:12  warning  'isCached' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   269:26  warning  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   275:8   warning  React Hook useEffect has missing dependencies: 'cancelGeneration', 'grammar.title', and 'isAnalysisGenerating'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+   327:19  warning  'refData' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   520:41  warning  'isExampleSection' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+   592:12  warning  'isCached' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   625:8   warning  React Hook useEffect has missing dependencies: 'cancelGeneration', 'isAnalysisGenerating', and 'token'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/exhaustive-deps
+   645:19  warning  'refDef' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   836:11  warning  'colorScheme' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  1040:11  warning  'wafuStyle' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  1209:41  warning  'isExampleSection' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+  1215:45  error    Error: Cannot reassign variable after render completes
+
+Reassigning `isExampleSection` after render has completed can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+C:\Users\sai\yomi\src\components\InfoPanel.tsx:1215:45
+  1213 |
+  1214 |                                         if (trimmed.includes('渚嬪彞锛?) || trimmed.includes('渚嬪彞:')) {
+> 1215 |                                             isExampleSection = true;
+       |                                             ^^^^^^^^^^^^^^^^ Cannot reassign `isExampleSection` after render completes
+  1216 |                                             return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
+  1217 |                                         }
+  1218 |  react-hooks/immutability
+
+C:\Users\sai\yomi\src\components\LoadingProgress.tsx
+  18:11  warning  'isDark' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\ReaderHeader.tsx
+  35:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\ReaderHeader.tsx:35:9
+  33 |
+  34 |     useEffect(() => {
+> 35 |         setMounted(true);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  36 |     }, []);
+  37 |
+  38 |     const isDark = mounted && settings.theme === 'dark';  react-hooks/set-state-in-effect
+  38:11  warning  'isDark' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\RefactoredInput.tsx
+  3:8  warning  'clsx' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\ResizableThreeSection.tsx
+  119:8  warning  React Hook useEffect has missing dependencies: 'effectiveMinBottom' and 'effectiveMinTop'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\sai\yomi\src\components\SettingsModal.tsx
+  13:10  warning  'COLOR_THEMES' is defined but never used  @typescript-eslint/no-unused-vars
+  13:24  warning  'ThemeId' is defined but never used       @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\components\TextAnalyzer.tsx
+  191:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\sai\yomi\src\components\TextAnalyzer.tsx:191:13
+  189 |             // If we keep the old result but clear translations, it looks like "Not Translated".
+  190 |             // Let's clear translations immediately.
+> 191 |             setTranslations(new Map());
+      |             ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  192 |         }
+  193 |
+  194 |         const timer = setTimeout(() => {  react-hooks/set-state-in-effect
+
+C:\Users\sai\yomi\src\components\TranslationTip.tsx
+  4:10  warning  'ChevronDown' is defined but never used  @typescript-eslint/no-unused-vars
+  4:23  warning  'RefreshCw' is defined but never used    @typescript-eslint/no-unused-vars
+  4:34  warning  'Volume2' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\dictionary\yomitanLoader.ts
+  85:15  warning  'cacheName' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\lib\grammar\grammarMatcher.ts
+  39:10  warning  'deduplicateMatches' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\sai\yomi\src\store\useGeminiStore.ts
+   59:56   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:33   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  151:79   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  174:84   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:33   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  281:83   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:46   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  288:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+鉁?65 problems (3 errors, 62 warnings)
+

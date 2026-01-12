@@ -41,28 +41,15 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         setError(null);
         setSelectedToken(null);
         setSpeakingTokenId(null);
-        setTranslations(new Map());
-        setResult(null); // Clear previous result
+        // Do not clear translations here, handled in text effect
+        setResult(null);
 
         try {
             const analysis = await analyzeJapaneseText(text);
             if (!isMountedRef.current) return;
 
-            // Immediately show result - don't wait for translations
             setResult(analysis);
-            setIsLoading(false); // Stop loading spinner as soon as analysis is ready
-
-            // Start translating sentences in background (parallel, decoupled from display)
-            analysis.sentences.forEach(async (sentence) => {
-                try {
-                    const translation = await translateText(sentence.original);
-                    if (isMountedRef.current) {
-                        setTranslations(prev => new Map(prev).set(sentence.id, translation));
-                    }
-                } catch (e) {
-                    console.warn('Translation failed', e);
-                }
-            });
+            setIsLoading(false);
         } catch (err: unknown) {
             if (!isMountedRef.current) return;
             console.error('Analysis error:', err);
@@ -71,6 +58,30 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
             setIsLoading(false);
         }
     }, [text, setSelectedToken, setSpeakingTokenId]);
+
+    // Manual Full Translation Trigger
+    const handleFullTranslation = async () => {
+        if (!result || result.sentences.length === 0) return;
+
+        const sentences = result.sentences;
+        const fullText = sentences.map(s => s.original).join('\n');
+
+        try {
+            const translatedText = await translateText(fullText);
+
+            if (isMountedRef.current && translatedText) {
+                const translatedSentences = translatedText.split('\n');
+                const newMap = new Map<string, string>();
+                sentences.forEach((s, idx) => {
+                    const trans = translatedSentences[idx] || '';
+                    newMap.set(s.id, trans);
+                });
+                setTranslations(newMap);
+            }
+        } catch (e) {
+            console.warn('Bulk translation failed', e);
+        }
+    };
 
     // Build token map when result changes
     useEffect(() => {
@@ -169,11 +180,26 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     // Cleanup of internal state not needed anymore as store handles it.
 
 
-    // Auto-analyze on mount
+    // Debounced Auto-analyze on text change
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        analyze();
-    }, [analyze]);
+        // Reset state immediately on typing
+        if (text.trim()) {
+            // We don't want to clear result immediately to prevent flickering?
+            // User said: "Reset full translation... collapse panel".
+            // If we keep the old result but clear translations, it looks like "Not Translated".
+            // Let's clear translations immediately.
+            // Wrap in setTimeout to avoid "setState synchronously" warning from strict linter
+            setTimeout(() => {
+                setTranslations(new Map());
+            }, 0);
+        }
+
+        const timer = setTimeout(() => {
+            analyze();
+        }, 1000); // 1s debounce
+
+        return () => clearTimeout(timer);
+    }, [text, analyze]);
 
     const handleTokenSelect = (token: WordToken, sentenceOriginal?: string) => {
         setSelectedToken(token);
@@ -227,6 +253,23 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         <div className={clsx("pb-20 font-japanese", fontSizeClass)}>
             {/* Sentences */}
             <div className="space-y-4">
+                {/* Global Translation Trigger */}
+                {result && result.sentences.length > 0 && translations.size === 0 && (
+                    <div className="flex justify-start mb-4">
+                        <button
+                            onClick={handleFullTranslation}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-secondary)] border border-[var(--border-muted)]"
+                        >
+                            <span className="w-4 h-4 text-orange-500">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                                </svg>
+                            </span>
+                            全文翻译
+                        </button>
+                    </div>
+                )}
+
                 {result.sentences.map((sentence, sentenceIndex) => {
                     // Filter out space-only tokens
                     const filteredTokens = sentence.tokens.filter(token =>

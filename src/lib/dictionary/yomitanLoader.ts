@@ -91,7 +91,7 @@ class YomitanLoader {
 
             // Try to get from Cache API first
             if (typeof window !== 'undefined' && 'caches' in window) {
-                cache = await caches.open(DICTIONARY_CACHE_NAME);
+                cache = await caches.open(cacheName);
                 response = await cache.match(url);
             }
 

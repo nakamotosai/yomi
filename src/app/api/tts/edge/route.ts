@@ -104,20 +104,8 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
 
     console.log('[EdgeTTS] Connecting to Edge TTS...');
 
-    // Cloudflare Workers - Outgoing WebSocket connection pattern
-    const response = await fetch(wsUrl, {
-        headers: {
-            'Upgrade': 'websocket',
-            'Connection': 'Upgrade',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
-            'Origin': 'chrome-extension://jdmojkciocbebbpMaphlnoooglehbebe'
-        }
-    });
-
-    const ws: any = (response as any).webSocket;
-    if (!ws) {
-        throw new Error(`Edge TTS WebSocket connection failed: ${response.status} ${response.statusText}. Ensure this is running on Cloudflare Pages or a supported environment.`);
-    }
+    // standard WebSocket connection
+    const ws = new WebSocket(wsUrl);
 
     // ws.accept() is only for server-side sockets. For outgoing client-side sockets from fetch, it should not be called.
 
@@ -227,35 +215,37 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
         });
 
         // 1. Send Speech Config
-        const configMessage = `X-Timestamp:${new Date().toISOString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
-            JSON.stringify({
-                context: {
-                    synthesis: {
-                        audio: {
-                            metadataOptions: {
-                                sentenceBoundaryEnabled: false,
-                                wordBoundaryEnabled: true
-                            },
-                            outputFormat: 'audio-24khz-48kbitrate-mono-mp3'
+        ws.addEventListener('open', () => {
+            const configMessage = `X-Timestamp:${new Date().toISOString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
+                JSON.stringify({
+                    context: {
+                        synthesis: {
+                            audio: {
+                                metadataOptions: {
+                                    sentenceBoundaryEnabled: false,
+                                    wordBoundaryEnabled: true
+                                },
+                                outputFormat: 'audio-24khz-48kbitrate-mono-mp3'
+                            }
                         }
                     }
-                }
-            });
-        ws.send(configMessage);
+                });
+            ws.send(configMessage);
 
-        // 2. Send SSML
-        const ratePct = Math.round(rate * 100);
-        const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
-        const escapedText = escapeXml(text);
-        const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ja-JP'>` +
-            `<voice name='${voice}'>` +
-            `<prosody rate='${rateStr}'>` +
-            `${escapedText}` +
-            `</prosody>` +
-            `</voice>` +
-            `</speak>`;
+            // 2. Send SSML
+            const ratePct = Math.round(rate * 100);
+            const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+            const escapedText = escapeXml(text);
+            const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ja-JP'>` +
+                `<voice name='${voice}'>` +
+                `<prosody rate='${rateStr}'>` +
+                `${escapedText}` +
+                `</prosody>` +
+                `</voice>` +
+                `</speak>`;
 
-        const ssmlMessage = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n` + ssml;
-        ws.send(ssmlMessage);
+            const ssmlMessage = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n` + ssml;
+            ws.send(ssmlMessage);
+        });
     });
 }

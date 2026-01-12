@@ -67,7 +67,7 @@ async function parseTermBank(url: string): Promise<GrammarEntry[]> {
         }
 
         if (!response) {
-            console.log(`[Grammar] Downloading bank ${index}...`);
+            console.log(`[Grammar] Downloading bank ${url}...`);
             response = await fetch(url);
             if (!response.ok) return entries;
 
@@ -79,7 +79,7 @@ async function parseTermBank(url: string): Promise<GrammarEntry[]> {
                 await cache.put(url, response.clone());
             }
         } else {
-            console.log(`[Grammar] Loading bank ${index} from cache...`);
+            console.log(`[Grammar] Loading bank ${url} from cache...`);
             const blob = await response.blob();
             useDictionaryStore.getState().addDownloadedBytes(blob.size);
         }

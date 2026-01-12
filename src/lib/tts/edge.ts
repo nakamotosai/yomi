@@ -103,7 +103,8 @@ export class EdgeTtsProvider implements TtsProvider {
                 }
 
                 if (!res.ok) {
-                    throw new Error('Edge TTS API failed with status ' + res.status);
+                    const errorMsg = await res.text();
+                    throw new Error(`Edge TTS API failed with status ${res.status}: ${errorMsg}`);
                 }
 
                 data = await res.json();
