@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Eraser, ImagePlus, Languages, Loader2 } from 'lucide-react';
+import { Eraser, ImagePlus, Languages, Loader2, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { createWorker, PSM } from 'tesseract.js';
 import { translateText } from '@/lib/translate';
@@ -19,7 +19,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
     const fileInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isTranslating, setIsTranslating] = useState(false);
-    const { settings } = useAppStore();
+    const { settings, setAnalyzedText, analyzedText } = useAppStore();
     const isDark = settings.theme === 'dark';
 
     // Detect if text is mostly non-Japanese (e.g. Chinese or English)
@@ -225,6 +225,20 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                         title="クリア"
                     >
                         <Eraser className="w-6 h-6" />
+                    </button>
+
+                    {/* Analyze Button */}
+                    <button
+                        onClick={() => setAnalyzedText(inputText)}
+                        disabled={!inputText.trim() || inputText === analyzedText}
+                        className={clsx(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100",
+                            inputText !== analyzedText && inputText.trim() ? "bg-[var(--accent-primary)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-primary)] border border-[var(--border-default)]"
+                        )}
+                        title="分析"
+                    >
+                        <Search className="w-5 h-5" />
+                        <span className="font-bold text-sm">分析</span>
                     </button>
                 </div>
             </div>

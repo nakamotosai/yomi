@@ -63,7 +63,7 @@ const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
 const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
 
 const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: () => void }) => {
-  const { appMode, inputText, isSpeaking, isPaused, settings, centerViewMode, isFromExtension, setIsFromExtension } = useAppStore();
+  const { appMode, inputText, analyzedText, isSpeaking, isPaused, settings, centerViewMode, isFromExtension, setIsFromExtension, setAnalyzedText } = useAppStore();
   const [isMounted, setIsMounted] = useState(false);
   const isDark = isMounted && settings.theme === 'dark';
 
@@ -74,9 +74,14 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
 
   // Auto-expand translation when imported from browser extension
   useEffect(() => {
-    if (isFromExtension && inputText.trim() && !showTranslation) {
-      setShowTranslation(true);
-      // Trigger translation
+    if (isFromExtension && inputText.trim()) {
+      // Immediately reset to prevent re-triggering on inputText changes
+      setIsFromExtension(false);
+
+      if (!showTranslation) setShowTranslation(true);
+
+      // Trigger analysis and translation
+      setAnalyzedText(inputText);
       setIsTranslating(true);
       translateText(inputText).then(text => {
         setFullTranslation(text);
@@ -84,11 +89,11 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
         console.error("Translation failed", e);
       }).finally(() => {
         setIsTranslating(false);
-        // Reset extension flag after handling
-        setIsFromExtension(false);
       });
     }
-  }, [isFromExtension, inputText, showTranslation, setIsFromExtension]);
+    // Only trigger when isFromExtension becomes true or inputText changes while it is true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFromExtension, inputText]);
 
   // Handle toggling translation
   const handleToggleTranslation = async () => {
@@ -96,10 +101,10 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       setShowTranslation(false);
     } else {
       setShowTranslation(true);
-      if (!fullTranslation && inputText.trim()) {
+      if (!fullTranslation && analyzedText.trim()) {
         setIsTranslating(true);
         try {
-          const text = await translateText(inputText);
+          const text = await translateText(analyzedText);
           setFullTranslation(text);
         } catch (e) {
           console.error("Translation failed", e);
@@ -110,7 +115,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
     }
   };
 
-  // Effect to auto-update translation when input text changes
+  // Effect to auto-update translation when analyzed text changes
   useEffect(() => {
     // If panel is closed, clear stale translation so next open fetches fresh
     if (!showTranslation) {
@@ -118,27 +123,22 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       return;
     }
 
-    // If panel is open, debounce and translate
-    const timer = setTimeout(async () => {
-      if (!inputText.trim()) {
-        setFullTranslation(null);
-        return;
-      }
+    if (!analyzedText.trim()) {
+      setFullTranslation(null);
+      return;
+    }
 
-      setIsTranslating(true);
-      try {
-        const text = await translateText(inputText);
-        setFullTranslation(text);
-      } catch (e) {
-        console.error("Auto-translation failed", e);
-      } finally {
-        setIsTranslating(false);
-      }
-    }, 1000); // 1 second debounce
-
-    return () => clearTimeout(timer);
+    setIsTranslating(true);
+    // Directly translate analyzed text when it changes
+    translateText(analyzedText).then(text => {
+      setFullTranslation(text);
+    }).catch(e => {
+      console.error("Auto-translation failed", e);
+    }).finally(() => {
+      setIsTranslating(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputText]);
+  }, [analyzedText, showTranslation]);
 
   // Scrollbar Visibility Logic
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -188,7 +188,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
         background: 'transparent',
       }}
     >
-      {inputText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
+      {analyzedText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
         <div className="shrink-0 z-10 pl-2 pr-1 pt-2 pb-1">
           <div
             className="flex flex-col relative transition-all duration-300 ease-spring"
@@ -263,8 +263,8 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
           >
             <div className="min-h-full">
               {appMode === 'reader' ? (
-                inputText.trim() ? (
-                  <TextAnalyzer key={inputText} text={inputText} />
+                analyzedText.trim() ? (
+                  <TextAnalyzer key={analyzedText} text={analyzedText} />
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center select-none pb-20" style={{ color: 'var(--text-faint)' }}>
                     <div
@@ -275,7 +275,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
                     </div>
                     <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
                     <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
-                      左下の入力欄に日本語を入力するか、画像を貼り付けてOCR解析を開始します
+                      分析ボタンをクリックして解析を開始します
                     </p>
                   </div>
                 )
@@ -296,6 +296,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   const setAppMode = useAppStore(s => s.setAppMode);
   const inputText = useAppStore(s => s.inputText);
   const setInputText = useAppStore(s => s.setInputText);
+  const analyzedText = useAppStore(s => s.analyzedText);
+  const setAnalyzedText = useAppStore(s => s.setAnalyzedText);
   const isSpeaking = useAppStore(s => s.isSpeaking);
   const setIsSpeaking = useAppStore(s => s.setIsSpeaking);
   const isPaused = useAppStore(s => s.isPaused);
@@ -357,17 +359,21 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       if (hasJapanese) {
         // Japanese text - use directly
         setInputText(textParam);
+        setAnalyzedText(textParam);
       } else {
         // Non-Japanese text - translate to Japanese first
         translateText(textParam, 'ja', 'auto').then(japaneseText => {
           if (japaneseText && japaneseText.trim()) {
             setInputText(japaneseText);
+            setAnalyzedText(japaneseText);
           } else {
             // Fallback to original text if translation fails
             setInputText(textParam);
+            setAnalyzedText(textParam);
           }
         }).catch(() => {
           setInputText(textParam);
+          setAnalyzedText(textParam);
         });
       }
 
@@ -381,6 +387,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       const currentText = useAppStore.getState().inputText;
       if (!currentText || !currentText.trim()) {
         setInputText(DEFAULT_INPUT_TEXT);
+        setAnalyzedText(DEFAULT_INPUT_TEXT);
       }
     }
   }, [searchParams, setInputText, setIsFromExtension]);
@@ -434,6 +441,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
   const handleClear = () => {
     setInputText('');
+    setAnalyzedText('');
     handleStop();
   };
 
@@ -621,7 +629,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         background: 'transparent', // Transparent to show the main background
       }}
     >
-      {inputText.trim() && appMode === 'reader' && (
+      {analyzedText.trim() && appMode === 'reader' && (
         /* Toolbar */
         <div
           className="h-14 flex items-center px-4 md:px-6 sticky top-0 z-10 justify-between shrink-0"
@@ -690,8 +698,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       >
         <div className="max-w-3xl mx-auto min-h-full">
           {appMode === 'reader' ? (
-            inputText.trim() ? (
-              <TextAnalyzer key={inputText} text={inputText} />
+            analyzedText.trim() ? (
+              <TextAnalyzer key={analyzedText} text={analyzedText} />
             ) : (
               <div className="h-full flex flex-col items-center justify-center select-none pb-20" style={{ color: 'var(--text-faint)' }}>
                 <div
@@ -702,7 +710,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                 </div>
                 <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
                 <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
-                  左下の入力欄に日本語を入力するか、画像を貼り付けてOCR解析を開始します
+                  分析ボタンをクリックして解析を開始します
                 </p>
               </div>
             )

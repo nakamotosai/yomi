@@ -117,16 +117,19 @@ async function connectToEdgeTTS(wsUrl: string): Promise<WebSocket> {
                 ...commonHeaders,
                 'Upgrade': 'websocket',
                 'Connection': 'Upgrade',
-                'Sec-WebSocket-Key': btoa(globalThis.crypto.randomUUID().substring(0, 16)),
-                'Sec-WebSocket-Version': '13'
+                // Note: Sec-WebSocket-Key and Version are handled by Cloudflare runtime
             }
         });
 
         if (connectResp.status === 101) {
-            const socket = (connectResp as any).webSocket as WebSocket;
+            const socket = (connectResp as any).webSocket as any;
             if (socket) {
                 console.log('[EdgeTTS] Connected via Cloudflare fetch upgrade');
-                return socket;
+                // CRITICAL: Cloudflare requires calling accept() on the WebSocket object
+                if (typeof socket.accept === 'function') {
+                    socket.accept();
+                }
+                return socket as WebSocket;
             }
         }
         console.warn(`[EdgeTTS] Cloudflare upgrade returned status: ${connectResp.status}`);
@@ -179,8 +182,9 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
 
             if (data instanceof ArrayBuffer) {
                 buffer = new Uint8Array(data);
-            } else if (ArrayBuffer.isView(data)) { // Handles Node.js Buffer/Uint8Array
-                buffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            } else if (typeof data !== 'string' && data && (data.buffer instanceof ArrayBuffer || ArrayBuffer.isView(data))) {
+                // Safer check for Buffer/Uint8Array-like objects
+                buffer = new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength || data.length);
             }
 
             if (buffer) {
@@ -282,8 +286,9 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
             reject(new Error(`WebSocket connection error to ${wsUrl.slice(0, 50)}...`));
         });
 
-        // 1. Send Speech Config
-        ws.addEventListener('open', () => {
+        // Handler for starting the TTS protocol
+        const startProtocol = () => {
+            // 1. Send Speech Config
             const configMessage = `X-Timestamp:${new Date().toISOString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
                 JSON.stringify({
                     context: {
@@ -314,6 +319,13 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
 
             const ssmlMessage = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n` + ssml;
             ws.send(ssmlMessage);
-        });
+        };
+
+        // If the socket is already open (common with Cloudflare fetch upgrade), send immediately
+        if (ws.readyState === 1) { // 1 = OPEN
+            startProtocol();
+        } else {
+            ws.addEventListener('open', startProtocol);
+        }
     });
 }

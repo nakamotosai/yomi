@@ -192,31 +192,35 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         }
     }, [result, setPlaylist]);
 
-    // Sequential Auto-Translation Queue
-    // This ensures cards translate one-by-one to avoid API blocking/congestion
+    // Unified debounced full translation trigger
     useEffect(() => {
-        if (!result || !result.sentences || result.sentences.length === 0) return;
+        if (!text.trim() || !result || result.sentences.length === 0) return;
         if (!isMountedRef.current) return;
 
-        // Find first sentence that is NOT translated yet
-        const pendingSentence = result.sentences.find(s => !translations.has(s.id));
+        const timer = setTimeout(async () => {
+            if (!isMountedRef.current) return;
+            console.log(`[TextAnalyzer] Fetching single full translation for entire text...`);
 
-        if (pendingSentence) {
-            // Found a pending one. Translate it.
-            // We use a small timeout to act as a "queue pacer" and prevent tight loops
-            const timer = setTimeout(() => {
-                if (!isMountedRef.current) return;
-
-                // Double check if it's still needed
-                if (!translations.has(pendingSentence.id)) {
-                    console.log(`[Auto-Translate] Processing: ${pendingSentence.id}`);
-                    handleSentenceTranslation(pendingSentence.id, pendingSentence.original);
+            try {
+                const translatedText = await translateText(text);
+                if (isMountedRef.current && translatedText) {
+                    // Split by lines and map to IDs
+                    const translatedLines = translatedText.split('\n').filter(l => l.trim().length > 0);
+                    const newMap = new Map();
+                    result.sentences.forEach((s, idx) => {
+                        // Attempt to match line by line
+                        const trans = translatedLines[idx] || '';
+                        newMap.set(s.id, trans);
+                    });
+                    setTranslations(newMap);
                 }
-            }, 300); // 300ms delay between items to be safe
+            } catch (e) {
+                console.warn('Full text translation failed', e);
+            }
+        }, 1500); // Wait 1.5s after text stabilizes to call API once
 
-            return () => clearTimeout(timer);
-        }
-    }, [result, translations]);
+        return () => clearTimeout(timer);
+    }, [text, result]);
 
     // Analyze text with debounce
     useEffect(() => {

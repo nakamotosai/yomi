@@ -140,12 +140,7 @@ async function fetchShortMeaning(word: string): Promise<string> {
 }
 
 export default function VocabTip({ tokens }: VocabTipProps) {
-    const [vocabEntries, setVocabEntries] = useState<VocabEntry[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [speakingWord, setSpeakingWord] = useState<string | null>(null);
-    const { setSelectedToken, setCurrentSentence, settings, selectedToken, selectedGrammar, isSpeaking } = useAppStore();
-    const { vocabList, addVocab, removeVocab, isWordSaved } = useVocabStore();
+    const { setSelectedToken, setCurrentSentence, settings, isSpeaking } = useAppStore();
 
     // Dynamic Noun Color Logic:
     const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
@@ -153,53 +148,11 @@ export default function VocabTip({ tokens }: VocabTipProps) {
 
     const worthyTokens = useMemo(() => filterWorthyVocab(tokens), [tokens]);
 
-    // 组件加载时获取释义
-    useEffect(() => {
-        let cancelled = false;
-
-        async function loadMeanings() {
-            if (worthyTokens.length === 0) {
-                setIsLoading(false);
-                return;
-            }
-
-            setIsLoading(true);
-
-            const promises = worthyTokens.map(async (token) => {
-                const shortMeaning = await fetchShortMeaning(token.baseForm || token.surface);
-                return { token, shortMeaning };
-            });
-
-            const results = await Promise.all(promises);
-
-            if (!cancelled) {
-                setVocabEntries(results);
-                setIsLoading(false);
-            }
-        }
-
-        loadMeanings();
-        return () => { cancelled = true; };
-    }, [worthyTokens]);
-
-    // Auto-selection removed to prevent hijacking mobile navigation
-    // useEffect(() => {
-    //     if (!isLoading && vocabEntries.length >= 3 && !selectedToken && !selectedGrammar) {
-    //         const firstEntry = vocabEntries[0];
-    //         if (firstEntry) {
-    //             const sentenceOriginal = tokens.map(t => t.surface).join('');
-    //             setCurrentSentence(sentenceOriginal);
-    //             setSelectedToken(firstEntry.token);
-    //         }
-    //     }
-    // }, [isLoading, vocabEntries, selectedToken, selectedGrammar, tokens, setCurrentSentence, setSelectedToken]);
-
-    // 生词最少3个才显示
-    if (isLoading || vocabEntries.length < 3) return null;
+    // 只要有生词就显示
+    if (worthyTokens.length === 0) return null;
 
     const handleWordClick = (token: WordToken, e: React.MouseEvent) => {
         e.stopPropagation();
-        setIsExpanded(true); // User request: Always expand panel when clicking a word
         const sentenceOriginal = tokens.map(t => t.surface).join('');
         setCurrentSentence(sentenceOriginal);
         setSelectedToken(token);
@@ -211,11 +164,8 @@ export default function VocabTip({ tokens }: VocabTipProps) {
 
     return (
         <div className="py-1">
-            <div
-                className="flex items-start gap-3 cursor-pointer group"
-                onClick={() => setIsExpanded(!isExpanded)}
-            >
-                <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
+            <div className="flex items-start gap-3 group">
+                <div className="shrink-0 w-12 flex items-center mt-1 select-none">
                     <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: nounBarColor }}></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         生词
@@ -223,27 +173,22 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    {/* Preview Chips (Always visible) */}
                     <div className="flex flex-wrap gap-1.5 items-center">
                         {worthyTokens.map((token, idx) => {
-                            // Resolve theme colors
                             const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
                             const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
                             const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
                             const isWafu = settings.colorScheme === 'wafu';
 
-                            // Determine style classes
                             const bgClass = isColorEnabled ? themeColors.bg : 'bg-[var(--bg-elevated)]';
                             const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-secondary)]';
                             const borderClass = isColorEnabled
                                 ? (themeColors.border || 'border-transparent')
                                 : 'border-[var(--border-muted)]';
 
-                            // Wafu/Monochrome Override
                             const wafuStyle = (() => {
                                 const isMonochrome = settings.colorScheme === 'monochrome';
                                 if ((!isWafu && !isMonochrome) || !isColorEnabled) return {};
-
                                 const posKeyMap: Record<string, string> = {
                                     [PartOfSpeech.NOUN]: 'noun', [PartOfSpeech.PRONOUN]: 'noun', [PartOfSpeech.PROPER_NOUN]: 'noun',
                                     [PartOfSpeech.VERB]: 'verb', [PartOfSpeech.ADJECTIVE]: 'adjective', [PartOfSpeech.PARTICLE]: 'particle',
@@ -265,8 +210,6 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                     onClick={(e) => handleWordClick(token, e)}
                                     className={clsx(
                                         "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border cursor-pointer hover:brightness-110",
-                                        // If Wafu or Monochrome is active, we disable standard classes
-                                        // However, inline style always wins.
                                         (!isWafu && settings.colorScheme !== 'monochrome') && bgClass,
                                         (!isWafu && settings.colorScheme !== 'monochrome') && textClass,
                                         (!isWafu && settings.colorScheme !== 'monochrome') && borderClass
@@ -279,138 +222,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                         })}
                     </div>
                 </div>
-
-                {/* Arrow - Always visible */}
-                <svg
-                    className={clsx(
-                        "w-4 h-4 text-[var(--text-muted)] transition-transform mt-0.5 shrink-0 hover:text-[var(--text-secondary)]",
-                        isExpanded && "rotate-180"
-                    )}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
             </div>
-
-            {/* List Content (Visible when expanded) - Placed below header with indentation */}
-            <Collapsible isOpen={isExpanded} variant="default">
-                <div className="flex flex-col gap-1 mt-2 ml-[60px] border-l-2 border-[var(--border-muted)] pl-2">
-                    {vocabEntries.map((entry, idx) => {
-                        const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
-                        const themeColors = currentTheme.colors[entry.token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
-                        const isColorEnabled = (settings.activeColorPOS || []).includes(entry.token.pos);
-                        const textClass = isColorEnabled ? themeColors.text : 'text-[var(--text-primary)]';
-
-                        // Logic for Saved State
-                        const effectiveReading = entry.token.reading || entry.token.surface;
-                        const isSaved = isWordSaved(entry.token.surface, effectiveReading);
-
-                        const handleToggleSave = (e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            if (isSaved) {
-                                const item = vocabList.find(v => v.word === entry.token.surface && v.reading === effectiveReading);
-                                if (item) removeVocab(item.id);
-                            } else {
-                                const sentenceContext = tokens.map(t => t.surface).join('');
-                                addVocab({
-                                    word: entry.token.surface,
-                                    reading: effectiveReading,
-                                    baseForm: entry.token.baseForm, // Assuming baseForm is available on token
-                                    meaning: entry.shortMeaning,
-                                    pos: entry.token.pos,
-                                    pitch: entry.token.pitch,
-                                    context: sentenceContext,
-                                });
-                            }
-                        };
-
-                        return (
-                            <div
-                                key={idx}
-                                className="flex items-baseline gap-2 py-1 border-b border-[var(--border-muted)] last:border-0 hover:bg-[var(--bg-elevated)] transition-colors px-2 -mx-2 rounded cursor-pointer group/row"
-                                onClick={(e) => handleWordClick(entry.token, e)}
-                            >
-                                {/* Word + Reading */}
-                                <div className="shrink-0 flex items-baseline gap-2 w-1/3 min-w-[100px]">
-                                    {/* Star Button - Always visible, subtle by default */}
-                                    <button
-                                        onClick={handleToggleSave}
-                                        className={clsx(
-                                            "shrink-0 w-4 h-4 transition-all focus:outline-none flex items-center justify-center -ml-1 mr-1",
-                                            isSaved
-                                                ? "text-[var(--scheme-accent)] fill-[var(--scheme-accent)]"
-                                                : "text-[var(--text-faint)] hover:text-[var(--scheme-accent)] hover:fill-[var(--scheme-accent)]" // Very subtle gray by default
-                                        )}
-                                        title={isSaved ? "保存済み（クリックして削除）" : "単語帳に保存"}
-                                    >
-                                        <Star className="w-3.5 h-3.5" strokeWidth={isSaved ? 2 : 1.5} />
-                                    </button>
-
-                                    <span className={clsx("font-bold text-base", textClass)}>
-                                        {entry.token.surface}
-                                    </span>
-
-                                    {/* Speaker Button - Always visible, circular bg when speaking */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (speakingWord === entry.token.surface) {
-                                                ttsManager.stop();
-                                                setSpeakingWord(null);
-                                                return;
-                                            }
-
-                                            if (isSpeaking) return;
-
-                                            setSpeakingWord(entry.token.surface);
-                                            ttsManager.speak(entry.token.surface, settings, {
-                                                onStart: () => { },
-                                                onEnd: () => setSpeakingWord(null),
-                                                onError: () => setSpeakingWord(null)
-                                            });
-                                        }}
-                                        className={clsx(
-                                            "inline-flex items-center justify-center w-5 h-5 rounded-full transition-all ml-1",
-                                            speakingWord === entry.token.surface
-                                                ? "bg-[var(--scheme-primary-bg)] text-[var(--scheme-primary)] scale-110" // Active state
-                                                : "text-[var(--text-faint)] hover:text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary-bg)]" // Default subtle state
-                                        )}
-                                        title="朗读"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            {speakingWord === entry.token.surface ? (
-                                                // Active/Speaking Icon (Sound waves)
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                            ) : (
-                                                // Static Icon (Simple Speaker)
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                            )}
-                                        </svg>
-                                    </button>
-                                    {/* 纯英文不显示读音 */}
-                                    {entry.token.reading &&
-                                        entry.token.reading !== entry.token.surface &&
-                                        !/^[a-zA-Z0-9\s]+$/.test(entry.token.surface) && (
-                                            <span className="text-xs text-[var(--text-muted)] truncate">
-                                                {entry.token.reading}
-                                            </span>
-                                        )}
-                                </div>
-
-                                {/* Separator */}
-                                <div className="text-[var(--text-faint)] text-xs">·</div>
-
-                                {/* Meaning */}
-                                <div className="text-[var(--text-secondary)] text-sm truncate flex-1" title={entry.shortMeaning}>
-                                    {entry.shortMeaning}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </Collapsible>
         </div>
     );
 }

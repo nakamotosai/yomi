@@ -245,44 +245,12 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
     const [isCached, setIsCached] = useState(false);
     const [isAIExpanded, setIsAIExpanded] = useState(false);
 
-    // Clear AI result when switching grammar (Auto-load cache)
+    // Clear AI result when switching grammar
     useEffect(() => {
-        // If we switch to an item that is ALREADY generating, auto-expand
-        if (isGenerating) {
-            setAiResult(''); // Will use streamedContent
-            setAiResultTitle('AI老师在线解读');
-            setIsAIExpanded(true);
-            return;
-        }
-
-        // Always reset local state when switching items
-        // The store's activeGenerations will handle the spinner state if the new item is loading
         setAiResult('');
         setAiResultTitle('');
         setIsCached(false);
         setIsAIExpanded(false);
-
-        // Auto-check cache
-        if (grammar.id) {
-            const checkCache = async () => {
-                try {
-                    const cacheKey = `grammar:${grammar.title}`;
-                    const res = await fetch(`/api/cache?key=${encodeURIComponent(cacheKey)}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.success && data.text) {
-                            setAiResult(data.text);
-                            setAiResultTitle('AI老师在线解读');
-                            setIsCached(true);
-                            setIsAIExpanded(true);
-                        }
-                    }
-                } catch (e) {
-                    // Ignore silent failures
-                }
-            };
-            checkCache();
-        }
     }, [grammar.id]);
 
     // Resume TTS Handler
@@ -340,11 +308,14 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
             // Debugging log
             console.log('[Grammar AI] Generating request for:', grammar.title);
 
-            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解语法：${grammar.title}。
+            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。
+**必须全程使用中文进行讲解和回复。**
+正在讲解语法：${grammar.title}。
 
 【重要风格指南】
 - 严禁使用『』或「」来包裹目标语法。
 - 内容必须通俗、接地气，像是在微信聊天。
+- **字数限制**：人话解读部分控制在 100 字以内。
 
 【任务要求】
 第1步 - 人话解读：
@@ -521,7 +492,14 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                             }}>
                             <div className="flex items-center gap-2 mb-2">
                                 <Sparkles className="w-4 h-4" style={{ color: grammarColor }} />
-                                <div className="flex-1 text-sm font-bold" style={{ color: grammarColor }}>{aiResultTitle}</div>
+                                <div className="flex-1 text-sm font-bold flex items-center gap-2" style={{ color: grammarColor }}>
+                                    {aiResultTitle}
+                                    {aiResult && (
+                                        <span className="text-[10px] font-normal opacity-60">
+                                            ({aiResult.length} 字)
+                                        </span>
+                                    )}
+                                </div>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -620,8 +598,7 @@ export default function InfoPanel() {
     const [isCached, setIsCached] = useState(false);
     const [isAIExpanded, setIsAIExpanded] = useState(false);
 
-    // Clear AI result when switching words (Auto-load cache if available)
-    // Clear AI result when switching words (Auto-load cache if available)
+    // Clear AI result when switching words
     useEffect(() => {
         // If we switch to an item that is ALREADY generating, auto-expand
         if (isGenerating) {
@@ -640,28 +617,6 @@ export default function InfoPanel() {
             setIsCached(false);
             setIsAIExpanded(false);
         }, 0);
-
-        // Auto-check cache
-        if (token) {
-            const checkCache = async () => {
-                try {
-                    const cacheKey = `word:${token.surface}`;
-                    const res = await fetch(`/api/cache?key=${encodeURIComponent(cacheKey)}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.success && data.text) {
-                            setAiResult(data.text);
-                            setAiResultTitle('AI老师在线解读');
-                            setIsCached(true);
-                            setIsAIExpanded(true);
-                        }
-                    }
-                } catch (e) {
-                    console.error('Silent cache check failed', e);
-                }
-            };
-            checkCache();
-        }
     }, [token?.surface, token?.reading]);
 
     const handleAIToggle = () => {
@@ -684,11 +639,14 @@ export default function InfoPanel() {
             // Fetch reference data from dictionary if possible
             const refDef = yomitanEntry?.definitions[0] || "";
 
-            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。正在讲解单词：${token.surface}。
+            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。
+**必须全程使用中文进行讲解和回复。**
+正在讲解单词：${token.surface}。
 
 【重要风格指南】
 - 严禁使用『』或「」来包裹目标单词。
 - 将这个词“翻译”成风趣的人话。
+- **字数限制**：人话解读部分必须控制在 100 字以内，总体原则是“短小精悍”。
 
 【任务要求】
 第1步 - 人话解读：
@@ -1278,7 +1236,14 @@ export default function InfoPanel() {
                             }}>
                             <div className="flex items-center gap-2 mb-2">
                                 <Sparkles className="w-4 h-4" style={{ color: wordAccentColor }} />
-                                <div className="flex-1 text-sm font-bold" style={{ color: wordAccentColor }}>{aiResultTitle}</div>
+                                <div className="flex-1 text-sm font-bold flex items-center gap-2" style={{ color: wordAccentColor }}>
+                                    {aiResultTitle}
+                                    {aiResult && (
+                                        <span className="text-[10px] font-normal opacity-60">
+                                            ({aiResult.length} 字)
+                                        </span>
+                                    )}
+                                </div>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();

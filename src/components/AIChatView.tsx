@@ -129,6 +129,13 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                                     </div>
                                 )}
+                                {msg.role === 'model' && msg.content && (
+                                    <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex justify-end">
+                                        <span className="text-[10px] text-[var(--text-faint)] select-none">
+                                            字数: {msg.content.length}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))

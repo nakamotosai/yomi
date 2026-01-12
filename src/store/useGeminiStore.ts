@@ -80,10 +80,11 @@ export const useGeminiStore = create<GeminiState>()(
 4. **简洁开场**：开场白要干脆利落。
 
 # Output Format
-请严格遵守 Markdown 格式结构进行回答。`;
+请严格遵守 Markdown 格式结构进行回答。
+所有回答必须简洁明了，字数严格控制在 200 字左右（除非是长难句翻译等特殊情况）。`;
 
-                    // Construct context from history
-                    const contextMessages = history.slice(-6);
+                    // Construct context from history - Limit to last 4 messages (approx 2 rounds)
+                    const contextMessages = history.slice(-4);
                     let contextStr = `Current Conversation Context:\n`;
                     contextMessages.forEach(msg => {
                         contextStr += `${msg.role === 'user' ? 'Student' : 'Teacher'}: ${msg.content}\n`;

@@ -18,8 +18,7 @@ export interface TTSSentence {
 }
 
 export const DEFAULT_INPUT_TEXT = `ようこそ、ここでは日本語の文章を入力して、詳細な読み方や意味を解析することができます。
-単語をクリックすると右側に詳しい辞书情報が表示され、学習の履歴も自动で保存されます。
-左のメニューから「単語帐」や「仮名练习」モードに切り替えて、様々な方法で日本語を学びましょう。`;
+単語をクリックすると右側に詳しい辞书情報が表示され、学習の履歴も自动で保存されます。`;
 
 const DEFAULT_SETTINGS: AppSettings = {
     showFurigana: true,
@@ -101,6 +100,8 @@ interface AppState {
     setIsMobileSheetOpen: (open: boolean) => void;
     isFromExtension: boolean;
     setIsFromExtension: (fromExtension: boolean) => void;
+    analyzedText: string;
+    setAnalyzedText: (text: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -205,12 +206,15 @@ export const useAppStore = create<AppState>()(
             setIsMobileSheetOpen: (open) => set({ isMobileSheetOpen: open }),
             isFromExtension: false,
             setIsFromExtension: (fromExtension) => set({ isFromExtension: fromExtension }),
+            analyzedText: DEFAULT_INPUT_TEXT,
+            setAnalyzedText: (text) => set({ analyzedText: text }),
         }),
         {
             name: 'yomi-app-store-v7',
             partialize: (state) => ({
                 settings: state.settings,
                 inputText: state.inputText,
+                analyzedText: state.analyzedText,
                 history: state.history,
                 layout: state.layout,
             }),
