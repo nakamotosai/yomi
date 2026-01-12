@@ -30,26 +30,31 @@ export class RichGrammarLoader {
                 response = await cache.match(url);
             }
 
+            let data: any;
             if (!response) {
                 console.log('[RichGrammar] Downloading dictionary...');
                 response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-                const blob = await response.clone().blob();
+                const blob = await response.blob();
                 useDictionaryStore.getState().addDownloadedBytes(blob.size);
                 useDictionaryStore.getState().incrementDownloadedUnits();
 
                 if (cache) {
-                    await cache.put(url, response.clone());
+                    await cache.put(url, new Response(blob, {
+                        headers: { 'Content-Type': 'application/json' }
+                    }));
                 }
+                data = JSON.parse(await blob.text());
             } else {
                 console.log('[RichGrammar] Loading dictionary from cache...');
                 const blob = await response.blob();
                 useDictionaryStore.getState().addDownloadedBytes(blob.size);
+                data = JSON.parse(await blob.text());
             }
 
-            if (response && response.ok) {
-                this.dictionary = await response.json();
+            if (data) {
+                this.dictionary = data;
                 console.log('[Grammar] Rich dictionary loaded');
                 useDictionaryStore.getState().incrementLoadedUnits();
             } else {

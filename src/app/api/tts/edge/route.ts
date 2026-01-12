@@ -17,27 +17,30 @@ const WIN_EPOCH = 11644473600;
  * Generate the Sec-MS-GEC token using Web Crypto API
  */
 async function generateSecMsGec(): Promise<string> {
-    // Get current Unix timestamp in seconds
-    let ticks = Math.floor(Date.now() / 1000);
+    // Current time in seconds (Unix Epoch)
+    const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // Add Windows epoch offset
-    ticks += WIN_EPOCH;
+    // Windows Epoch (1601-01-01) to Unix Epoch (1970-01-01) difference in seconds
+    const unixEpochStart = 11644473600;
+
+    // Total seconds since Windows Epoch
+    let ticksSeconds = nowSeconds + unixEpochStart;
 
     // Round down to nearest 5 minutes (300 seconds)
-    ticks -= ticks % 300;
+    // This is the critical step for the token window validation
+    ticksSeconds -= (ticksSeconds % 300);
 
-    // Convert to 100-nanosecond intervals (Windows file time format)
-    const ticksNs = BigInt(ticks) * BigInt(10000000);
+    // Convert to 100-nanosecond intervals (Windows File Time)
+    // 1 second = 10,000,000 ticks (10^7)
+    // Using BigInt to prevent overflow
+    const ticks = BigInt(ticksSeconds) * 10_000_000n;
 
-    // Create string to hash
-    const strToHash = ticksNs.toString() + TRUSTED_CLIENT_TOKEN;
+    // Trusted Client Token (Hardcoded in Edge Browser)
+    const strToHash = ticks.toString() + TRUSTED_CLIENT_TOKEN;
 
-    // Use Web Crypto SHA-256
     const encoder = new TextEncoder();
     const data = encoder.encode(strToHash);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-
-    // Convert to hex string
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
@@ -105,9 +108,16 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
     console.log('[EdgeTTS] Connecting to Edge TTS...');
 
     // standard WebSocket connection
-    const ws = new WebSocket(wsUrl);
-
-    // ws.accept() is only for server-side sockets. For outgoing client-side sockets from fetch, it should not be called.
+    // IMPORTANT: The User-Agent must match the version used in Sec-MS-GEC calculation
+    // and Origin must be exactly correct to avoid 403/Reset packets.
+    const ws = new WebSocket(wsUrl, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+            'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Language': 'en-US,en;q=0.9'
+        }
+    });
 
     return new Promise((resolve, reject) => {
         const requestId = uuidv4().replace(/-/g, '');
@@ -118,15 +128,33 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
 
         // Message handler
         ws.addEventListener('message', async (event: any) => {
-            const data = event.data;
+            let data = event.data;
+
+            // Handle Blob (standard Web API)
+            if (typeof Blob !== 'undefined' && data instanceof Blob) {
+                data = await data.arrayBuffer();
+            }
+
+            // Handle Node.js Buffer or standard ArrayBuffer
+            // In Node.js, data might be a Buffer which is a Uint8Array
+            let buffer: Uint8Array | null = null;
 
             if (data instanceof ArrayBuffer) {
-                const buffer = new Uint8Array(data);
+                buffer = new Uint8Array(data);
+            } else if (ArrayBuffer.isView(data)) { // Handles Node.js Buffer/Uint8Array
+                buffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            }
+
+            if (buffer) {
                 if (buffer.length < 2) return;
 
                 const headerLen = (buffer[0] << 8) | buffer[1];
-                const decoder = new TextDecoder();
-                const headerText = decoder.decode(buffer.slice(2, 2 + headerLen));
+                const textDecoder = new TextDecoder();
+                // Ensure we don't read past buffer bounds
+                if (buffer.length < 2 + headerLen) return;
+
+                const headerText = textDecoder.decode(buffer.slice(2, 2 + headerLen));
+                // console.log('[EdgeTTS] Binary Header:', headerText); // Keep minimal logs
 
                 if (headerText.includes('Path:audio\r\n')) {
                     const audioPayload = buffer.slice(2 + headerLen);
@@ -134,6 +162,8 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
                 }
             } else if (typeof data === 'string') {
                 const message = data;
+                // console.log('[EdgeTTS] Text:', message.slice(0, 50)); // Keep minimal logs
+
                 if (message.includes('Path:audio.metadata')) {
                     const jsonParts = message.split('\r\n\r\n');
                     if (jsonParts.length > 1) {
@@ -210,8 +240,8 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
         });
 
         ws.addEventListener('error', (err: any) => {
-            console.error('[EdgeTTS] WebSocket Error:', err);
-            reject(new Error('WebSocket connection error'));
+            console.error('[EdgeTTS] WebSocket Error Details:', err);
+            reject(new Error(`WebSocket connection error to ${wsUrl.slice(0, 50)}...`));
         });
 
         // 1. Send Speech Config

@@ -8,6 +8,8 @@ const MODEL_ID = "gemma-3-27b-it";
 const RPM_LIMIT = 25; // 安全阈值，官方 30
 const TPM_LIMIT = 12000; // 安全阈值，官方 15000
 
+import { RemoteD1Client } from '@/lib/remoteD1';
+
 // 获取 D1 数据库绑定
 function getDB(request: NextRequest): D1Database | null {
     // 1. 尝试从 process.env 获取 (Cloudflare Pages nodejs_compat 标准方式)
@@ -22,6 +24,31 @@ function getDB(request: NextRequest): D1Database | null {
     // 3. 尝试从 request.env 获取 (部分环境支持)
     const env = (request as any).env;
     if (env?.DB) return env.DB;
+
+    // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
+    // 处理可能存在的空格问题 (通过遍历 process.env 键值对)
+    let apiToken = "";
+    let accountId = "";
+    let dbId = "";
+
+    for (const [key, value] of Object.entries(process.env)) {
+        const trimmedKey = key.trim();
+        const trimmedValue = value?.trim() || "";
+        if (trimmedKey === 'CLOUDFLARE_API_TOKEN') apiToken = trimmedValue;
+        if (trimmedKey === 'CLOUDFLARE_ACCOUNT_ID') accountId = trimmedValue;
+        if (trimmedKey === 'CLOUDFLARE_D1_ID') dbId = trimmedValue;
+    }
+
+    if (apiToken && accountId && dbId) {
+        console.log('[AI API] Local Dev: Initializing Remote D1 Client');
+        return new RemoteD1Client(apiToken, accountId, dbId);
+    }
+
+    console.warn('[AI API] DB not found. Env check:', {
+        hasToken: !!apiToken,
+        hasAccount: !!accountId,
+        hasDb: !!dbId
+    });
 
     return null;
 }
@@ -198,7 +225,10 @@ export async function POST(req: NextRequest, ctx: any) {
         });
 
     } catch (error: any) {
-        console.error('AI Proxy Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+        console.error('[AI API] Fatal Error:', error);
+        return NextResponse.json(
+            { error: 'Internal Server Error', details: error.message },
+            { status: 500 }
+        );
     }
 }

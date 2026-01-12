@@ -38,16 +38,40 @@ export default function LoadingProgress() {
 
     return (
         <div
-            className="flex flex-col gap-2 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 transition-all duration-500 animate-in fade-in slide-in-from-bottom-2"
+            className={clsx(
+                "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100]",
+                "w-full max-w-md px-6 py-4 rounded-2xl transition-all duration-700",
+                "backdrop-blur-2xl border shadow-2xl overflow-hidden",
+                "animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-out",
+                isDark
+                    ? "bg-black/60 border-white/10 shadow-black/40"
+                    : "bg-white/70 border-black/5 shadow-black/10"
+            )}
         >
-            <div className="flex items-center justify-between text-[13px] font-medium text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-2">
+            {/* Subtle glow background */}
+            <div className="absolute inset-0 z-[-1] opacity-20 pointer-events-none"
+                style={{
+                    backgroundImage: isAllLoaded
+                        ? 'radial-gradient(circle at 50% 120%, rgba(16, 185, 129, 0.3), transparent 70%)'
+                        : 'radial-gradient(circle at 50% 120%, rgba(99, 102, 241, 0.3), transparent 70%)'
+                }}
+            />
+
+            <div className="flex items-center justify-between mb-3 text-[14px] font-semibold">
+                <div className="flex items-center gap-3">
                     {isAllLoaded ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <div className="p-1 rounded-full bg-emerald-500/10">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        </div>
                     ) : (
-                        <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                        <div className="p-1 rounded-full bg-indigo-500/10">
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                        </div>
                     )}
-                    <span>
+                    <span className={clsx(
+                        "tracking-tight",
+                        isDark ? "text-slate-200" : "text-slate-700"
+                    )}>
                         {isAllLoaded
                             ? "辞典准备就绪"
                             : isDownloading
@@ -55,14 +79,17 @@ export default function LoadingProgress() {
                                 : "正在初始化索引..."}
                     </span>
                 </div>
-                <span>{progress}%</span>
+                <span className={clsx(
+                    "tabular-nums",
+                    isDark ? "text-slate-400" : "text-slate-500"
+                )}>{progress}%</span>
             </div>
 
-            <div className="h-1.5 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden p-[2px]">
                 <div
                     className={clsx(
-                        "h-full transition-all duration-500 ease-out",
-                        isAllLoaded ? "bg-emerald-500" : "bg-indigo-500"
+                        "h-full rounded-full transition-all duration-700 ease-out",
+                        isAllLoaded ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]" : "bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)]"
                     )}
                     style={{ width: `${progress}%` }}
                 />

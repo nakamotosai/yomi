@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAICache, setAICache, D1Database } from '@/lib/db';
+import { RemoteD1Client } from '@/lib/remoteD1';
 
 export const runtime = 'edge';
 
@@ -17,6 +18,27 @@ function getDB(request: NextRequest): D1Database | null {
     // 3. 尝试从 request.env 获取 (部分环境支持)
     const env = (request as any).env;
     if (env?.DB) return env.DB;
+
+    // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
+    let apiToken = "";
+    let accountId = "";
+    let dbId = "";
+
+    // 遍历环境变量，处理可能的空格问题
+    if (typeof process !== 'undefined' && process.env) {
+        for (const [key, value] of Object.entries(process.env)) {
+            const trimmedKey = key.trim();
+            const trimmedValue = value?.trim() || "";
+            if (trimmedKey === 'CLOUDFLARE_API_TOKEN') apiToken = trimmedValue;
+            if (trimmedKey === 'CLOUDFLARE_ACCOUNT_ID') accountId = trimmedValue;
+            if (trimmedKey === 'CLOUDFLARE_D1_ID') dbId = trimmedValue;
+        }
+    }
+
+    if (apiToken && accountId && dbId) {
+        // console.log('[Cache API] Local Dev: using Remote D1'); // Optional debug
+        return new RemoteD1Client(apiToken, accountId, dbId);
+    }
 
     return null;
 }

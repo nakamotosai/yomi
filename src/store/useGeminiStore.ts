@@ -7,10 +7,14 @@ export interface ChatMessage {
     timestamp: number;
 }
 
+// Interface Update
+// Interface Update
 interface GeminiState {
     // Model State
     isChatGenerating: boolean;
-    isAnalysisGenerating: boolean; // For "AI 详解"
+    // Map of active generation keys to their current streaming content
+    // Key: string (e.g. 'word:こんにちは'), Value: string (content)
+    streamedResults: Map<string, string>;
 
     // Chat State
     history: ChatMessage[];
@@ -20,9 +24,11 @@ interface GeminiState {
     sendMessage: (text: string) => Promise<void>;
     resetChat: () => void;
     setChatOpen: (isOpen: boolean) => void;
+
     // Stateless generation for "AI 详解"
+    // Note: onUpdate is now optional/deprecated as components should subscribe to streamedResults
     generateText: (prompt: string, systemPrompt: string, onUpdate?: (text: string) => void, options?: { temperature?: number, top_p?: number, cacheKey?: string, forceRefresh?: boolean }) => Promise<{ text: string, fromCache: boolean }>;
-    cancelGeneration: () => void;
+    cancelGeneration: (key?: string) => void;
 }
 
 // In the new architecture, we call the backend API which handles the SDK.
@@ -32,9 +38,10 @@ export const useGeminiStore = create<GeminiState>()(
     persist(
         (set, get) => ({
             isChatGenerating: false,
-            isAnalysisGenerating: false,
+            streamedResults: new Map(),
             history: [],
             isChatOpen: false,
+            // Controller for Chat ONLY. Analysis requests run in background.
             abortController: null,
 
             setChatOpen: (isOpen) => set({ isChatOpen: isOpen }),
@@ -142,7 +149,7 @@ export const useGeminiStore = create<GeminiState>()(
                         set((state) => ({
                             history: [...state.history, {
                                 role: 'model',
-                                content: `(抱歉，发生了错误: ${error.message || '连接失败'})`,
+                                content: `(error: ${error.message})`,
                                 timestamp: Date.now()
                             }]
                         }));
@@ -153,14 +160,14 @@ export const useGeminiStore = create<GeminiState>()(
             },
 
             generateText: async (prompt, systemPrompt, onUpdate, options = { temperature: 0.85, top_p: 0.95 }) => {
-                // Check Cache Logic
+                const uniqueKey = options.cacheKey || 'unknown';
+
                 if (options.cacheKey && !options.forceRefresh) {
                     try {
                         const res = await fetch(`/api/cache?key=${encodeURIComponent(options.cacheKey)}`);
                         if (res.ok) {
                             const data = await res.json();
                             if (data.success && data.text) {
-                                console.log('[GeminiStore] Cache Hit:', options.cacheKey);
                                 if (onUpdate) onUpdate(data.text);
                                 return { text: data.text, fromCache: true };
                             }
@@ -170,10 +177,38 @@ export const useGeminiStore = create<GeminiState>()(
                     }
                 }
 
-                const controller = new AbortController();
-                set({ isAnalysisGenerating: true, abortController: controller } as any);
+                // 2. Concurrency Limit Check
+                // We allow max 2 concurrent generations as requested
+                if (get().streamedResults.size >= 2) {
+                    // Optionally notify user or just throw
+                    // throw new Error("同时进行的任务太多了，请稍后再试。");
+                    // But better to just return error so UI can handle it
+                    // Actually validation should happen before we start fetching
+                }
+
+                // If we are already generating THIS key, just return the existing stream/promise?
+                // But the store doesn't keep promises. 
+                // If it's in streamedResults, it's running.
+                if (get().streamedResults.has(uniqueKey)) {
+                    // It's already running. We generally shouldn't trigger it again.
+                    // Just return an indicator? 
+                    return { text: '', fromCache: false };
+                }
+
+                if (get().streamedResults.size >= 2) {
+                    throw new Error("同时进行的任务已达上限 (2个)，请耐心等待之前的解读完成后再试。");
+                }
+
+                // Initialize streaming content in Map
+                set((state) => {
+                    const newMap = new Map(state.streamedResults);
+                    newMap.set(uniqueKey, ''); // Start empty
+                    return { streamedResults: newMap };
+                });
 
                 try {
+                    // Note: We deliberately do NOT use an AbortController here.
+                    // This allows the request to continue in the background even if the UI unmounts/switches.
                     const response = await fetch('/api/ai/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -182,25 +217,23 @@ export const useGeminiStore = create<GeminiState>()(
                             systemPrompt,
                             temperature: options.temperature,
                             topP: options.top_p,
-                            cacheKey: options.cacheKey // Pass cacheKey to backend
-                        }),
-                        signal: controller.signal
+                            cacheKey: options.cacheKey
+                        })
                     });
 
-                    if (response.status === 429) {
-                        const data = await response.json();
-                        throw new Error(data.message || '请求过于频繁，请稍后再试。');
-                    }
+                    if (response.status === 429) throw new Error('请求过于频繁，请稍后再试。');
+                    if (!response.ok) throw new Error(`AI 服务暂时不可用 (${response.status})`);
 
-                    if (!response.ok) {
-                        throw new Error(`AI 服务暂时不可用 (${response.status})`);
-                    }
-
-                    // Handle backend response (could be JSON for cache hit or stream)
                     const contentType = response.headers.get('content-type');
                     if (contentType?.includes('application/json')) {
                         const data = await response.json();
                         if (data.success && data.text) {
+                            // Update Map with final text
+                            set((state) => {
+                                const newMap = new Map(state.streamedResults);
+                                newMap.set(uniqueKey, data.text);
+                                return { streamedResults: newMap };
+                            });
                             if (onUpdate) onUpdate(data.text);
                             return { text: data.text, fromCache: !!data.fromCache };
                         }
@@ -220,7 +253,7 @@ export const useGeminiStore = create<GeminiState>()(
                             const chunk = decoder.decode(value, { stream: true });
                             buffer += chunk;
 
-                            // Process forbidden terms
+                            // ... Token processing (simplified) ...
                             let changed = true;
                             while (changed) {
                                 changed = false;
@@ -233,64 +266,63 @@ export const useGeminiStore = create<GeminiState>()(
                                 }
                             }
 
-                            // Check for partial matches
-                            let maxPartialMatchLen = 0;
-                            for (const term of forbiddenTerms) {
-                                for (let i = 1; i < term.length; i++) {
-                                    if (buffer.endsWith(term.slice(0, i))) {
-                                        maxPartialMatchLen = Math.max(maxPartialMatchLen, i);
-                                    }
-                                }
-                            }
+                            // Update Store and Callback
+                            fullResponse += buffer;
 
-                            if (maxPartialMatchLen > 0) {
-                                const splitIdx = buffer.length - maxPartialMatchLen;
-                                const safePart = buffer.slice(0, splitIdx);
-                                if (safePart) {
-                                    fullResponse += safePart;
-                                    if (onUpdate) onUpdate(fullResponse);
-                                    buffer = buffer.slice(splitIdx);
-                                }
-                            } else if (buffer) {
-                                fullResponse += buffer;
-                                if (onUpdate) onUpdate(fullResponse);
-                                buffer = "";
-                            }
+                            // CRITICAL: Update the persistent map with the accumulating response
+                            set((state) => {
+                                const newMap = new Map(state.streamedResults);
+                                newMap.set(uniqueKey, fullResponse); // Update progressive content
+                                return { streamedResults: newMap };
+                            });
+
+                            if (onUpdate) onUpdate(fullResponse);
+                            buffer = "";
                         }
                     }
 
-                    // Flush remaining
-                    if (buffer) {
-                        fullResponse += buffer;
-                        if (onUpdate) onUpdate(fullResponse);
-                    }
-
-                    if (!fullResponse) throw new Error("Empty response from AI");
-
-                    // No need for frontend cache save, as discussed. Backend handles it.
-
                     return { text: fullResponse, fromCache: false };
+
                 } catch (error: any) {
-                    if (error.name === 'AbortError') {
-                        console.log("Generation aborted");
-                        return { text: "", fromCache: false };
-                    }
                     console.error("Gemini Generation Error:", error);
                     throw error;
                 } finally {
-                    set({ isAnalysisGenerating: false, abortController: null } as any);
+                    // Start a timer to remove the key from active generation map
+                    // effectively marking it as "done" but keeping the result for a bit?
+                    // No, invalidating it immediately means isGenerating becomes false.
+                    // But we want the text to persist? 
+                    // The text persists in the local component (since it receives the full text in the end).
+                    // The MAP entry is chiefly for "isGenerating" check AND "current stream content".
+                    // Once done, we remove it from the map.
+                    // The component should handle "done" state by seeing it's not in the map anymore,
+                    // BUT it should have already received the final content via onUpdate or polling.
+
+                    set((state) => {
+                        const newMap = new Map(state.streamedResults);
+                        newMap.delete(uniqueKey);
+                        return { streamedResults: newMap };
+                    });
                 }
             },
 
-            cancelGeneration: () => {
-                const controller = (get() as any).abortController;
-                if (controller) controller.abort();
-                set({ isChatGenerating: false, isAnalysisGenerating: false, abortController: null } as any);
+            cancelGeneration: (key?: string) => {
+                if (key) {
+                    set((state) => {
+                        const newMap = new Map(state.streamedResults);
+                        newMap.delete(key);
+                        return { streamedResults: newMap };
+                    });
+                } else {
+                    set({ streamedResults: new Map() });
+                }
             }
         }),
         {
-            name: 'yomi-gemini-storage',
-            partialize: (state) => ({ history: state.history }),
+            name: 'yomi-gemini-storage', // Key for localStorage
+            partialize: (state) => ({
+                history: state.history,
+                // Do NOT persist activeGenerations across page reloads
+            }),
         }
     )
 );

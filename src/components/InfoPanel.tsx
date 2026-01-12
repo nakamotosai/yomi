@@ -224,8 +224,11 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
 // 渲染语法详情 - 样式与单词卡片保持一致
 function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: GrammarEntry; settings: AppSettings; isGlobalSpeaking: boolean }) {
     const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
-    const { generateText, isAnalysisGenerating, cancelGeneration } = useGeminiStore();
+    const { generateText, streamedResults, cancelGeneration } = useGeminiStore();
     const isSaved = isGrammarSaved(grammar.id);
+    const grammarCacheKey = `grammar:${grammar.title}`;
+    const streamedContent = streamedResults.get(grammarCacheKey);
+    const isGenerating = streamedContent !== undefined;
 
 
     // 语法颜色使用 CSS 变量
@@ -244,8 +247,16 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 
     // Clear AI result when switching grammar (Auto-load cache)
     useEffect(() => {
-        // Cancel any pending generation
-        if (isAnalysisGenerating) cancelGeneration();
+        // If we switch to an item that is ALREADY generating, auto-expand
+        if (isGenerating) {
+            setAiResult(''); // Will use streamedContent
+            setAiResultTitle('AI老师在线解读');
+            setIsAIExpanded(true);
+            return;
+        }
+
+        // Always reset local state when switching items
+        // The store's activeGenerations will handle the spinner state if the new item is loading
         setAiResult('');
         setAiResultTitle('');
         setIsCached(false);
@@ -311,7 +322,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
     };
 
     const handleAIExplain = async (forceRefresh = false) => {
-        if (isAnalysisGenerating) return;
+        if (isGenerating) return;
 
         // Prepare context
         // Ensure model is loaded
@@ -359,10 +370,11 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 如果没有输出3个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
 
             // Use simple user prompt like Word Interpretation
-            const { fromCache } = await generateText(
+            const currentGrammarId = grammar.id; // Capture ID for validation
+            const { fromCache, text } = await generateText(
                 `Target Grammar: ${grammar.title}`,
                 systemPrompt,
-                (text) => setAiResult(text),
+                undefined, // Use Store for streaming
                 {
                     temperature: 0.85,
                     top_p: 0.95,
@@ -371,11 +383,16 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                 }
             );
 
-            setIsCached(fromCache);
+            // Simple Validation: Are we still on the same grammar?
+            if (currentGrammarId === grammar.id) {
+                setAiResult(text);
+                setIsCached(fromCache);
+            }
 
-        } catch (error) {
+
+        } catch (error: any) {
             console.error("AI Generation failed", error);
-            setAiResult("AI 老师好像在休息，请稍后再试...");
+            setAiResult(error.message || "AI 老师好像在休息，请稍后再试...");
         } finally {
             // isGenerating handled by store
         }
@@ -480,10 +497,13 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                             borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
                             color: grammarColor,
                         }}
-                        disabled={isAnalysisGenerating}
+                        disabled={isGenerating}
                     >
-                        {isAnalysisGenerating ? (
-                            <Sparkles className="w-4 h-4 animate-spin" />
+                        {isGenerating ? (
+                            <>
+                                <Sparkles className="w-4 h-4 animate-spin" />
+                                <span className="font-bold text-sm">AI正在解读中...</span>
+                            </>
                         ) : (
                             <>
                                 <Sparkles className="w-4 h-4" />
@@ -493,7 +513,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                     </button>
 
                     {/* AI Results Section */}
-                    <Collapsible isOpen={isAIExpanded && !!aiResult} variant="default">
+                    <Collapsible isOpen={isAIExpanded && (!!aiResult || isGenerating)} variant="default">
                         <div className="p-4 rounded-xl border border-dashed"
                             style={{
                                 backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`,
@@ -516,7 +536,10 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                 {(() => {
-                                    const lines = aiResult.split('\n');
+                                    // Prefer streaming content, fallback to aiResult (which is actively updated via onUpdate callback)
+                                    // This dual-source approach ensures responsiveness
+                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中...";
+                                    const lines = displayText.split('\n');
 
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
@@ -583,21 +606,34 @@ export default function InfoPanel() {
     const [dictLang] = useState<'en' | 'jp' | 'zh'>('zh'); // 默认中文
     const [isLoadingDict, setIsLoadingDict] = useState(false);
 
+    // No more complex refs needed
+    // const tokenRef = React.useRef(token);
+    // useEffect(() => { tokenRef.current = token; }, [token]);
+
     // AI State for Words
-    const { generateText, isAnalysisGenerating, cancelGeneration } = useGeminiStore();
+    const { generateText, streamedResults, cancelGeneration } = useGeminiStore();
+    const wordCacheKey = token ? `word:${token.surface}` : '';
+    const streamedContent = streamedResults.get(wordCacheKey);
+    const isGenerating = streamedContent !== undefined;
     const [aiResult, setAiResult] = useState<string>('');
     const [aiResultTitle, setAiResultTitle] = useState<string>('');
     const [isCached, setIsCached] = useState(false);
     const [isAIExpanded, setIsAIExpanded] = useState(false);
 
     // Clear AI result when switching words (Auto-load cache if available)
+    // Clear AI result when switching words (Auto-load cache if available)
     useEffect(() => {
-        // Cancel any pending generation
-        if (isAnalysisGenerating) cancelGeneration();
-        // Cancel any pending generation
-        if (isAnalysisGenerating) cancelGeneration();
+        // If we switch to an item that is ALREADY generating, auto-expand
+        if (isGenerating) {
+            setTimeout(() => {
+                setAiResult('');
+                setAiResultTitle('AI老师在线解读');
+                setIsAIExpanded(true);
+            }, 0);
+            return;
+        }
 
-        // Wrap state updates in setTimeout to avoid "setState synchronously" warning
+        // Always reset local state when switching words
         setTimeout(() => {
             setAiResult('');
             setAiResultTitle('');
@@ -637,7 +673,7 @@ export default function InfoPanel() {
     };
 
     const handleAIExplain = async (forceRefresh = false) => {
-        if (isAnalysisGenerating || !token) return;
+        if (isGenerating || !token) return;
 
         setAiResult('');
         setAiResultTitle('AI老师在线解读');
@@ -678,24 +714,28 @@ export default function InfoPanel() {
 【警告】
 严禁输出 <br>、--- 或其他分隔符，请直接使用换行符。
 如果没有输出5个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
-
-            const { fromCache } = await generateText(
-                `Target Word: ${token.surface}`,
+            // Start Generation
+            const currentTokenSurface = token.surface; // Capture for validation
+            const { fromCache, text } = await generateText(
+                `Target Word: ${token.surface}\nContext: ${currentSentence || "No context provided."}`,
                 systemPrompt,
-                (text) => setAiResult(text),
+                undefined, // Use Store for streaming
                 {
                     temperature: 0.85,
                     top_p: 0.95,
                     cacheKey: `word:${token.surface}`,
-                    forceRefresh
                 }
             );
 
-            setIsCached(fromCache);
+            // Validation without Refs
+            if (token.surface === currentTokenSurface) {
+                setAiResult(text);
+                setIsCached(fromCache);
+            }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("AI Generation failed", error);
-            setAiResult("AI 老师好像在休息，请稍后再试...");
+            setAiResult(error.message || "AI 老师好像在休息，请稍后再试...");
         }
     };
 
@@ -1213,10 +1253,13 @@ export default function InfoPanel() {
                             borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
                             color: wordAccentColor,
                         }}
-                        disabled={isAnalysisGenerating}
+                        disabled={isGenerating}
                     >
-                        {isAnalysisGenerating ? (
-                            <Sparkles className="w-4 h-4 animate-spin" />
+                        {isGenerating ? (
+                            <>
+                                <Sparkles className="w-4 h-4 animate-spin" />
+                                <span className="font-bold text-sm">AI正在解读中...</span>
+                            </>
                         ) : (
                             <>
                                 <Sparkles className="w-4 h-4" />
@@ -1227,7 +1270,7 @@ export default function InfoPanel() {
 
                     {/* AI Results Section */}
                     {/* AI Results Section */}
-                    <Collapsible isOpen={isAIExpanded && !!aiResult} variant="default">
+                    <Collapsible isOpen={isAIExpanded && (!!aiResult || isGenerating)} variant="default">
                         <div className="p-4 rounded-xl border border-dashed"
                             style={{
                                 backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`,
@@ -1250,7 +1293,8 @@ export default function InfoPanel() {
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                 {(() => {
-                                    const lines = aiResult.split('\n');
+                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中...";
+                                    const lines = displayText.split('\n');
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
 

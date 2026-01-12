@@ -1,5 +1,6 @@
 
 import { useDictionaryStore } from '@/store/useDictionaryStore';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 interface YomitanEntry {
     term: string;
@@ -20,11 +21,43 @@ export interface DictionaryResult {
     source: string;
 }
 
+// Define the DB Schema
+interface YomiDictionaryDB extends DBSchema {
+    entries: {
+        key: number;
+        value: DictionaryResult;
+        indexes: { 'term': string; 'reading': string };
+    };
+    meta: {
+        key: string;
+        value: number; // For storing loaded count or version
+    };
+}
+
 class YomitanLoader {
-    private dictionaryIndex: Map<string, DictionaryResult[]> = new Map();
+    private dbPromise: Promise<IDBPDatabase<YomiDictionaryDB>> | null = null;
     private isLoaded = false;
     private loadingPromise: Promise<void> | null = null;
     private loadedBanks: Set<number> = new Set();
+    private readonly DB_NAME = 'yomi-dictionary-db';
+    private readonly DB_VERSION = 1;
+
+    constructor() {
+        // Initialize DB connection immediately if in browser
+        if (typeof window !== 'undefined') {
+            this.dbPromise = openDB<YomiDictionaryDB>(this.DB_NAME, this.DB_VERSION, {
+                upgrade(db) {
+                    // Create object store for entries
+                    const store = db.createObjectStore('entries', { autoIncrement: true });
+                    store.createIndex('term', 'term', { unique: false });
+                    store.createIndex('reading', 'reading', { unique: false });
+
+                    // Create object store for metadata
+                    db.createObjectStore('meta');
+                },
+            });
+        }
+    }
 
     // Format definition text
     private formatDefinition(def: string): string {
@@ -67,83 +100,60 @@ class YomitanLoader {
     }
 
     private convertToResult(entry: YomitanEntry): DictionaryResult {
-        const firstDef = entry.definitions[0] || '';
         return {
             term: entry.term,
             reading: entry.reading || entry.term,
-            partOfSpeech: this.inferPartOfSpeech(entry.rules, firstDef),
-            definitions: entry.definitions.map(this.formatDefinition),
+            partOfSpeech: this.inferPartOfSpeech(entry.rules, entry.definitions[0] || ''),
+            definitions: entry.definitions.map(d => this.formatDefinition(d)),
             source: '明鏡日汉双解辞典'
         };
     }
 
-    // Load a specific bank
+    // Load a specific bank and store into DB
     public async loadBank(index: number): Promise<void> {
         if (this.loadedBanks.has(index)) return;
 
+        // Skip if DB is already fully populated (checked in init)
+        if (this.isLoaded) return;
+
         const url = `/yomitan/term_bank_${index}.json`;
-        const cacheName = 'yomi-dictionary-cache-v1';
 
         try {
-            let data: unknown[];
-            let response: Response | undefined;
-            let cache: Cache | undefined;
+            console.log(`[Dictionary] Downloading bank ${index}...`);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-            // Try to get from Cache API first
-            if (typeof window !== 'undefined' && 'caches' in window) {
-                cache = await caches.open(cacheName);
-                response = await cache.match(url);
-            }
+            const blob = await response.blob();
+            // Update store progress
+            useDictionaryStore.getState().addDownloadedBytes(blob.size);
+            useDictionaryStore.getState().incrementDownloadedUnits();
 
-            if (response) {
-                console.log(`[Dictionary] Loading bank ${index} from cache...`);
-                const blob = await response.blob();
-                useDictionaryStore.getState().addDownloadedBytes(blob.size);
-                data = JSON.parse(await blob.text());
-            } else {
-                console.log(`[Dictionary] Downloading bank ${index}...`);
-                response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                const blob = await response.blob();
-                data = JSON.parse(await blob.text());
-
-                // Update downloaded bytes and units
-                useDictionaryStore.getState().addDownloadedBytes(blob.size);
-                useDictionaryStore.getState().incrementDownloadedUnits();
-
-                // Put into cache for next time
-                if (cache) {
-                    try {
-                        await cache.put(url, new Response(blob, {
-                            headers: { 'Content-Type': 'application/json' }
-                        }));
-                    } catch (e) {
-                        console.warn(`[YomitanLoader] Cache put failed for ${url}`, e);
-                    }
-                }
-            }
-
+            const data = JSON.parse(await blob.text());
             if (!Array.isArray(data)) return;
 
+            // Prepare batch for DB
+            const entriesToStore: DictionaryResult[] = [];
             for (const rawEntry of data) {
                 const entry = this.parseEntry(rawEntry as unknown[]);
                 const result = this.convertToResult(entry);
-
-                // Index by term
-                const termResults = this.dictionaryIndex.get(result.term) || [];
-                termResults.push(result);
-                this.dictionaryIndex.set(result.term, termResults);
-
-                // Index by reading
-                if (result.reading !== result.term) {
-                    const readingResults = this.dictionaryIndex.get(result.reading) || [];
-                    if (!readingResults.some(r => r.term === result.term)) {
-                        readingResults.push(result);
-                        this.dictionaryIndex.set(result.reading, readingResults);
-                    }
-                }
+                entriesToStore.push(result);
             }
+
+            // Bulk add to DB
+            if (this.dbPromise) {
+                const db = await this.dbPromise;
+                const tx = db.transaction('entries', 'readwrite');
+                const store = tx.objectStore('entries');
+
+                // Use Promise.all for parallel adds (or simple loop awaiting)
+                // Using Promise.all with store.add is faster generally
+                await Promise.all(entriesToStore.map(item => store.add(item)));
+
+                // Commit transaction implicit
+                await tx.done;
+                console.log(`[Dictionary] Bank ${index} stored in DB (${entriesToStore.length} entries).`);
+            }
+
             this.loadedBanks.add(index);
             useDictionaryStore.getState().incrementLoadedUnits();
         } catch (error) {
@@ -154,31 +164,74 @@ class YomitanLoader {
     // Load all banks sequentially in the background
     private async loadAllBanksSequentially(): Promise<void> {
         const TOTAL_BANKS = 18;
-        const banksToLoad = Array.from({ length: TOTAL_BANKS }, (_, i) => i); // 0 to 17
+        const banksToLoad = Array.from({ length: TOTAL_BANKS }, (_, i) => i);
 
         for (const i of banksToLoad) {
-            if (this.loadedBanks.has(i)) continue;
+            // Check if already in DB (optimization could be added here to check 'meta' store for last loaded bank)
+            // For now, relies on isLoaded check in init()
+            if (this.isLoaded) break;
 
             await this.loadBank(i);
-            // Small delay between banks to avoid clogging the network
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait a bit to yield main thread
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
+
+        // After all loaded, mark DB as fully loaded
+        if (this.dbPromise) {
+            const db = await this.dbPromise;
+            // Count total to verify? Optionally set a flag
+            const count = await db.count('entries');
+            console.log(`[Dictionary] Loading complete. Total DB entries: ${count}`);
+            await db.put('meta', count, 'total_entries');
+            await db.put('meta', Date.now(), 'last_updated');
+        }
+
         this.isLoaded = true;
-        console.log(`[Dictionary] Background loading complete. Total entries: ${this.dictionaryIndex.size}`);
     }
 
-    // Initial load: Just load the first bank immediately, the rest in background
+    // Initial load logic
     public async init(): Promise<void> {
         if (this.isLoaded) return;
         if (this.loadingPromise) return this.loadingPromise;
 
         this.loadingPromise = (async () => {
-            console.log('[Dictionary] Starting background loading...');
+            if (!this.dbPromise) return;
+            const db = await this.dbPromise;
 
-            // Load the first bank immediately (contains most common words)
+            // Check if DB is already populated
+            const count = await db.count('entries');
+            console.log(`[Dictionary] Existing DB entries: ${count}`);
+
+            // Threshold for "loaded" (approx 200k entries expected total, but >1000 means at least something is there)
+            // Let's say if we have > 50000 entries, we assume it's usable instantiation.
+            // Or better: Check if we completed the last bank? 
+            // For now, simple count check. 
+            if (count > 50000) {
+                console.log('[Dictionary] DB already populated. Skipping download.');
+                this.isLoaded = true;
+
+                // Update UI state to "Done"
+                const store = useDictionaryStore.getState();
+                const totalBytesGuess = 85 * 1024 * 1024; // ~85MB
+
+                store.addDownloadedBytes(totalBytesGuess);
+                store.setTotalBytesToDownload(totalBytesGuess);
+
+                // Force visually complete state
+                store.setAllLoaded(true);
+                // Hack to ensure progress bar fills: manually set loadedUnits to total
+                // Since we don't have setLoadedUnits, we loop increment
+                for (let i = 0; i < 23; i++) store.incrementLoadedUnits();
+
+                return;
+            }
+
+            console.log('[Dictionary] DB empty or partial. Starting download...');
+
+            // Load Bank 0 immediately (priority)
             await this.loadBank(0);
 
-            // Start loading the rest in the background without awaiting it here
+            // Load rest in background
             this.loadAllBanksSequentially().catch(err => {
                 console.error('[Dictionary] Background loading failed:', err);
             });
@@ -187,24 +240,47 @@ class YomitanLoader {
         return this.loadingPromise;
     }
 
-    // Explicit prefetch trigger (useful for global initialization)
     public async prefetch(): Promise<void> {
         return this.init();
     }
 
     public async search(keyword: string): Promise<DictionaryResult[] | null> {
-        // Non-blocking strategy:
-        // If not loaded, return null immediately to allow fallback to API.
-        // Do NOT await loadingPromise, as it blocks UI during large downloads.
-        if (!this.isLoaded) {
-            // Check if we happen to have it in memory anyway (partial load)?
-            const result = this.dictionaryIndex.get(keyword);
-            if (result) return result;
+        if (!this.dbPromise) return null;
 
+        // If not loaded yet, check if we have results in DB anyway (e.g. from partial load)
+        // If DB is completely empty (first run, bank 0 not done), we prefer returning null to fallback to API.
+        // But IndexedDB is fast. We can just query it.
+        // API fallback is mainly for when the client has NOTHING.
+
+        const db = await this.dbPromise;
+
+        // Search by Term
+        const resultsByTerm = await db.getAllFromIndex('entries', 'term', keyword);
+        // Search by Reading
+        const resultsByReading = await db.getAllFromIndex('entries', 'reading', keyword);
+
+        // Merge and Deduplicate
+        const combined = [...resultsByTerm, ...resultsByReading];
+        const unique = new Map<string, DictionaryResult>();
+
+        for (const item of combined) {
+            const key = `${item.term}-${item.reading}-${item.definitions[0]}`;
+            if (!unique.has(key)) {
+                unique.set(key, item);
+            }
+        }
+
+        const finalResults = Array.from(unique.values());
+
+        // If we found nothing AND we are not fully loaded, return null to allow API fallback
+        // Rationale: User might search for a word that is in Bank 10, but we only loaded Bank 0.
+        // If we return [], UI says "No definition".
+        // If we return null, UI falls back to API, which definitely has it.
+        if (finalResults.length === 0 && !this.isLoaded) {
             return null;
         }
 
-        return this.dictionaryIndex.get(keyword) || [];
+        return finalResults;
     }
 }
 

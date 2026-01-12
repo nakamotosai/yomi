@@ -862,7 +862,6 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                         </div>
                       </div>
                     </div>
-                    <LoadingProgress />
                   </div>
                 }
 
@@ -958,6 +957,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
       {/* Global Logic Components */}
       <GlobalAudioPlayer />
+      <LoadingProgress />
     </main >
   );
 }
