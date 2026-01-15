@@ -9,7 +9,7 @@ const GOOGLE_ENDPOINTS = [
 ];
 
 export async function POST(request: NextRequest) {
-    let requestBody: any = {};
+    let requestBody: { text?: string; sourceLang?: string; targetLang?: string } = {};
     try {
         requestBody = await request.json();
     } catch {
@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
                     sourceLang
                 });
             }
-        } catch (error: any) {
-            console.warn(`[Translate] Failed endpoint ${endpoint}:`, error.message);
+        } catch (error: unknown) {
+            console.warn(`[Translate] Failed endpoint ${endpoint}:`, error instanceof Error ? error.message : String(error));
             // Continue to next endpoint
         }
     }
@@ -89,8 +89,8 @@ async function translateSingle(baseUrl: string, text: string, sl: string, tl: st
     // Strategy A: /single endpoint
     if (isSingle && Array.isArray(data) && Array.isArray(data[0])) {
         return data[0]
-            .filter((item: any) => Array.isArray(item) && typeof item[0] === 'string')
-            .map((item: any) => item[0])
+            .filter((item: unknown) => Array.isArray(item) && typeof item[0] === 'string')
+            .map((item: unknown) => (item as string[])[0])
             .join('');
     }
 
@@ -102,7 +102,7 @@ async function translateSingle(baseUrl: string, text: string, sl: string, tl: st
             if (typeof data[0] === 'string') return data.join('');
             // Nested array
             if (Array.isArray(data[0])) {
-                return data.map((item: any) => Array.isArray(item) ? item[0] : item).join('');
+                return data.map((item: unknown) => Array.isArray(item) ? item[0] : item).join('');
             }
         }
     }

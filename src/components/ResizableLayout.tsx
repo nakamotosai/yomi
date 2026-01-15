@@ -17,12 +17,15 @@ export default function ResizableLayout({ leftContent, centerContent, rightConte
     const [isDraggingLeft, setIsDraggingLeft] = useState(false);
     const [isDraggingRight, setIsDraggingRight] = useState(false);
 
-    // Sync from store on mount (use useLayoutEffect to avoid flicker)
-    useLayoutEffect(() => {
-        if (layout.leftSidebarWidth) setLeftWidth(layout.leftSidebarWidth);
-        if (layout.rightSidebarWidth) setRightWidth(layout.rightSidebarWidth);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    // Sync from store on mount and when layout changes (e.g. hydration)
+    useEffect(() => {
+        if (!isDraggingLeft && layout.leftSidebarWidth && layout.leftSidebarWidth !== leftWidth) {
+            setLeftWidth(layout.leftSidebarWidth);
+        }
+        if (!isDraggingRight && layout.rightSidebarWidth && layout.rightSidebarWidth !== rightWidth) {
+            setRightWidth(layout.rightSidebarWidth);
+        }
+    }, [layout.leftSidebarWidth, layout.rightSidebarWidth, isDraggingLeft, isDraggingRight]);
 
     // Handle global mouse events
     useEffect(() => {

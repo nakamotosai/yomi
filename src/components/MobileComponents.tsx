@@ -56,7 +56,7 @@ export function MobileDrawer({ children }: MobileDrawerProps) {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setIsMobileDrawerOpen(false)}
-                        className="fixed inset-0 z-40 lg:hidden"
+                        className="fixed inset-0 z-[105] lg:hidden"
                         style={{
                             background: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.4)',
                             backdropFilter: 'blur(4px)'
@@ -66,7 +66,7 @@ export function MobileDrawer({ children }: MobileDrawerProps) {
                     {/* Drawer Content */}
                     <motion.div
                         exit={{ x: '-100%' }}
-                        className="fixed top-0 bottom-0 left-0 w-[85%] max-w-[320px] shadow-xl z-50 lg:hidden flex flex-col"
+                        className="fixed top-0 bottom-0 left-0 w-[85%] max-w-[320px] shadow-xl z-[110] lg:hidden flex flex-col"
                         style={{
                             background: isDark ? 'var(--bg-elevated)' : 'white'
                         }}

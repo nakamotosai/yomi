@@ -18,11 +18,11 @@ function getDB(request: NextRequest): D1Database | null {
     }
 
     // 2. 尝试从 globalThis 获取
-    const globalDB = (globalThis as any).DB;
+    const globalDB = (globalThis as unknown as { DB: D1Database }).DB;
     if (globalDB) return globalDB;
 
     // 3. 尝试从 request.env 获取 (部分环境支持)
-    const env = (request as any).env;
+    const env = (request as unknown as { env: { DB: D1Database } }).env;
     if (env?.DB) return env.DB;
 
     // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
@@ -53,9 +53,9 @@ function getDB(request: NextRequest): D1Database | null {
     return null;
 }
 
-export async function POST(req: NextRequest, ctx: any) {
+export async function POST(req: NextRequest, ctx: unknown) {
     try {
-        const { prompt, systemPrompt, temperature = 0.85, topP = 0.95, cacheKey } = await req.json();
+        const { prompt, systemPrompt, temperature = 0.85, topP = 0.95, cacheKey, forceRefresh } = await req.json();
 
         if (!prompt) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -67,12 +67,23 @@ export async function POST(req: NextRequest, ctx: any) {
             return NextResponse.json({ error: 'Database not available' }, { status: 500 });
         }
 
-        // 0. 如果有 cacheKey，先尝试直接从后端读取缓存 (多一层保险)
+        // 0. 缓存策略
         if (cacheKey) {
-            const cached = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(cacheKey).first<{ value: string }>();
-            if (cached) {
-                console.log(`[AI API] Backend Cache Hit: ${cacheKey}`);
-                return NextResponse.json({ success: true, text: cached.value, fromCache: true });
+            if (forceRefresh) {
+                // 强制刷新：明确删除旧数据，确保"清空"
+                console.log(`[AI API] Force Refresh: Deleting old cache for ${cacheKey}`);
+                try {
+                    await db.prepare('DELETE FROM ai_cache WHERE key = ?').bind(cacheKey).run();
+                } catch (e) {
+                    console.warn('[AI API] Failed to delete old cache:', e);
+                }
+            } else {
+                // 正常模式：尝试读取缓存
+                const cached = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(cacheKey).first<{ value: string }>();
+                if (cached) {
+                    console.log(`[AI API] Backend Cache Hit: ${cacheKey}`);
+                    return NextResponse.json({ success: true, text: cached.value, fromCache: true });
+                }
             }
         }
 
@@ -101,8 +112,8 @@ export async function POST(req: NextRequest, ctx: any) {
         // 3. 预先占位增加计数 (防止瞬时并发绕过检查)
         try {
             await incrementAIUsage(db, MODEL_ID, minuteKey, 1, estInputTokens);
-        } catch (e) {
-            console.error('[AI Usage] Failed to increment initial usage', e);
+        } catch (_e) {
+            console.error('[AI Usage] Failed to increment initial usage', _e);
             // 继续执行，防止数据库错误阻断 AI 服务，但记录日志
         }
 
@@ -191,7 +202,7 @@ export async function POST(req: NextRequest, ctx: any) {
                             console.error('[AI API] Stats/Cache Error:', statsError);
                         }
 
-                    } catch (err: any) {
+                    } catch (err: unknown) {
                         console.error('[AI API] Stream Processing Error:', err);
                         if (!isStreamClosed) {
                             controller.error(err);
@@ -204,8 +215,9 @@ export async function POST(req: NextRequest, ctx: any) {
                 const task = processStream();
 
                 // 使用 waitUntil 保持后台运行
-                if (ctx && typeof ctx.waitUntil === 'function') {
-                    ctx.waitUntil(task);
+                const context = ctx as { waitUntil: (promise: Promise<unknown>) => void };
+                if (context && typeof context.waitUntil === 'function') {
+                    context.waitUntil(task);
                 } else {
                     // 非 Cloudflare 环境下等待任务完成 (防止过早终止)
                     await task;
@@ -224,10 +236,10 @@ export async function POST(req: NextRequest, ctx: any) {
             },
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[AI API] Fatal Error:', error);
         return NextResponse.json(
-            { error: 'Internal Server Error', details: error.message },
+            { error: 'Internal Server Error', details: error instanceof Error ? error.message : String(error) },
             { status: 500 }
         );
     }

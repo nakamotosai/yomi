@@ -98,6 +98,8 @@ interface AppState {
     setIsMobileDrawerOpen: (open: boolean) => void;
     isMobileSheetOpen: boolean;
     setIsMobileSheetOpen: (open: boolean) => void;
+    isInputModalOpen: boolean;
+    setIsInputModalOpen: (open: boolean) => void;
     isFromExtension: boolean;
     setIsFromExtension: (fromExtension: boolean) => void;
     analyzedText: string;
@@ -204,6 +206,8 @@ export const useAppStore = create<AppState>()(
             setIsMobileDrawerOpen: (open) => set({ isMobileDrawerOpen: open }),
             isMobileSheetOpen: false,
             setIsMobileSheetOpen: (open) => set({ isMobileSheetOpen: open }),
+            isInputModalOpen: false,
+            setIsInputModalOpen: (open) => set({ isInputModalOpen: open }),
             isFromExtension: false,
             setIsFromExtension: (fromExtension) => set({ isFromExtension: fromExtension }),
             analyzedText: DEFAULT_INPUT_TEXT,

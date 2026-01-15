@@ -62,7 +62,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 min-h-screen"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 min-h-screen"
             style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
             onClick={onClose}
         >

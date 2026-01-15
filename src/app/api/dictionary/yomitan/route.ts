@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
                 try {
                     const res = await fetch(`${origin}/yomitan/term_bank_${bankIndex}.json`, {
                         // Add internal cache tag if available in CF
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         cf: { cacheTtl: 86400, cacheEverything: true }
                     } as any);
                     if (!res.ok) return null;

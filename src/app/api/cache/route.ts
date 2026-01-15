@@ -12,11 +12,11 @@ function getDB(request: NextRequest): D1Database | null {
     }
 
     // 2. 尝试从 globalThis 获取
-    const globalDB = (globalThis as any).DB;
+    const globalDB = (globalThis as unknown as { DB: D1Database }).DB;
     if (globalDB) return globalDB;
 
     // 3. 尝试从 request.env 获取 (部分环境支持)
-    const env = (request as any).env;
+    const env = (request as unknown as { env: { DB: D1Database } }).env;
     if (env?.DB) return env.DB;
 
     // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
@@ -67,9 +67,10 @@ export async function GET(request: NextRequest) {
 
         console.log(`[Cache API] Miss for key: ${key}`);
         return NextResponse.json({ success: false });
-    } catch (error: any) {
-        console.error('[Cache API] GET Error:', error.message);
-        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[Cache API] GET Error:', message);
+        return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 });
     }
 }
 
@@ -92,8 +93,9 @@ export async function POST(request: NextRequest) {
         console.log(`[Cache API] Saved key: ${key} (${text.length} chars)`);
 
         return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error('[Cache API] POST Error:', error.message);
-        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[Cache API] POST Error:', message);
+        return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 });
     }
 }

@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Collapsible } from './Collapsible';
-import { Volume2, Bookmark, ArrowRight, BookOpen, BookMarked, Sparkles, ChevronRight, RotateCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Volume2, Bookmark, BookOpen, Sparkles, ChevronRight, RotateCw, Search, Send } from 'lucide-react';
 import { WordToken, DictionaryEntry, PartOfSpeech, AppSettings } from '@/types';
 import { GrammarEntry } from '@/types/grammar';
 import { useAppStore } from '@/store/useAppStore';
@@ -19,6 +18,7 @@ import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import { yomitanLoader, DictionaryResult as YomitanResult } from '@/lib/dictionary/yomitanLoader';
+
 
 interface JishoJapanese {
     reading?: string;
@@ -74,7 +74,8 @@ const translatePOS = (pos: string[], lang: 'en' | 'jp' | 'zh'): string[] => {
 };
 
 // 核心文本高亮组件：支持多关键词自动识别、加粗并染色
-function UnifiedHighlighter({ text, target, color, isChinese = false }: { text: string; target: string; color: string; isChinese?: boolean }) {
+// 核心文本高亮组件：支持多关键词自动识别、加粗并染色
+function UnifiedHighlighter({ text, target, color, isChinese = false, replaceTilde = false }: { text: string; target: string; color: string; isChinese?: boolean, replaceTilde?: boolean }) {
     if (!text || !target) return <>{text}</>;
 
     // 预处理目标词：移除 ～、括号注释、序号等
@@ -91,17 +92,22 @@ function UnifiedHighlighter({ text, target, color, isChinese = false }: { text: 
     const sortedKeywords = keywords.filter(k => k.length > 0).sort((a, b) => b.length - a.length);
 
     // 构建正则 (转义特殊字符)
+    // 根据开关决定是否匹配波浪号
     const escaped = sortedKeywords.map(k => k.replace(/[./*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const regex = new RegExp(`(${escaped})`, 'g');
+    const pattern = replaceTilde ? `(${escaped}|[～〜~])` : `(${escaped})`;
+    const regex = new RegExp(pattern, 'g');
 
     const parts = text.split(regex);
 
     return (
         <>
             {parts.map((part, i) => {
-                const isMatch = sortedKeywords.some(k => k === part);
+                const isTilde = replaceTilde && /[～〜~]/.test(part);
+                const isMatch = sortedKeywords.some(k => k === part) || isTilde;
+
                 if (isMatch) {
-                    return <strong key={i} className="font-bold" style={{ color }}>{part}</strong>;
+                    // 如果是波浪号且开启了替换，显示为目标词 (baseTarget)
+                    return <strong key={i} className="font-bold" style={{ color }}>{isTilde ? baseTarget : part}</strong>;
                 }
                 return <span key={i}>{part}</span>;
             })}
@@ -116,7 +122,8 @@ function UnifiedExampleItem({
     onSpeak,
     accentColor,
     targetWord,
-    isSpeaking = false
+    isSpeaking = false,
+    replaceTilde = false
 }: {
     japanese: string;
     chinese?: string;
@@ -124,26 +131,29 @@ function UnifiedExampleItem({
     accentColor: string;
     targetWord: string;
     isSpeaking?: boolean;
+    replaceTilde?: boolean;
 }) {
     return (
         <div className="mt-3 first:mt-1 mb-3 group animate-in slide-in-from-left-2 duration-300">
             {/* 日文行 */}
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-start gap-2">
                 {/* 播放按钮 */}
+                {/* 播放按钮 (无背景，顶对齐) */}
                 <button
                     onClick={() => onSpeak(japanese)}
                     className={clsx(
-                        "p-1.5 rounded-full transition-all shrink-0 translate-y-[2px]",
-                        isSpeaking ? "bg-[var(--scheme-primary-bg)]" : "bg-black/5 dark:bg-white/10 opacity-70 group-hover:opacity-100"
+                        "p-0.5 rounded transition-all shrink-0 mt-[3px] opacity-70 group-hover:opacity-100",
+                        isSpeaking && "animate-pulse"
                     )}
                     style={{ color: accentColor }}
+                    title="播放"
                 >
-                    <Volume2 className="w-3.5 h-3.5" />
+                    <Volume2 className="w-4 h-4" />
                 </button>
 
                 {/* 文字内容 - 日文 */}
                 <div className="flex-1 text-[16px] leading-relaxed break-words font-medium text-[var(--text-muted)]">
-                    <UnifiedHighlighter text={japanese} target={targetWord} color={accentColor} />
+                    <UnifiedHighlighter text={japanese} target={targetWord} color={accentColor} replaceTilde={replaceTilde} />
                 </div>
             </div>
 
@@ -205,6 +215,7 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
                     onSpeak={onSpeak}
                     accentColor={grammarColor}
                     targetWord={grammar.title}
+                    replaceTilde={true} // 原字典示例，开启波浪号替换
                 />
             )}
 
@@ -308,37 +319,36 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
             // Debugging log
             console.log('[Grammar AI] Generating request for:', grammar.title);
 
-            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。
-**必须全程使用中文进行讲解和回复。**
-正在讲解语法：${grammar.title}。
+            const systemPrompt = `你是一位拥有20年教学经验的资深日语老师。
+**必须全程使用中文进行讲解。**
+正在讲解语法：${grammar.title}
 
-【重要风格指南】
-- 严禁使用『』或「」来包裹目标语法。
-- 内容必须通俗、接地气，像是在微信聊天。
-- **字数限制**：人话解读部分控制在 100 字以内。
+【输出规则】
+- **严禁使用Emoji表情符号**。
+- **严禁使用拼音**。
+- **严禁任何开场白（如“你好”、“作为...”），直接输出第一个对应板块。**
+- 所有日文汉字必须标注假名，格式为：漢字（かんじ）。
+- 保持Markdown格式，总字数控制在500字以内。
 
-【任务要求】
-第1步 - 人话解读：
-- 直接点出精髓，指出其“情绪潜台词”。
-- 严禁使用任何标题。
+【输出格式】
+请严格按照以下三个板块输出（板块标题加粗，但不要使用Markdown星号）：
 
-第2步 - 换行：
-- 解读写完后，**必须输出一个空行**。
-- **紧接着输出一行标题：例句：** (不要加任何符号)。
+接续与含义
+- 清晰列出接续方式（例如：动词它形 + ほうがいい）。
+- 用简洁的中文解释该语法的核心含义。
 
-第3步 - 场景例句：
-- 创作 3 组**全新**的例句。
-- 每一组必须包含：一行日文、一行中文。
-- 格式如下：
-  日文句子1
-  *中文翻译1*
-  日文句子2
-  *中文翻译2*
-  日文句子3
-  *中文翻译3*
+老师划重点
+这里是关键部分。请重点讲解：
+- “情绪潜台词”：这个语法包含了什么样的情感（建议、后悔、强迫、客观描述等）？
+- 易混淆点：它和相似语法有什么区别？
+- 使用限制：只能对长辈用？还是只能用于消极结果？
+- 语言风格需通俗易懂，像私教面对面点拨一样。
 
-【警告】
-如果没有输出3个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
+场景例句
+提供3个地道的日文例句，展示该语法的典型用法。
+格式：
+- 日文句子（汉字带注音）
+- 中文翻译`;
 
             // Use simple user prompt like Word Interpretation
             const currentGrammarId = grammar.id; // Capture ID for validation
@@ -521,21 +531,26 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
-                                        if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
-                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
+                                        if (trimmed.includes('场景例句') || trimmed.includes('接续与含义') || trimmed.includes('老师划重点')) {
+                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--accent-primary)]" style={{ color: grammarColor }}>{line.replace(/\*+/g, '')}</div>;
                                         }
 
-                                        // 如果是例句部分：检测日文和翻译对
-                                        const nextLine = lines[lineIdx + 1]?.trim() || '';
-                                        const isTranslation = trimmed.startsWith('*') && trimmed.endsWith('*');
-                                        const nextIsTranslation = nextLine.startsWith('*');
+                                        // 重新适配例句检测
+                                        const nextLine = (lines[lineIdx + 1] || '').trim();
+                                        // 简单识别：如果当前行是日文（含汉字/假名）且下一行是纯中文，且当前行不是标题
+                                        const cleanTrimmed = trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
+                                        const cleanNext = nextLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
 
-                                        if (trimmed && !isTranslation && nextIsTranslation) {
+                                        const isJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanTrimmed);
+                                        // 宽松的中文判定：允许所有全角字符范围，确保问号 ？ (FF1F) 等能被匹配
+                                        const isChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(cleanNext);
+
+                                        if (trimmed && isJapanese && nextLine && isChinese && !trimmed.startsWith('**') && !trimmed.includes('：')) {
                                             return (
                                                 <UnifiedExampleItem
                                                     key={lineIdx}
-                                                    japanese={trimmed}
-                                                    chinese={nextLine.slice(1, -1)}
+                                                    japanese={cleanTrimmed}
+                                                    chinese={cleanNext}
                                                     onSpeak={handleSpeak}
                                                     accentColor={grammarColor}
                                                     targetWord={grammar.title}
@@ -544,11 +559,16 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                         }
 
                                         // 跳过已被包含在 UnifiedExampleItem 的翻译行
-                                        if (isTranslation && lines[lineIdx - 1]?.trim() && !lines[lineIdx - 1]?.trim().startsWith('*')) return null;
+                                        const prevLine = (lines[lineIdx - 1] || '').trim();
+                                        const cleanPrev = prevLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
+                                        const prevIsJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanPrev);
+                                        const currentIsChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, ''));
+
+                                        if (currentIsChinese && prevIsJapanese && !prevLine.startsWith('**') && !prevLine.includes('：')) return null;
 
                                         return (
                                             <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
-                                                <UnifiedHighlighter text={trimmed} target={grammar.title} color={grammarColor} />
+                                                <UnifiedHighlighter text={trimmed.replace(/\*+/g, '')} target={grammar.title} color={grammarColor} />
                                             </div>
                                         );
                                     });
@@ -575,7 +595,8 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 }
 
 export default function InfoPanel() {
-    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings, isSpeaking: isGlobalSpeaking } = useAppStore();
+    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings, isSpeaking: isGlobalSpeaking, setSelectedToken, setSelectedGrammar, layout } = useAppStore();
+    const [panelInput, setPanelInput] = useState('');
     const { addVocab, isWordSaved, removeVocab, vocabList } = useVocabStore();
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [speakingLineIndex, setSpeakingLineIndex] = useState<number | null>(null);
@@ -597,6 +618,53 @@ export default function InfoPanel() {
     const [aiResultTitle, setAiResultTitle] = useState<string>('');
     const [isCached, setIsCached] = useState(false);
     const [isAIExpanded, setIsAIExpanded] = useState(false);
+
+    const handlePanelLookup = (text: string) => {
+        if (!text.trim()) return;
+        setPanelInput(''); // Clear input
+
+        // Create a manual token
+        const token: WordToken = {
+            id: `manual-${Date.now()}`,
+            surface: text,
+            reading: '',
+            romaji: '',
+            pos: PartOfSpeech.OTHER,
+            baseForm: text,
+        };
+        setSelectedGrammar(null); // 1. 先清除语法状态 (这会副作用把 token 设为 null)
+        setSelectedToken(token);  // 2. 再设置新的 Token
+    };
+
+    const renderLookupInput = () => {
+        return (
+            <div className="shrink-0 p-4 pt-2 border-t border-[var(--border-default)] bg-transparent">
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handlePanelLookup(panelInput);
+                    }}
+                    className="flex items-center gap-2 p-1.5 pl-4 pr-1.5 rounded-xl bg-[var(--bg-muted)] transition-all focus-within:bg-[var(--bg-elevated)] focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/10"
+                >
+                    <input
+                        type="text"
+                        value={panelInput}
+                        onChange={(e) => setPanelInput(e.target.value)}
+                        placeholder="输入单词或语法进行查询..."
+                        className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none !border-none !ring-0 !outline-none text-[15px] placeholder-[var(--text-muted)] text-[var(--text-primary)] min-w-0"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!panelInput.trim()}
+                        className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                        style={{ color: 'var(--text-muted)' }}
+                    >
+                        <Search className="w-5 h-5" />
+                    </button>
+                </form>
+            </div>
+        );
+    };
 
     // Clear AI result when switching words
     useEffect(() => {
@@ -639,39 +707,43 @@ export default function InfoPanel() {
             // Fetch reference data from dictionary if possible
             const refDef = yomitanEntry?.definitions[0] || "";
 
-            const systemPrompt = `你是一位说话风趣幽默的日语私教，同时也是精通日剧/动漫台词的编剧。
-**必须全程使用中文进行讲解和回复。**
-正在讲解单词：${token.surface}。
+            const systemPrompt = `你是一位拥有20年教学经验的资深日语老师。
+**必须全程使用中文进行讲解。**
+当前输入的词汇是：${token.surface}
 
-【重要风格指南】
-- 严禁使用『』或「」来包裹目标单词。
-- 将这个词“翻译”成风趣的人话。
-- **字数限制**：人话解读部分必须控制在 100 字以内，总体原则是“短小精悍”。
+【逻辑判断与预处理】
+1. **中文识别**：如果用户输入的是中文词汇（且不是标准日语汉字），请先将其翻译成最常用的日语单词。
+   - 例如：输入“冰箱”，转为“冷蔵庫”进行讲解。
+   - 例如：输入“先生”，直接按日语“先生”讲解。
+2. **目标锁定**：接下来的所有讲解，必须针对这个**日语单词**进行。
 
-【任务要求】
-第1步 - 人话解读：
-- 解释单词的含义，并指出它的“语感”或“潜台词”。
-- 严禁任何标题。
-如果有特殊的“潜台词”一定要指出来。
+【输出规则】
+- **严禁使用Emoji表情符号**。
+- **严禁使用拼音**。
+- **严禁任何开场白（如“你好”、“作为...”），直接输出第一个对应板块。**
+- 所有日文汉字必须标注假名，格式为：漢字（かんじ）。
+- 保持Markdown格式，总字数控制在500字以内。
 
-第2步 - 换行：
-- 解读写完后，只输出一个空行。
-- **紧接着输出一行标题：例句：** (不要加任何符号)。
+【输出格式】
+请严格按照以下三个板块输出（板块标题加粗，但不要使用Markdown星号）：
 
-第3步 - 场景例句：
-- 创作 5 个**全新**的生活化例句。
-- 每一组必须包含：一行日文、一行中文（中文必须用 *斜体* 包裹）。
-- **每组例句之间只空一行**。
-- 格式如下：
-  日文句子1
-  *中文翻译1*
-  (空一行)
-  日文句子2
-  *中文翻译2*
+核心含义
+(如果输入是中文，先在第一行写：对应的日语是「单词（假名）」)
+第一行：列出单词、假名读音、声调（如有）。
+第二行：用简洁的中文解释核心意思。
 
-【警告】
-严禁输出 <br>、--- 或其他分隔符，请直接使用换行符。
-如果没有输出5个例句，任务即为失败。不要输出任何“总结”或“注意”废话。`;
+老师划重点
+这里是比字典更详细的部分。请解释：
+- 语感差异（它是书面语还是口语？）。
+- 使用场景（是对上级用还是朋友用？）。
+- 避坑指南（中国学生容易错的地方，或近义词辨析）。
+- 语言风格需通俗易懂，直击要点，不要啰嗦。
+
+场景例句
+提供3个地道的日文例句，涵盖不同生活场景。
+格式：
+- 日文句子（汉字带注音）
+- 中文翻译`;
             // Start Generation
             const currentTokenSurface = token.surface; // Capture for validation
             const { fromCache, text } = await generateText(
@@ -682,6 +754,7 @@ export default function InfoPanel() {
                     temperature: 0.85,
                     top_p: 0.95,
                     cacheKey: `word:${token.surface}`,
+                    forceRefresh
                 }
             );
 
@@ -705,6 +778,20 @@ export default function InfoPanel() {
             setSpeakingLineIndex(null);
         }, 0);
     }, [token]);
+
+    // 自动触发 manual 查询的 AI 解读
+    useEffect(() => {
+        if (token?.id?.startsWith('manual-')) {
+            // 延迟 300ms，确保 reset 逻辑（timeout 0）执行完毕后再触发
+            const timer = setTimeout(() => {
+                console.log("Triggering manual AI explain for", token.surface);
+                setIsAIExpanded(true); // 强制展开
+                handleAIExplain(false); // Default to cache first for manual lookup
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token?.id]);
 
     // 获取 Jisho 词典数据 (EN/JP)
     const fetchJishoDictionary = useCallback(async (word: string) => {
@@ -850,19 +937,31 @@ export default function InfoPanel() {
         };
     }, [token, dictLang, fetchJishoDictionary, fetchYomitanDictionary]);
 
+
+
     // 如果选中了语法，显示语法面板
     if (grammar && !token) {
-        return <GrammarPanel grammar={grammar} settings={settings} isGlobalSpeaking={isGlobalSpeaking} />;
+        return (
+            <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
+                <div className="flex-1 overflow-hidden relative w-full h-full">
+                    <GrammarPanel grammar={grammar} settings={settings} isGlobalSpeaking={isGlobalSpeaking} />
+                </div>
+                {renderLookupInput()}
+            </div>
+        );
     }
 
     if (!token) {
         return (
-            <div className="flex flex-col items-center justify-center h-full p-8" style={{ color: 'var(--text-faint)' }}>
-                <BookOpen className="w-12 h-12 mb-3 stroke-1" />
-                <p className="text-sm font-medium">単語を選択してください</p>
-                <p className="text-xs text-center mt-1 w-32">
-                    本文中の単語をクリックすると、ここに意味が表示されます
-                </p>
+            <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
+                <div className="flex-1 overflow-hidden relative w-full h-full flex flex-col items-center justify-center p-8" style={{ color: 'var(--text-faint)' }}>
+                    <BookOpen className="w-12 h-12 mb-3 stroke-1" />
+                    <p className="text-sm font-medium">単語を選択してください</p>
+                    <p className="text-xs text-center mt-1 w-32">
+                        本文中の単語をクリックすると、ここに意味が表示されます
+                    </p>
+                </div>
+                {renderLookupInput()}
             </div>
         );
     }
@@ -919,7 +1018,15 @@ export default function InfoPanel() {
 
     // 统一渲染单词定义的逻辑
     const renderYomitanDefinitions = () => {
-        if (!yomitanEntry) return null;
+        if (!yomitanEntry) {
+            return (
+                <div className="flex flex-col items-center justify-center py-12 text-[var(--text-muted)] opacity-60 px-4 text-center">
+                    <Search className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="font-medium text-sm">未找到「{token.surface}」的释义</p>
+                    <p className="text-xs mt-1 opacity-70">请检查输入或尝试搜索其他形式</p>
+                </div>
+            );
+        }
 
         const allLines: string[] = [];
         yomitanEntry.definitions.forEach(def => {
@@ -1001,6 +1108,8 @@ export default function InfoPanel() {
         );
     };
 
+
+
     // 渲染 Jisho 定义（EN/JP 模式）
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _renderJishoDefinitions = () => {
@@ -1079,12 +1188,6 @@ export default function InfoPanel() {
         : isWafu
             ? `var(--wafu-${posKey}-text)`
             : (POS_GLOW_COLORS[token.pos] || POS_GLOW_COLORS[PartOfSpeech.OTHER]);
-
-    const wafuStyle = (isWafu || isMonochrome) ? {
-        background: `var(--wafu-${posKey}-bg)`,
-        color: `var(--wafu-${posKey}-text)`,
-        border: `1px solid var(--wafu-${posKey}-border)`
-    } : {};
 
     return (
         <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
@@ -1263,21 +1366,30 @@ export default function InfoPanel() {
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
 
+                                        if (trimmed.includes('场景例句') || trimmed.includes('核心含义') || trimmed.includes('老师划重点')) {
+                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--accent-primary)]" style={{ color: wordAccentColor }}>{line.replace(/\*+/g, '')}</div>;
+                                        }
                                         if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
-                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-muted)]">{line}</div>;
+                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-primary)]">{line}</div>;
                                         }
 
-                                        // 检测例句模式
-                                        const nextLine = lines[lineIdx + 1]?.trim() || '';
-                                        const isTranslation = trimmed.startsWith('*') && trimmed.endsWith('*');
-                                        const nextIsTranslation = nextLine.startsWith('*');
+                                        // 重新适配例句检测 (支持 - 开头或普通文本对)
+                                        const nextLine = (lines[lineIdx + 1] || '').trim();
+                                        // 简单识别：如果当前行是日文（含汉字/假名）且下一行是纯中文，且当前行不是标题
+                                        const cleanTrimmed = trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
+                                        const cleanNext = nextLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
 
-                                        if (trimmed && !isTranslation && nextIsTranslation) {
+                                        // 宽松的日语判定：包含日文字符即可
+                                        const isJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanTrimmed);
+                                        // 宽松的中文判定：允许所有全角字符范围，确保问号 ？ (FF1F) 等能被匹配
+                                        const isChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(cleanNext);
+
+                                        if (trimmed && isJapanese && nextLine && isChinese && !trimmed.startsWith('**') && !trimmed.includes('：')) {
                                             return (
                                                 <UnifiedExampleItem
                                                     key={lineIdx}
-                                                    japanese={trimmed}
-                                                    chinese={nextLine.slice(1, -1)}
+                                                    japanese={cleanTrimmed}
+                                                    chinese={cleanNext}
                                                     onSpeak={handleSpeak}
                                                     accentColor={wordAccentColor}
                                                     targetWord={token.surface}
@@ -1285,11 +1397,18 @@ export default function InfoPanel() {
                                             );
                                         }
 
-                                        if (isTranslation && lines[lineIdx - 1]?.trim() && !lines[lineIdx - 1]?.trim().startsWith('*')) return null;
+                                        // 跳过已被包含在 UnifiedExampleItem 的翻译行
+                                        const prevLine = (lines[lineIdx - 1] || '').trim();
+                                        const cleanPrev = prevLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
+                                        const prevIsJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanPrev);
+                                        // 重复使用同样的中文判定逻辑
+                                        const currentIsChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, ''));
+
+                                        if (currentIsChinese && prevIsJapanese && !prevLine.startsWith('**') && !prevLine.includes('：')) return null;
 
                                         return (
                                             <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
-                                                <UnifiedHighlighter text={trimmed} target={token.surface} color={wordAccentColor} />
+                                                <UnifiedHighlighter text={trimmed.replace(/\*+/g, '')} target={token.surface} color={wordAccentColor} />
                                             </div>
                                         );
                                     });
@@ -1313,6 +1432,9 @@ export default function InfoPanel() {
 
                 {/* Pitch Footer Removed */}
             </div>
+
+            {/* Bottom Lookup Input */}
+            {renderLookupInput()}
         </div >
     );
 }

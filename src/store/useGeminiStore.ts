@@ -77,11 +77,11 @@ export const useGeminiStore = create<GeminiState>()(
 1. **母语环境**：学生是**母语为中文的人**，完全理解并能流畅阅读汉字。
 2. **严禁中文拼音**：禁止在任何地方出现中文拼音（Hanyu Pinyin）。严禁给中文文字标注拼音。
 3. **智能注音 (日语专用)**：仅为日语汉字标注假名。汉字后紧跟括号，如：私（わたし）。
-4. **简洁开场**：开场白要干脆利落。
+4. **严禁寒暄**：开头严禁说“你好”、“您好”或任何客套话。直接开始正文回答，不要有任何开场白。
 
 # Output Format
 请严格遵守 Markdown 格式结构进行回答。
-所有回答必须简洁明了，字数严格控制在 200 字左右（除非是长难句翻译等特殊情况）。`;
+所有回答必须简洁明了，字数尽量控制在 500 字以内（除非是长难句翻译等特殊情况）。`;
 
                     // Construct context from history - Limit to last 4 messages (approx 2 rounds)
                     const contextMessages = history.slice(-4);
@@ -163,20 +163,8 @@ export const useGeminiStore = create<GeminiState>()(
             generateText: async (prompt, systemPrompt, onUpdate, options = { temperature: 0.85, top_p: 0.95 }) => {
                 const uniqueKey = options.cacheKey || 'unknown';
 
-                if (options.cacheKey && !options.forceRefresh) {
-                    try {
-                        const res = await fetch(`/api/cache?key=${encodeURIComponent(options.cacheKey)}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.success && data.text) {
-                                if (onUpdate) onUpdate(data.text);
-                                return { text: data.text, fromCache: true };
-                            }
-                        }
-                    } catch (err) {
-                        console.error('[GeminiStore] Cache check failed:', err);
-                    }
-                }
+                // Client-side cache check is deprecated. Backend handles cache via 'cacheKey'.
+                // if (options.cacheKey && !options.forceRefresh) ...
 
                 // 2. Concurrency Limit Check
                 // We allow max 2 concurrent generations as requested
@@ -218,7 +206,8 @@ export const useGeminiStore = create<GeminiState>()(
                             systemPrompt,
                             temperature: options.temperature,
                             topP: options.top_p,
-                            cacheKey: options.cacheKey
+                            cacheKey: options.cacheKey,
+                            forceRefresh: options.forceRefresh
                         })
                     });
 

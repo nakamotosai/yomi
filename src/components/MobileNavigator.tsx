@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, X, Trash2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useGeminiStore } from '@/store/useGeminiStore';
 import MobileBottomBar from './MobileBottomBar';
@@ -29,19 +29,38 @@ export default function MobileNavigator({
     grammarContent,
     menuContent
 }: MobileNavigatorProps) {
-    const [currentView, setCurrentView] = useState<MobileView>('main');
-    const [isInputModalOpen, setIsInputModalOpen] = useState(false);
+    const [currentView, setCurrentView] = useState<MobileView>('ai');
+    const [hasMainLoaded, setHasMainLoaded] = useState(false);
 
     // Store access
-    const { settings, selectedToken, setSelectedToken, selectedGrammar, setSelectedGrammar, inputText, setInputText, centerViewMode, setCenterViewMode } = useAppStore();
+    const {
+        settings,
+        selectedToken,
+        setSelectedToken,
+        selectedGrammar,
+        setSelectedGrammar,
+        inputText,
+        setInputText,
+        centerViewMode,
+        setCenterViewMode,
+        isInputModalOpen,
+        setIsInputModalOpen
+    } = useAppStore();
     const { isChatOpen, setChatOpen } = useGeminiStore();
     const isDark = settings.theme === 'dark';
 
     // Clear ghost selection on mount to prevent auto-jump
     useEffect(() => {
         useAppStore.setState({ selectedToken: null });
-        useGeminiStore.setState({ isChatOpen: false });
+        // Although default is 'ai', ensuring store sync is good practice
     }, []);
+
+    // Lazy load main content when switching to it
+    useEffect(() => {
+        if (currentView === 'main' && !hasMainLoaded) {
+            setHasMainLoaded(true);
+        }
+    }, [currentView, hasMainLoaded]);
 
     // Sync: Selected Token/Grammar -> Info View
     useEffect(() => {
@@ -51,13 +70,29 @@ export default function MobileNavigator({
     }, [selectedToken, selectedGrammar]); // Use proper dependency
 
     // Sync: Chat Open -> AI View
+    const isInitialMount = React.useRef(true);
     useEffect(() => {
-        if (isChatOpen) {
-            setCurrentView('ai');
-        } else {
-            // Close AI view if store says closed (e.g. from elsewhere)
-            setCurrentView(v => v === 'ai' ? 'main' : v);
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            // Detect if we are on desktop (>1024px) logic could go here, 
+            // but for now we simply allow the default 'ai' view to persist on valid mounts.
+            // If the global store says 'closed' (false) but we want mobile defaults to 'open',
+            // we skip the synchronization on the very first render.
+            return;
         }
+
+        useEffect(() => {
+            if (isInitialMount.current) {
+                isInitialMount.current = false;
+                return;
+            }
+
+            if (isChatOpen) {
+                setCurrentView('ai');
+            }
+            // We no longer auto-close AI view when isChatOpen becomes false,
+            // because AI view is now the main view and accessible via tabs.
+        }, [isChatOpen]);
     }, [isChatOpen]);
 
     // Sync: Center View Mode -> Mobile Views
@@ -90,13 +125,14 @@ export default function MobileNavigator({
     };
 
     // Animation Variants
-    const slideVariants = {
-        enter: { x: '100%', opacity: 1 },
-        center: { x: 0, opacity: 1 },
-        exit: { x: '100%', opacity: 1 }, // Slide back to right
+    // Animation Variants (Fade)
+    const fadeVariants = {
+        enter: { opacity: 0 },
+        center: { opacity: 1 },
+        exit: { opacity: 0 },
     };
 
-    const transition = { type: 'spring', stiffness: 300, damping: 30 } as const;
+    const transition = { duration: 0.25, ease: 'easeInOut' } as const;
 
     return (
         <div className="h-full w-full relative overflow-hidden bg-[var(--bg-base)]">
@@ -109,20 +145,23 @@ export default function MobileNavigator({
                 className="absolute inset-0 z-0 flex flex-col pb-16" // pb-16 for BottomBar
                 style={{ overflowY: isInputModalOpen ? 'hidden' : 'auto' }}
             >
+                {/* Back Button Overlay for Reader Mode */}
+                {currentView === 'main' && (
+                    <div className="absolute top-3 left-3 z-[60] pointer-events-none">
+                        <button
+                            onClick={() => setCurrentView('ai')}
+                            className="pointer-events-auto flex items-center gap-1 bg-[var(--bg-elevated)]/90 backdrop-blur-md border border-[var(--border-default)] text-[var(--text-secondary)] px-3 py-2 rounded-full shadow-md active:scale-95 transition-all"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span className="font-bold text-xs">AI老师</span>
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex-1 relative">
-                    {mainContent}
+                    {hasMainLoaded && mainContent}
                 </div>
             </div>
-
-            {/* ====================
-                Layer 1: Bottom Bar
-               ==================== */}
-            <MobileBottomBar
-                currentView={currentView}
-                onMenuClick={() => useAppStore.getState().setIsMobileDrawerOpen(true)}
-                onInputClick={() => setIsInputModalOpen(true)}
-                onAIClick={() => setChatOpen(true)}
-            />
 
             {/* ====================
                 Layer 2: Left Drawer (Menu)
@@ -139,11 +178,11 @@ export default function MobileNavigator({
                     <>
                         {/* Backdrop */}
                         <div
-                            className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-sm"
+                            className="fixed inset-0 z-[105] bg-black/20 backdrop-blur-sm"
                             onClick={() => setIsInputModalOpen(false)}
                         />
                         <div
-                            className="absolute bottom-0 left-0 right-0 h-[60vh] z-[60] flex flex-col bg-[var(--bg-base)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] rounded-t-3xl border-t border-[var(--border-default)]"
+                            className="absolute bottom-0 left-0 right-0 h-[60vh] z-[110] flex flex-col bg-[var(--bg-base)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] rounded-t-3xl border-t border-[var(--border-default)]"
                         >
                             <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
                                 <h2 className="font-bold text-lg">输入文本</h2>
@@ -172,19 +211,19 @@ export default function MobileNavigator({
                 {currentView !== 'main' && (
                     <motion.div
                         key={currentView}
-                        variants={slideVariants}
+                        variants={fadeVariants}
                         initial="enter"
                         animate="center"
                         exit="exit"
                         transition={transition}
-                        className="absolute inset-0 z-[70] bg-[var(--bg-base)] flex flex-col shadow-2xl"
+                        className="absolute inset-0 z-[70] bg-[#faf9f6] dark:bg-[#0a0a12] flex flex-col shadow-2xl pb-20" // Added pb-20 for BottomBar visibility
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
                         dragElastic={{ left: 0, right: 0.5 }} // Only drag right (back)
                         dragMomentum={false}
                         onDragEnd={(e, { offset, velocity }) => {
                             // Threshold: 100px or fast swipe
-                            if (offset.x > 100 || velocity.x > 500) {
+                            if (currentView !== 'ai' && (offset.x > 100 || velocity.x > 500)) {
                                 handleBack();
                             }
                         }}
@@ -195,23 +234,56 @@ export default function MobileNavigator({
                                 className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[var(--border-default)]"
                                 style={{ background: isDark ? 'var(--bg-elevated)' : 'white' }}
                             >
-                                {/* Left spacer to balance right button if needed, but here we just use justify-between */}
-                                <div className="w-10" />
+                                {currentView === 'ai' ? (
+                                    /* AI Header: Logo & Title */
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative w-8 h-8">
+                                            {/* Assuming Image component is imported or we use img tag. 
+                                               Since Next.js Image is better, we should check imports. 
+                                               MobileNavigator doesn't import Image. Using img for now or standard div.
+                                               wait, I should use Next Image if possible. But I don't see it imported.
+                                               Let's use <img> for simplicity or check if I can import it.
+                                               The previous file didn't have Image. I'll use <img> to be safe.
+                                             */}
+                                            <img src="/logo.png" alt="Logo" className="object-contain w-full h-full" />
+                                        </div>
+                                        <span className="font-bold text-[var(--text-primary)]">YOMI | AI智能老师</span>
+                                    </div>
+                                ) : (
+                                    /* Normal Header: Spacer for centering */
+                                    <div className="w-10" />
+                                )}
 
-                                <span className="absolute left-1/2 -translate-x-1/2 font-bold text-[var(--text-primary)] text-sm md:text-base whitespace-nowrap">
-                                    {currentView === 'info' && '单词详解'}
-                                    {currentView === 'vocab' && '我的单词本'}
-                                    {currentView === 'grammar' && '语法知识库'}
-                                    {currentView === 'ai' && 'AI智能老师'}
-                                </span>
+                                {currentView !== 'ai' && (
+                                    <span className="absolute left-1/2 -translate-x-1/2 font-bold text-[var(--text-primary)] text-sm md:text-base whitespace-nowrap">
+                                        {currentView === 'info' && '单词详解'}
+                                        {currentView === 'vocab' && '我的单词本'}
+                                        {currentView === 'grammar' && '语法知识库'}
+                                    </span>
+                                )}
 
-                                <button
-                                    onClick={handleBack}
-                                    className="flex items-center gap-1 text-[var(--text-secondary)] p-2 rounded-lg active:bg-[var(--bg-muted)] transition-colors"
-                                >
-                                    <span className="font-medium text-sm">返回</span>
-                                    <X className="w-5 h-5" />
-                                </button>
+                                {currentView !== 'ai' && (
+                                    <button
+                                        onClick={handleBack}
+                                        className="flex items-center gap-1 text-[var(--text-secondary)] p-2 rounded-lg active:bg-[var(--bg-muted)] transition-colors"
+                                    >
+                                        <span className="font-medium text-sm">返回</span>
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                )}
+                                {currentView === 'ai' && (
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('确定要清除所有对话记录吗？')) {
+                                                useGeminiStore.getState().resetChat();
+                                            }
+                                        }}
+                                        className="p-2 -mr-2 text-[var(--text-muted)] hover:text-red-500 transition-colors active:scale-95"
+                                        title="清除所有对话"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -225,6 +297,21 @@ export default function MobileNavigator({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* ====================
+                Layer 1: Bottom Bar (Moved to Top Z-Index)
+               ==================== */}
+            <div className="relative z-[80]">
+                <MobileBottomBar
+                    currentView={currentView}
+                    onMenuClick={() => useAppStore.getState().setIsMobileDrawerOpen(true)}
+                    onReaderClick={() => {
+                        setChatOpen(false);
+                        setCurrentView('main');
+                    }}
+                    onAIClick={() => setCurrentView('ai')} // Force switch to AI
+                />
+            </div>
 
         </div>
     );

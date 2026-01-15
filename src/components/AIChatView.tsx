@@ -3,7 +3,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useGeminiStore } from '@/store/useGeminiStore';
 import { useAppStore } from '@/store/useAppStore';
-import { ChevronLeft, User, Bot, Send, Loader2, Trash2, Square } from 'lucide-react';
+import { ChevronLeft, User, Bot, Send, Trash2, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export default function AIChatView({ hideHeader = false }: { hideHeader?: boolean }) {

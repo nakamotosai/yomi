@@ -6,11 +6,11 @@ export const runtime = 'edge';
 // Constants for Edge TTS (2024/2025 updated version)
 const TRUSTED_CLIENT_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
 const CHROMIUM_FULL_VERSION = '130.0.2849.68';
-const CHROMIUM_MAJOR_VERSION = CHROMIUM_FULL_VERSION.split('.')[0];
+// const CHROMIUM_MAJOR_VERSION = CHROMIUM_FULL_VERSION.split('.')[0];
 const SEC_MS_GEC_VERSION = `1-${CHROMIUM_FULL_VERSION}`;
 
 // Windows epoch offset (1601-01-01 to 1970-01-01) in seconds
-const WIN_EPOCH = 11644473600;
+// const WIN_EPOCH = 11644473600;
 
 /**
  * Generate the Sec-MS-GEC token using Web Crypto API
@@ -122,14 +122,16 @@ async function connectToEdgeTTS(wsUrl: string): Promise<WebSocket> {
         });
 
         if (connectResp.status === 101) {
-            const socket = (connectResp as any).webSocket as any;
+            const socket = (connectResp as unknown as { webSocket: unknown }).webSocket as WebSocket;
             if (socket) {
                 console.log('[EdgeTTS] Connected via Cloudflare fetch upgrade');
                 // CRITICAL: Cloudflare requires calling accept() on the WebSocket object
-                if (typeof socket.accept === 'function') {
-                    socket.accept();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (typeof (socket as any).accept === 'function') {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (socket as any).accept();
                 }
-                return socket as WebSocket;
+                return socket;
             }
         }
         console.warn(`[EdgeTTS] Cloudflare upgrade returned status: ${connectResp.status}`);
@@ -141,6 +143,7 @@ async function connectToEdgeTTS(wsUrl: string): Promise<WebSocket> {
     console.log('[EdgeTTS] Attempting standard WebSocket connection...');
     try {
         // Try with custom headers (supported in Node.js/ws-like environments)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return new WebSocket(wsUrl, {
             headers: commonHeaders
         } as any);
@@ -184,7 +187,8 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
                 buffer = new Uint8Array(data);
             } else if (typeof data !== 'string' && data && (data.buffer instanceof ArrayBuffer || ArrayBuffer.isView(data))) {
                 // Safer check for Buffer/Uint8Array-like objects
-                buffer = new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength || data.length);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                buffer = new Uint8Array((data as any).buffer || data, (data as any).byteOffset || 0, (data as any).byteLength || data.length);
             }
 
             if (buffer) {
@@ -281,8 +285,8 @@ async function generateEdgeTTS(text: string, voice: string, rate: number): Promi
             }
         });
 
-        ws.addEventListener('error', (err: any) => {
-            console.error('[EdgeTTS] WebSocket Error Details:', err);
+        ws.addEventListener('error', (ev: Event) => {
+            console.error('[EdgeTTS] WebSocket Error Details:', ev);
             reject(new Error(`WebSocket connection error to ${wsUrl.slice(0, 50)}...`));
         });
 

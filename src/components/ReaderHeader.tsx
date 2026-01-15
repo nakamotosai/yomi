@@ -4,7 +4,8 @@ import {
     PlayCircle,
     PauseCircle,
     StopCircle,
-    RefreshCw
+    RefreshCw,
+    PenLine
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
@@ -17,6 +18,7 @@ interface ReaderHeaderProps {
     isPaused: boolean;
     onPlay: () => void;
     onStop: () => void;
+    onOpenInputModal: () => void;
 }
 
 const ReaderHeader: React.FC<ReaderHeaderProps> = ({
@@ -27,6 +29,7 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     isPaused,
     onPlay,
     onStop,
+    onOpenInputModal,
 }) => {
     const { settings } = useAppStore();
 
@@ -34,6 +37,23 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
         <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none justify-center">
             {/* Left Column: Fixed Left Pair */}
             <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
+                {/* Input Button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenInputModal();
+                    }}
+                    className={clsx(
+                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
+                        "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
+                    )}
+                    style={{ color: 'var(--text-muted)' }}
+                    title="入力 / 貼り付け"
+                >
+                    <PenLine className="w-5 h-5" />
+                    <span className="text-[14px] font-medium tracking-wide truncate">输入文本</span>
+                </button>
+
                 {/* Translate Button */}
                 <button
                     onClick={(e) => {

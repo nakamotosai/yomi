@@ -10,7 +10,8 @@ import {
   StopCircle,
   GraduationCap,
   BookOpen,
-  X
+  X,
+  PenLine,
 } from 'lucide-react';
 import Image from 'next/image';
 import clsx from 'clsx';
@@ -26,19 +27,18 @@ import { useGeminiStore } from '@/store/useGeminiStore';
 import { yomitanLoader } from '@/lib/dictionary/yomitanLoader';
 import { prefetchGrammar } from '@/lib/grammar/grammarLoader';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
-import AIChatInput from '@/components/AIChatInput';
 import LoadingProgress from '@/components/LoadingProgress';
 import AIChatView from '@/components/AIChatView';
 import SettingsModal from '@/components/SettingsModal';
+import AIHeroInput from '@/components/AIHeroInput';
 import RefactoredInput from '@/components/RefactoredInput';
 import InfoPanel from '@/components/InfoPanel';
+
 import HistoryPanel from '@/components/HistoryPanel';
 import VocabListView from '@/components/VocabListView';
 import GrammarListView from '@/components/GrammarListView';
 import ResizableLayout from '@/components/ResizableLayout';
 import ResizableVerticalSection from '@/components/ResizableVerticalSection';
-import ResizableThreeSection from '@/components/ResizableThreeSection';
-import { MobileHeader, MobileDrawer, MobileBottomSheet } from '@/components/MobileComponents';
 import MobileNavigator from '@/components/MobileNavigator';
 import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import { Collapsible } from '@/components/Collapsible';
@@ -60,12 +60,12 @@ const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
   loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Kana Mode...</div>,
 });
 
-const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
+// const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
 
-const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: () => void }) => {
+const CenterColumn = ({ onPlayAll, onStop, onOpenInputModal }: { onPlayAll: () => void, onStop: () => void, onOpenInputModal: () => void }) => {
   const { appMode, inputText, analyzedText, isSpeaking, isPaused, settings, centerViewMode, isFromExtension, setIsFromExtension, setAnalyzedText } = useAppStore();
   const [isMounted, setIsMounted] = useState(false);
-  const isDark = isMounted && settings.theme === 'dark';
+  // const isDark = isMounted && settings.theme === 'dark';
 
   // Translation State
   const [showTranslation, setShowTranslation] = useState(true);
@@ -93,7 +93,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
     }
     // Only trigger when isFromExtension becomes true or inputText changes while it is true
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFromExtension, inputText]);
+  }, [isFromExtension, inputText, setIsFromExtension, showTranslation, setAnalyzedText]);
 
   // Handle toggling translation
   const handleToggleTranslation = async () => {
@@ -203,6 +203,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
               isPaused={isPaused}
               onPlay={onPlayAll}
               onStop={onStop}
+              onOpenInputModal={onOpenInputModal}
             />
 
             {/* Content Section (Animated Grid) */}
@@ -315,6 +316,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   // Subscribe to isChatOpen to trigger re-renders when chat opens/closes
   const { isChatOpen } = useGeminiStore();
   const [showSettings, setShowSettings] = useState(false);
+  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -322,7 +324,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   }, []);
 
   const isDark = mounted && settings.theme === 'dark';
-  const isMonochrome = settings.colorScheme === 'monochrome';
+  // const isMonochrome = settings.colorScheme === 'monochrome';
 
   // Apply theme to document
   useEffect(() => {
@@ -390,7 +392,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         setAnalyzedText(DEFAULT_INPUT_TEXT);
       }
     }
-  }, [searchParams, setInputText, setIsFromExtension]);
+  }, [searchParams, setInputText, setIsFromExtension, setAnalyzedText]);
 
   // Background Dictionary Prefetching
   useEffect(() => {
@@ -446,140 +448,6 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   };
 
   const isCompact = layout.leftSidebarWidth < 300;
-
-  const LeftColumnContent = (
-    <div className="h-full flex flex-col">
-      {/* Logo Area (Desktop only) */}
-      <div
-        className="h-16 hidden lg:flex items-center px-4 shrink-0 bg-transparent border-none"
-      >
-        <div className="relative w-8 h-8 mr-3">
-          <Image src="/logo.png" alt="Logo" fill className="object-contain" unoptimized />
-        </div>
-        {!isCompact && (
-          <h1 className="text-[16px] font-bold tracking-tight" style={{ color: settings.colorScheme === 'wafu' ? '#3c3633' : 'var(--text-secondary)' }}>
-            読み | YOMI
-          </h1>
-        )}
-        <button
-          onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
-          className="ml-auto p-2 rounded-lg transition-colors"
-          style={{ color: 'var(--text-muted)' }}
-          title="設定"
-        >
-          <Settings2 className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Navigation & Tools */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-
-        {/* Main Functions */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-faint)' }}>機能</h3>
-          <button
-            onClick={() => { setAppMode('reader'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
-            className={clsx(
-              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2",
-              appMode === 'reader' && centerViewMode === 'reader' && isDark && "rainbow-highlight",
-              appMode === 'reader' && centerViewMode === 'reader' && !isDark && "shadow-sm"
-            )}
-            style={{
-              background: appMode === 'reader' && centerViewMode === 'reader'
-                ? (isDark ? 'rgba(255, 255, 255, 0.03)' : 'var(--bg-elevated)')
-                : 'transparent',
-              border: appMode === 'reader' && centerViewMode === 'reader' && !isDark
-                ? '1px solid var(--border-default)'
-                : '1px solid transparent',
-              color: appMode === 'reader' && centerViewMode === 'reader' ? 'var(--text-primary)' : 'var(--text-secondary)'
-            }}
-          >
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ background: appMode === 'reader' ? (isDark ? '#34d399' : 'var(--text-primary)') : 'var(--text-faint)' }}
-            />
-            文 Reader
-          </button>
-          <button
-            onClick={() => { setAppMode('kana'); setCenterViewMode('reader'); setIsMobileDrawerOpen(false); }}
-            className={clsx(
-              "w-full text-left px-3 py-2 rounded-lg text-[16px] font-medium transition-all flex items-center gap-2",
-              appMode === 'kana' && isDark && "rainbow-highlight",
-              appMode === 'kana' && !isDark && "shadow-sm"
-            )}
-            style={{
-              background: appMode === 'kana'
-                ? (isDark ? 'rgba(255, 255, 255, 0.03)' : 'var(--bg-elevated)')
-                : 'transparent',
-              border: appMode === 'kana' && !isDark
-                ? '1px solid var(--border-default)'
-                : '1px solid transparent',
-              color: appMode === 'kana' ? 'var(--text-primary)' : 'var(--text-secondary)'
-            }}
-          >
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ background: appMode === 'kana' ? (isDark ? '#34d399' : 'var(--text-primary)') : 'var(--text-faint)' }}
-            />
-            あ Kana
-          </button>
-        </div>
-
-        {/* Collection/Library */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-faint)' }}>学習</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => { setCenterViewMode('vocab'); setIsMobileDrawerOpen(false); }}
-              className={clsx(
-                "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
-                centerViewMode === 'vocab' && (isDark ? "rainbow-highlight" : "ring-2 ring-emerald-500/20 bg-emerald-50/30")
-              )}
-              style={{
-                background: isDark ? 'var(--bg-muted)' : 'white',
-                border: `1px solid var(--border-default)`
-              }}
-            >
-              <BookMarked className="w-5 h-5 mb-1 transition-colors" style={{ color: 'var(--scheme-primary)' }} />
-              <span className="font-medium text-slate-500 text-[16px]">単語帳{vocabList.length > 0 ? `(${vocabList.length})` : ''}</span>
-            </button>
-            <button
-              onClick={() => { setCenterViewMode('grammar'); setIsMobileDrawerOpen(false); }}
-              className={clsx(
-                "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative glass-card",
-                centerViewMode === 'grammar' && (isDark ? "rainbow-highlight" : "ring-2 ring-blue-500/20 bg-blue-50/30")
-              )}
-              style={{
-                background: isDark ? 'var(--bg-muted)' : 'white',
-                border: `1px solid var(--border-default)`
-              }}
-            >
-              <GraduationCap className="w-5 h-5 mb-1" style={{ color: 'var(--scheme-grammar)' }} />
-              <span className="font-medium text-slate-500 text-[16px]">文法帳{grammarList.length > 0 ? `(${grammarList.length})` : ''}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Input Area (Inside Drawer) */}
-      <div
-        className="lg:hidden p-3"
-        style={{
-          borderTop: `1px solid var(--border-default)`,
-          background: isDark ? 'var(--bg-muted)' : 'rgba(249, 250, 251, 0.5)'
-        }}
-      >
-        {appMode === 'reader' && (
-          <RefactoredInput
-            inputText={inputText}
-            setInputText={setInputText}
-            onClear={handleClear}
-            compact
-          />
-        )}
-      </div>
-    </div>
-  );
 
   // Scrollbar Visibility Logic
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -644,6 +512,18 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
           {/* Playback Controls */}
           <div className="flex items-center gap-2">
+            {/* Input Button */}
+            <button
+              onClick={() => useAppStore.getState().setIsInputModalOpen(true)}
+              className={clsx(
+                "flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all active:scale-95",
+                isDark ? "bg-[rgba(255,255,255,0.03)] text-[var(--text-muted)] border-none" : "bg-white text-[var(--text-muted)] border border-[var(--border-muted)] shadow-sm"
+              )}
+            >
+              <PenLine className="w-4 h-4" />
+              <span>入力</span>
+            </button>
+
             <button
               onClick={handlePlayAll}
               className={clsx(
@@ -735,6 +615,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
       {/* Mobile Header Removed - Replaced by MobileNavigator/BottomBar */}
 
+
       {/* Desktop Layout (> 1024px) */}
       <div className="hidden lg:block h-full w-full">
         <ResizableLayout
@@ -743,17 +624,28 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               {/* Refactored to 2 separate resize sections (Nav vs InputGroup) to keep AIChatInput fixed */}
               <ResizableVerticalSection
                 mode="top-fixed"
-                initialTopHeight={layout.leftTopHeight}
-                onTopHeightChange={(h) => setLayout({ ...layout, leftTopHeight: h })}
+                // Increase top height allocation for the Hero AI Card
+                initialTopHeight={Math.max(layout.leftTopHeight, 320)}
+                onTopHeightChange={(h: number) => setLayout({ ...layout, leftTopHeight: h })}
                 minTopHeight={250}
                 gap={16}
 
                 topContent={
-                  /* Card 1: Logo + Navigation + Learning */
-                  <div className="h-full flex flex-col rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden">
-                    {/* Logo Area */}
+                  /* Hero AI Card Section */
+                  <div className="h-full flex flex-col rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden relative">
+                    {/* Background Pattern for Card */}
+                    <div className="absolute inset-0 z-[-1] opacity-30 pointer-events-none"
+                      style={{
+                        backgroundImage: isDark
+                          ? 'radial-gradient(circle at 10% 10%, rgba(255,255,255,0.03) 1px, transparent 1px)'
+                          : 'radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                        backgroundSize: '16px 16px'
+                      }}
+                    />
+
+                    {/* Logo Area - Compact */}
                     <div
-                      className="h-14 hidden lg:flex items-center px-4 shrink-0 bg-transparent border-none"
+                      className="h-14 hidden lg:flex items-center px-6 shrink-0 bg-transparent border-none z-20"
                     >
                       <div className="relative w-8 h-8 mr-3">
                         <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
@@ -771,128 +663,107 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                       </button>
                     </div>
 
-                    {/* Navigation - 機能 & Learning */}
-                    <div className="flex-1 p-4 bg-transparent overflow-y-auto space-y-3">
-
-                      {/* Functions */}
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => {
-                              setAppMode('reader');
-                              setCenterViewMode('reader');
-                              setIsMobileDrawerOpen(false);
-                              useGeminiStore.getState().setChatOpen(false);
-                            }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
-                              !isChatOpen && appMode === 'reader' && centerViewMode === 'reader'
-                                ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-                                : "hover:scale-[1.02] shadow-sm hover:shadow-md bg-transparent"
-                            )}
-                          >
-                            <BookOpen
-                              className="w-5 h-5 mb-1 transition-colors"
-                              style={{ color: 'var(--text-muted)' }}
-                            />
-                            <span className="font-medium text-[16px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
-                              {isCompact ? "読解" : "読解モード"}
-                            </span>
-                          </button>
-                          <button
-                            disabled
-                            onClick={() => {
-                              setAppMode('kana');
-                              setCenterViewMode('reader');
-                              setIsMobileDrawerOpen(false);
-                              useGeminiStore.getState().setChatOpen(false);
-                            }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
-                              "opacity-40 cursor-not-allowed grayscale filter blur-[1px] hover:blur-0 transition-all",
-                              !isChatOpen && centerViewMode === 'reader' && appMode === 'kana'
-                                ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-                                : "bg-transparent"
-                            )}
-                          >
-                            <span
-                              className="w-5 h-5 mb-1 transition-colors flex items-center justify-center font-serif font-bold text-xl leading-none"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              あ
-                            </span>
-                            <span className="font-medium text-[16px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
-                              {isCompact ? "仮名" : "仮名练习(锁)"}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Collection/Library */}
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => {
-                              setCenterViewMode('vocab');
-                              setIsMobileDrawerOpen(false);
-                              useGeminiStore.getState().setChatOpen(false);
-                            }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
-                              !isChatOpen && centerViewMode === 'vocab'
-                                ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-                                : "hover:scale-[1.02] shadow-sm hover:shadow-md bg-transparent"
-                            )}
-                          >
-                            <BookMarked className="w-5 h-5 mb-1 transition-colors" style={{ color: 'var(--text-muted)' }} />
-                            <span className="font-medium text-[16px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
-                              {isCompact ? "単語" : `単語帳${vocabList.length > 0 ? `(${vocabList.length})` : ''}`}
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setCenterViewMode('grammar');
-                              setIsMobileDrawerOpen(false);
-                              useGeminiStore.getState().setChatOpen(false);
-                            }}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-3 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
-                              !isChatOpen && centerViewMode === 'grammar'
-                                ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-                                : "hover:scale-[1.02] shadow-sm hover:shadow-md bg-transparent"
-                            )}
-                          >
-                            <GraduationCap className="w-5 h-5 mb-1 transition-colors" style={{ color: 'var(--text-muted)' }} />
-                            <span className="font-medium text-[16px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
-                              {isCompact ? "文法" : `文法帳${grammarList.length > 0 ? `(${grammarList.length})` : ''}`}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
+                    {/* AI Hero Input */}
+                    <div className="flex-1 min-h-0 w-full relative">
+                      <AIHeroInput />
                     </div>
                   </div>
                 }
 
                 bottomContent={
-                  <div className="h-full flex flex-col gap-4">
-                    {/* Fixed Height Middle Section: AI Chat Input */}
-                    <div className="shrink-0 h-auto">
-                      <AIChatInput />
-                    </div>
+                  /* Navigation Grid Section (Moved Down) */
+                  <div className="h-full flex flex-col gap-4 overflow-y-auto">
 
-                    <div className="flex-1 min-h-0 rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden flex flex-col">
-                      <RefactoredInput
-                        inputText={inputText}
-                        setInputText={(text) => {
-                          setInputText(text);
-                          if (text.trim().length > 0) {
+                    {/* Navigation Buttons Grid - Expanded */}
+                    <div className="p-1">
+                      {/* Functions Row 1 */}
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <button
+                          onClick={() => {
+                            setAppMode('reader');
+                            setCenterViewMode('reader');
+                            setIsMobileDrawerOpen(false);
                             useGeminiStore.getState().setChatOpen(false);
-                            if (centerViewMode !== 'reader') setCenterViewMode('reader');
-                          }
-                        }}
-                        onClear={handleClear}
-                        compact={false}
-                      />
+                          }}
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            !isChatOpen && appMode === 'reader' && centerViewMode === 'reader'
+                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
+                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                          )}
+                        >
+                          <BookOpen
+                            className="w-6 h-6 mb-2 transition-colors"
+                            style={{ color: !isChatOpen && appMode === 'reader' && centerViewMode === 'reader' ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+                          />
+                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
+                            読解モード
+                          </span>
+                        </button>
+
+                        {/* Kana Mode (Locked) */}
+                        <button
+                          disabled
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            "opacity-50 grayscale bg-transparent border-[var(--border-muted)]"
+                          )}
+                        >
+                          <span
+                            className="w-6 h-6 mb-2 transition-colors flex items-center justify-center font-serif font-bold text-xl leading-none"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            あ
+                          </span>
+                          <span className="font-medium text-[14px]" style={{ color: 'var(--text-muted)' }}>
+                            仮名(Lock)
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Lists Row 2 */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => {
+                            setCenterViewMode('vocab');
+                            setIsMobileDrawerOpen(false);
+                            useGeminiStore.getState().setChatOpen(false);
+                          }}
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            !isChatOpen && centerViewMode === 'vocab'
+                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
+                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                          )}
+                        >
+                          <BookMarked className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'vocab' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
+                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
+                            単語帳
+                            <span className="ml-1 text-xs opacity-60 font-normal">{vocabList.length}</span>
+                          </span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setCenterViewMode('grammar');
+                            setIsMobileDrawerOpen(false);
+                            useGeminiStore.getState().setChatOpen(false);
+                          }}
+                          className={clsx(
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            !isChatOpen && centerViewMode === 'grammar'
+                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
+                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                          )}
+                        >
+                          <GraduationCap className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'grammar' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
+                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
+                            文法帳
+                            <span className="ml-1 text-xs opacity-60 font-normal">{grammarList.length}</span>
+                          </span>
+                        </button>
+                      </div>
+
                     </div>
                   </div>
                 }
@@ -915,7 +786,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                 {useGeminiStore.getState().isChatOpen ? (
                   <AIChatView />
                 ) : (
-                  <CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} />
+                  <CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} onOpenInputModal={() => setIsInputModalOpen(true)} />
                 )}
               </div>
             </div>
@@ -925,7 +796,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               <ResizableVerticalSection
                 mode="bottom-fixed"
                 initialBottomHeight={120} // Just enough for 1-2 lines
-                onBottomHeightChange={(h) => { /* Optional persists */ }}
+                onBottomHeightChange={(_h: number) => { /* Optional persists */ }}
                 gap={16}
                 topContent={
                   <div className="h-full rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden">
@@ -942,6 +813,46 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
           }
         />
       </div>
+
+      {/* Input Modal */}
+      {isInputModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div
+            className="w-full max-w-2xl bg-[var(--bg-base)] rounded-2xl border border-[var(--border-muted)] shadow-2xl overflow-hidden animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-muted)]">
+              <h2 className="text-lg font-bold">テキストを入力</h2>
+              <button
+                onClick={() => setIsInputModalOpen(false)}
+                className="p-2 rounded-lg hover:bg-[var(--bg-muted)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <RefactoredInput
+                inputText={inputText}
+                setInputText={setInputText}
+                onClear={handleClear}
+                compact={false}
+              />
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setIsInputModalOpen(false)}
+                  className="px-6 py-2.5 bg-[var(--accent-primary)] text-white rounded-xl font-bold shadow-lg shadow-[var(--accent-primary)]/20 hover:scale-[1.02] active:scale-95 transition-all text-[16px]"
+                >
+                  完了
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Mobile Layout (< 1024px) */}
       <div className="lg:hidden h-full relative overflow-hidden">
