@@ -52,3 +52,6 @@ eslint-result.json
 /dist
 /public/models
 /public/qwen
+
+# agent
+.agent/

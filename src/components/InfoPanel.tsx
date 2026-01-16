@@ -977,11 +977,17 @@ export default function InfoPanel() {
     const activeTheme = COLOR_THEMES[settings.colorTheme || 'standard'];
     const colorScheme = activeTheme.colors[token.pos as PartOfSpeech] || activeTheme.colors[PartOfSpeech.OTHER];
 
-    const handleSpeak = () => {
+    const handleSpeak = (textOrEvent?: string | React.MouseEvent | React.KeyboardEvent) => {
         if (isGlobalSpeaking) return;
+
+        // Determine what to speak: 
+        // If it's a string, use it (from example items). 
+        // Otherwise use token.surface (from header icon).
+        const textToSpeak = typeof textOrEvent === 'string' ? textOrEvent : token.surface;
+
         setIsSpeaking(true);
         ttsManager.speak(
-            token.surface,
+            textToSpeak,
             settings,
             {
                 onStart: () => setIsSpeaking(true),
