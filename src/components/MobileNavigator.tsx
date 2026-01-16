@@ -74,25 +74,14 @@ export default function MobileNavigator({
     useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
-            // Detect if we are on desktop (>1024px) logic could go here, 
-            // but for now we simply allow the default 'ai' view to persist on valid mounts.
-            // If the global store says 'closed' (false) but we want mobile defaults to 'open',
-            // we skip the synchronization on the very first render.
             return;
         }
 
-        useEffect(() => {
-            if (isInitialMount.current) {
-                isInitialMount.current = false;
-                return;
-            }
-
-            if (isChatOpen) {
-                setCurrentView('ai');
-            }
-            // We no longer auto-close AI view when isChatOpen becomes false,
-            // because AI view is now the main view and accessible via tabs.
-        }, [isChatOpen]);
+        if (isChatOpen) {
+            setCurrentView('ai');
+        }
+        // We no longer auto-close AI view when isChatOpen becomes false,
+        // because AI view is now the main view and accessible via tabs.
     }, [isChatOpen]);
 
     // Sync: Center View Mode -> Mobile Views

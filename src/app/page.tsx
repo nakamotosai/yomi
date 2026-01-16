@@ -783,7 +783,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   }}
                 />
 
-                {useGeminiStore.getState().isChatOpen ? (
+                {isChatOpen ? (
                   <AIChatView />
                 ) : (
                   <CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} onOpenInputModal={() => setIsInputModalOpen(true)} />
