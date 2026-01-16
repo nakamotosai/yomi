@@ -262,7 +262,7 @@ export default function VocabListView() {
             </div>
 
             {/* Content Wrapper */}
-            <div className="flex-1 overflow-y-auto pt-2 pb-4 px-2 floating-scrollbar">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden pt-2 pb-4 px-2 floating-scrollbar overscroll-y-none">
                 <div className="min-h-full">
                     {vocabList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center pb-20" style={{ color: 'var(--text-faint)' }}>

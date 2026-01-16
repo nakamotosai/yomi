@@ -1308,7 +1308,7 @@ export default function InfoPanel() {
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 floating-scrollbar" style={{ scrollbarGutter: 'stable' }}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 floating-scrollbar overscroll-y-none" style={{ scrollbarGutter: 'stable' }}>
 
                 {/* AI Section for Words */}
                 <div className="mb-4">

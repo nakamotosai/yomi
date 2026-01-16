@@ -12,14 +12,14 @@ interface RefactoredInputProps {
     compact?: boolean;
 }
 
-export default function RefactoredInput({ inputText, setInputText, onClear }: RefactoredInputProps) {
+export default function RefactoredInput({ inputText, setInputText, onClear, compact = false }: RefactoredInputProps) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [_isInputFocused, setIsInputFocused] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isTranslating, setIsTranslating] = useState(false);
-    const { settings, setAnalyzedText, analyzedText, setIsInputModalOpen } = useAppStore();
+    const { settings, setAnalyzedText, analyzedText, setIsInputModalOpen, setIsInputOpen } = useAppStore();
     const isDark = settings.theme === 'dark';
 
     // Detect if text is mostly non-Japanese (e.g. Chinese or English)
@@ -159,11 +159,14 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
     return (
         <div
             ref={containerRef}
-            className="group relative p-0 transition-all flex flex-col h-full bg-transparent"
+            className="group relative p-0 transition-all flex flex-col h-full bg-transparent pb-0"
         >
             <textarea
                 ref={textareaRef}
-                className="w-full flex-1 p-4 rounded-xl resize-none !outline-none text-[18px] md:text-2xl font-medium bg-[var(--bg-muted)]/30 custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none leading-relaxed"
+                className={clsx(
+                    "w-full flex-1 rounded-xl resize-none !outline-none font-normal leading-relaxed bg-[var(--bg-muted)]/30 custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none",
+                    compact ? "p-3 text-[15px]" : "p-4 text-[18px] md:text-2xl"
+                )}
                 style={{ color: 'var(--text-primary)' }}
                 placeholder="在此输入新的日文内容或粘贴图片直接分析..."
                 value={inputText}
@@ -174,10 +177,13 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
 
             {/* Bottom Tools */}
             <div
-                className="flex items-center justify-between pt-2 mt-1"
+                className={clsx(
+                    "flex items-center justify-between mt-1 px-1",
+                    compact ? "pt-1.5" : "pt-2"
+                )}
                 style={{ borderTop: `1px solid var(--border-muted)` }}
             >
-                <div className="text-[10px] font-mono flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-[10px] font-mono flex items-center gap-2 shrink-0" style={{ color: 'var(--text-muted)' }}>
                     <span>{inputText.length}字</span>
 
                     {/* Translation Button */}
@@ -185,7 +191,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                         <button
                             onClick={handleTranslate}
                             disabled={isTranslating}
-                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs transition-colors disabled:opacity-50 whitespace-nowrap"
                             style={{
                                 background: isDark ? 'rgba(100, 116, 139, 0.15)' : 'var(--bg-elevated)',
                                 color: 'var(--text-muted)',
@@ -197,11 +203,12 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                             ) : (
                                 <Languages className="w-3 h-3" />
                             )}
-                            日本語に翻訳
+                            翻訳
                         </button>
                     )}
                 </div>
-                <div className="flex gap-3">
+
+                <div className={clsx("flex", compact ? "gap-2" : "gap-3")}>
                     {/* Upload */}
                     <input
                         ref={fileInputRef}
@@ -212,38 +219,48 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
                     />
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-3 rounded-xl transition-all bg-[var(--bg-muted)] border border-[var(--border-default)] shadow-sm active:scale-90"
-                        style={{ color: 'var(--text-primary)' }}
+                        className={clsx(
+                            "rounded-full transition-all hover:bg-[var(--bg-muted)] active:scale-90 flex items-center justify-center",
+                            compact ? "p-1.5" : "p-3"
+                        )}
+                        style={{ color: 'var(--text-muted)' }}
                         title="画像OCR"
                     >
-                        <ImagePlus className="w-6 h-6" />
+                        <ImagePlus className={clsx(compact ? "w-5 h-5" : "w-6 h-6")} />
                     </button>
 
                     {/* Clear */}
                     <button
                         onClick={onClear}
-                        className="p-3 rounded-xl transition-all bg-[var(--bg-muted)] border border-[var(--border-default)] shadow-sm active:scale-90"
-                        style={{ color: 'var(--text-primary)' }}
+                        className={clsx(
+                            "rounded-full transition-all hover:bg-[var(--bg-muted)] active:scale-90 flex items-center justify-center",
+                            compact ? "p-1.5" : "p-3"
+                        )}
+                        style={{ color: 'var(--text-muted)' }}
                         title="クリア"
                     >
-                        <Eraser className="w-6 h-6" />
+                        <Eraser className={clsx(compact ? "w-5 h-5" : "w-6 h-6")} />
                     </button>
 
                     {/* Analyze Button */}
                     <button
                         onClick={() => {
                             setAnalyzedText(inputText);
-                            setIsInputModalOpen(false); // Auto close after analysis
+                            setIsInputModalOpen(false); // Legacy modal
+                            setIsInputOpen(false); // New Dropdown
                         }}
                         disabled={!inputText.trim()}
                         className={clsx(
-                            "flex items-center gap-2 px-8 py-3 rounded-2xl transition-all shadow-lg active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100",
-                            inputText.trim() ? "bg-[var(--accent-primary)] text-white scale-105" : "bg-[var(--bg-muted)] text-[var(--text-primary)] border border-[var(--border-default)]"
+                            "flex items-center gap-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100 border", // Standardized card style
+                            compact ? "px-4 py-1.5 text-sm" : "px-8 py-3 text-lg",
+                            inputText.trim()
+                                ? "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)] hover:bg-[var(--bg-muted)]" // Standard card colors
+                                : "bg-[var(--bg-muted)] text-[var(--text-primary)] border-[var(--border-default)]"
                         )}
                         title="分析"
                     >
-                        <Search className="w-6 h-6" />
-                        <span className="font-bold text-lg">开始分析</span>
+                        <Search className={clsx(compact ? "w-4 h-4 opacity-70" : "w-6 h-6")} />
+                        <span className="font-medium">分析</span> {/* font-bold -> font-medium for standard feel */}
                     </button>
                 </div>
             </div>

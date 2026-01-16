@@ -2,12 +2,23 @@
 
 import { AnalysisResult, SentenceAnalysis, PartOfSpeech, WordToken, PitchPattern, COMMON_WORDS } from '@/types';
 import * as wanakana from 'wanakana';
+import { loadDefaultJapaneseParser } from 'budoux';
 
 // Dynamic imports for browser-only modules
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Kuroshiro: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let KuromojiAnalyzer: any = null;
+
+// BudouX parser instance (lazy loaded)
+let budouXParser: ReturnType<typeof loadDefaultJapaneseParser> | null = null;
+
+function getBudouXParser() {
+    if (!budouXParser) {
+        budouXParser = loadDefaultJapaneseParser();
+    }
+    return budouXParser;
+}
 
 // Kuromoji token interface (原始分词结果)
 interface KuromojiToken {
@@ -149,7 +160,7 @@ export function getDeinflectedForm(token: WordToken): string {
 }
 
 // ============================================================================
-// TOKEN MERGING SYSTEM (核心后处理逻辑)
+// TOKEN MERGING SYSTEM (CORE API)
 // ============================================================================
 
 /**
@@ -211,7 +222,7 @@ function numberToKana(numStr: string): string {
 }
 
 /**
- * 合并 Kuromoji 原始 token 数组
+ * 合并 Kuromoji 原始 token 数组 (Stage 1: Rule-based Merging)
  * 使用 while 循环手动控制索引，实现向后贪婪吞噬
  */
 function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
@@ -223,15 +234,13 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
 
         // ========================================
         // Rule C: 接头词合并 (优先级最高)
-        // 如果当前词是 接頭詞，强制与下一个词合并
-        // 例: お + 水 → お水
         // ========================================
         if (curr.pos === '接頭詞' && i + 1 < tokens.length) {
             const next = tokens[i + 1];
             merged.push({
                 surface_form: curr.surface_form + next.surface_form,
                 reading: (curr.reading || curr.surface_form) + (next.reading || next.surface_form),
-                pos: next.pos,           // 使用后词的词性
+                pos: next.pos,
                 pos_detail_1: next.pos_detail_1,
                 basic_form: curr.surface_form + (next.basic_form !== '*' ? next.basic_form : next.surface_form),
                 conjugated_type: next.conjugated_type,
@@ -242,9 +251,6 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
 
         // ========================================
         // Rule A: 数字与单位/助数词合并
-        // 如果当前词是 名詞-数，且下一个词是 接尾辞 或 助数詞
-        // 例: 2026 + 年 → 2026年
-        // 例: 1 + つ → 1つ
         // ========================================
         if (curr.pos === '名詞' && curr.pos_detail_1 === '数' && i + 1 < tokens.length) {
             const next = tokens[i + 1];
@@ -283,10 +289,6 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
 
         // ========================================
         // Rule B: 动词/形容词的形态素链合并 (最重要)
-        // 触发点: 当前词是 動詞 或 形容詞
-        // 向后吞噬: 只要下一个词是可合并类型就持续合并
-        // 例: 食べ + られ + ませ + ん → 食べられません
-        // 例: 行か + なけれ + ば → 行かなければ
         // ========================================
         if (curr.pos === '動詞' || curr.pos === '形容詞') {
             let mergedSurface = curr.surface_form;
@@ -345,6 +347,93 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
 
     return merged;
 }
+
+/**
+ * Stage 2: BudouX-guided Merging
+ * 使用 BudouX 的语义分块结果来指导合并剩余的碎词 (如 複合動詞, 複合名詞)
+ */
+function mergeTokensWithBudouX(tokens: KuromojiToken[], chunks: string[]): KuromojiToken[] {
+    if (!chunks || chunks.length === 0) return tokens;
+
+    const merged: KuromojiToken[] = [];
+    let tokenIndex = 0;
+
+    for (const chunk of chunks) {
+        if (tokenIndex >= tokens.length) break;
+
+        // Collect tokens that make up this chunk
+        const chunkTokens: KuromojiToken[] = [];
+        let currentString = '';
+
+        // 尝试用后续的 tokens 拼出当前 chunk
+        let lookAheadIndex = tokenIndex;
+        while (lookAheadIndex < tokens.length) {
+            const t = tokens[lookAheadIndex];
+            chunkTokens.push(t);
+            currentString += t.surface_form;
+            lookAheadIndex++;
+
+            if (currentString.length >= chunk.length) break;
+        }
+
+        // Case 1: 完美匹配 (Chunk 覆盖了多个 Tokens) -> 尝试合并
+        if (currentString === chunk && chunkTokens.length > 1) {
+            // Validation: Only merge "Safe" types
+            // Safe: Verb, Noun, Adjective, Adverb, Prefix, Suffix, Auxiliary
+            // Unsafe: Particle (助詞), Symbol (記号)
+            const hasUnsafeToken = chunkTokens.some(t =>
+                (t.pos === '助詞' || t.pos === '記号')
+            );
+
+            // Special Case: Helper Verbs acting like suffixes sometimes get caught (e.g. ~ていく)
+            // But generally we want to avoid merging Particles unless they are part of a fixed expression recognized by BudouX.
+            // For now, STRICT safety: Do not merge if any particle is involved.
+            // Users specifically asked for "認め合う" (Verb+Verb) and "庁内" (Noun+Noun/Suffix). Matches this rule. 
+
+            if (!hasUnsafeToken) {
+                // Perform Merge
+                // const first = chunkTokens[0];
+                const last = chunkTokens[chunkTokens.length - 1]; // Use last token's details for conjugated type? Or first?
+                // Usually for Compound Verbs (認め合う), First is V-stem, Last is V. Main POS is Verb.
+                // For Compound Nouns (庁内), First is N, Last is N. Main POS is Noun.
+
+                const combinedSurface = chunkTokens.map(t => t.surface_form).join('');
+                const combinedReading = chunkTokens.map(t => t.reading || t.surface_form).join('');
+
+                merged.push({
+                    surface_form: combinedSurface,
+                    reading: combinedReading,
+                    pos: last.pos, // Inherit POS from the last element (e.g. 庁内 -> Noun, 認め合う -> Verb)
+                    pos_detail_1: 'BudouX結合',
+                    basic_form: combinedSurface, // Ideally should be dictionary form but hard to reconstruct for compounds. Use surface.
+                    conjugated_type: last.conjugated_type
+                });
+                tokenIndex = lookAheadIndex;
+                continue;
+            }
+        }
+
+        // Case 2: 无法合并或不安全 -> 保持原样 (Push individual tokens)
+        // Case 3: Chunk 甚至不匹配 (BugGuard) -> Push individual tokens
+        // Just advance token by token until we cover the chunk length or run out
+        let coveredLength = 0;
+        while (tokenIndex < tokens.length && coveredLength < chunk.length) {
+            const t = tokens[tokenIndex];
+            merged.push(t);
+            coveredLength += t.surface_form.length;
+            tokenIndex++;
+        }
+    }
+
+    // Add any remaining tokens (if BudouX text length < tokens text length for some reason)
+    while (tokenIndex < tokens.length) {
+        merged.push(tokens[tokenIndex]);
+        tokenIndex++;
+    }
+
+    return merged;
+}
+
 
 /**
  * 对已转换的 WordToken 数组进行单 token 读音修正
@@ -410,14 +499,21 @@ async function analyzeSentence(sentence: string, index: number): Promise<Sentenc
         throw new Error('Kuroshiro not initialized');
     }
 
-    // 1. 获取原始分词结果
+    // 1. 获取原始分词结果 (Detailed Morphological Analysis)
     const rawTokens = await kuroshiroInstance._analyzer.parse(sentence);
 
-    // 2. 在原始 token 层面进行合并 (关键步骤!)
-    const mergedRawTokens = mergeKuromojiTokens(rawTokens);
+    // 2. Stage 1: 基于规则的合并 (Rule-based)
+    // 处理形态素链 (e.g. 食べ+られ+ない) 和 基本接头/接尾
+    const ruleMergedTokens = mergeKuromojiTokens(rawTokens);
 
-    // 3. 将合并后的 token 转换为 WordToken
-    const tokens: WordToken[] = mergedRawTokens.map((t: KuromojiToken, idx: number) => {
+    // 3. Stage 2: 基于 BudouX 的语义合并 (AI-guided)
+    // 处理复合词 (e.g. 認め+合う, 庁+内)
+    const parser = getBudouXParser();
+    const budouxChunks = parser.parse(sentence);
+    const finalTokensRaw = mergeTokensWithBudouX(ruleMergedTokens, budouxChunks);
+
+    // 4. 将最终 token 转换为 WordToken
+    const tokens: WordToken[] = finalTokensRaw.map((t: KuromojiToken, idx: number) => {
         const surface = t.surface_form;
         const readingKatakana = t.reading || surface;
         const readingHiragana = wanakana.toHiragana(readingKatakana);
@@ -448,7 +544,7 @@ async function analyzeSentence(sentence: string, index: number): Promise<Sentenc
         };
     });
 
-    // 4. 对单个 token 进行读音修正 (处理分词器未正确分割的情况)
+    // 5. 对单个 token 进行读音修正 (处理分词器未正确分割的情况)
     const correctedTokens = correctSingleTokenReadings(tokens);
 
     return {

@@ -2,7 +2,9 @@
 @variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 @layer base {
-  input, textarea {
+
+  input,
+  textarea {
     font-size: 16px !important;
   }
 }
@@ -679,7 +681,6 @@
       #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f472b6, #f87171);
   --rainbow-border: linear-gradient(135deg,
       rgba(251, 191, 36, 0.6) 0%,
-      rgba(245, 158, 11, 0.5) 12%,
       rgba(239, 68, 68, 0.5) 24%,
       rgba(236, 72, 153, 0.6) 36%,
       rgba(168, 85, 247, 0.6) 48%,
@@ -802,8 +803,9 @@
 /* 彩虹光晕效果 - 增强版 */
 [data-theme="dark"] {
   --rainbow-glow: 0 0 5px rgba(251, 191, 36, 0.4),
-    0 0 10px rgba(236, 72, 153, 0.3),
-    0 0 15px rgba(99, 102, 241, 0.2);
+    0 0 10px rgba(251, 191, 36, 0.3),
+    0 0 15px rgba(236, 72, 153, 0.6),
+    0 0 20px rgba(236, 72, 153, 0.3);
 }
 
 /* ========================================
@@ -812,6 +814,11 @@
 
 html,
 body {
+  height: 100%;
+  overflow: hidden;
+  /* Critical: Prevent body scroll */
+  overscroll-behavior: none;
+  /* Disable system glow */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-base);

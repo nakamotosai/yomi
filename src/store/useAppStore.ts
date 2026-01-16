@@ -39,6 +39,9 @@ const DEFAULT_SETTINGS: AppSettings = {
     activeColorPOS: Object.values(PartOfSpeech),
     colorTheme: 'standard',
     colorScheme: 'morandi',
+    // showTranslation moved to top-level state
+    // but kept in Settings type for backward compatibility / schema requirements
+    // Re-added below to satisfy TypeScript
     showTranslation: true,
     autoReadOnClick: true,
     showRomaji: false,
@@ -69,6 +72,7 @@ interface AppState {
         leftTopHeight: number;
         leftInputHeight: number;
         rightBottomHeight: number;
+        isManualLayout: boolean;
     };
     setLayout: (layout: Partial<{
         leftSidebarWidth: number;
@@ -76,6 +80,7 @@ interface AppState {
         leftTopHeight: number;
         leftInputHeight: number;
         rightBottomHeight: number;
+        isManualLayout: boolean;
     }>) => void;
     currentSentence: string;
     setCurrentSentence: (sentence: string) => void;
@@ -104,6 +109,18 @@ interface AppState {
     setIsFromExtension: (fromExtension: boolean) => void;
     analyzedText: string;
     setAnalyzedText: (text: string) => void;
+
+    // New Dropdown States
+    isInputOpen: boolean;
+    toggleInput: () => void;
+    setIsInputOpen: (open: boolean) => void;
+
+    showTranslation: boolean;
+    toggleTranslation: () => void;
+    setShowTranslation: (show: boolean) => void;
+
+    hasAutoClosedTranslation: boolean;
+    setHasAutoClosedTranslation: (hasClosed: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -146,6 +163,7 @@ export const useAppStore = create<AppState>()(
                 leftTopHeight: 380,
                 leftInputHeight: 180,
                 rightBottomHeight: 240,
+                isManualLayout: false,
             },
             setLayout: (newLayout) => set((state) => ({
                 layout: { ...state.layout, ...newLayout }
@@ -212,6 +230,21 @@ export const useAppStore = create<AppState>()(
             setIsFromExtension: (fromExtension) => set({ isFromExtension: fromExtension }),
             analyzedText: DEFAULT_INPUT_TEXT,
             setAnalyzedText: (text) => set({ analyzedText: text }),
+
+            // Dropdown Logic Implementation
+            isInputOpen: false,
+            toggleInput: () => set((state) => ({ isInputOpen: !state.isInputOpen })),
+            setIsInputOpen: (open) => set({ isInputOpen: open }),
+
+            showTranslation: true,
+            toggleTranslation: () => set((state) => ({
+                showTranslation: !state.showTranslation,
+                hasAutoClosedTranslation: true
+            })),
+            setShowTranslation: (show) => set({ showTranslation: show }),
+
+            hasAutoClosedTranslation: false,
+            setHasAutoClosedTranslation: (hasClosed) => set({ hasAutoClosedTranslation: hasClosed })
         }),
         {
             name: 'yomi-app-store-v9',
@@ -221,6 +254,8 @@ export const useAppStore = create<AppState>()(
                 analyzedText: state.analyzedText,
                 history: state.history,
                 layout: state.layout,
+                showTranslation: state.showTranslation,
+                hasAutoClosedTranslation: state.hasAutoClosedTranslation,
             }),
             merge: (persistedState: unknown, currentState: AppState) => ({
                 ...currentState,

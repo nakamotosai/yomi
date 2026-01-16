@@ -1,16 +1,18 @@
-import React from 'react';
 import {
     Languages,
     PlayCircle,
     PauseCircle,
     StopCircle,
     RefreshCw,
+    ChevronDown,
     PenLine
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore } from '@/store/useAppStore'; // Ensure store is imported if needed, though props drive this component
 
 interface ReaderHeaderProps {
+    isInputOpen: boolean;
+    onToggleInput: () => void;
     isTranslationVisible: boolean;
     onToggleTranslation: () => void;
     isLoadingTranslation: boolean;
@@ -18,10 +20,11 @@ interface ReaderHeaderProps {
     isPaused: boolean;
     onPlay: () => void;
     onStop: () => void;
-    onOpenInputModal: () => void;
 }
 
 const ReaderHeader: React.FC<ReaderHeaderProps> = ({
+    isInputOpen,
+    onToggleInput,
     isTranslationVisible,
     onToggleTranslation,
     isLoadingTranslation,
@@ -29,60 +32,61 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
     isPaused,
     onPlay,
     onStop,
-    onOpenInputModal,
 }) => {
-    const { settings } = useAppStore();
-
     return (
-        <div className="flex items-center gap-3 w-full h-12 px-0 shrink-0 select-none justify-center">
+        <div className="flex items-center gap-3 w-full px-0 shrink-0 select-none justify-center">
             {/* Left Column: Fixed Left Pair */}
             <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
-                {/* Input Button */}
+                {/* Input Toggle Button */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        onOpenInputModal();
+                        onToggleInput();
                     }}
                     className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
-                        "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
+                        "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 h-12 whitespace-nowrap border border-transparent dark:border-white/10",
+                        isInputOpen
+                            ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)] bg-white/5"
+                            : "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                     )}
                     style={{ color: 'var(--text-muted)' }}
-                    title="入力 / 貼り付け"
+                    title="テキストを入力"
                 >
-                    <PenLine className="w-5 h-5" />
-                    <span className="text-[14px] font-medium tracking-wide truncate">输入文本</span>
+                    <PenLine className="w-4 h-4" />
+                    <span className="text-[15px] font-medium tracking-wide">输入文本</span>
+                    <ChevronDown className={clsx("ml-0.5 w-4 h-4 transition-transform duration-300", isInputOpen && "rotate-180")} />
                 </button>
 
-                {/* Translate Button */}
+                {/* Translation Toggle Button */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         onToggleTranslation();
                     }}
                     className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
+                        "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 h-12 whitespace-nowrap border border-transparent dark:border-white/10",
                         // Active State
                         isTranslationVisible
-                            ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
+                            ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)] bg-white/5"
                             : "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                     )}
                     style={{ color: 'var(--text-muted)' }}
-                    title={isTranslationVisible ? "翻訳を闭じる" : "翻訳を表示"}
+                    title={isTranslationVisible ? "翻訳を閉じる" : "翻訳を表示"}
                 >
                     {isLoadingTranslation ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <RefreshCw className="w-4 h-4 animate-spin" />
                     ) : (
-                        <Languages className="w-5 h-5" />
+                        <Languages className="w-4 h-4" />
                     )}
-                    <span className="text-[14px] font-medium tracking-wide truncate">全文翻訳</span>
+                    <span className="text-[15px] font-medium tracking-wide">全文翻译</span>
+                    <ChevronDown className={clsx("ml-0.5 w-4 h-4 transition-transform duration-300", isTranslationVisible && "rotate-180")} />
                 </button>
 
                 {/* Play/Pause Button */}
                 <button
                     onClick={(e) => { e.stopPropagation(); onPlay(); }}
                     className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 px-2 rounded-2xl transition-all duration-300 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10",
+                        "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 h-12 whitespace-nowrap border border-transparent dark:border-white/10",
                         // Active State
                         (isSpeaking && !isPaused)
                             ? "bg-transparent border-transparent shadow-[0_0_15px_rgba(0,0,0,0.3)] dark:shadow-[0_0_15px_rgba(255,255,255,0.15)]"
@@ -92,13 +96,13 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
                 >
                     {isSpeaking && !isPaused ? (
                         <>
-                            <PauseCircle className="w-5 h-5" />
-                            <span className="text-[14px] font-medium tracking-wide truncate">一时停止</span>
+                            <PauseCircle className="w-4 h-4" />
+                            <span className="text-[15px] font-medium tracking-wide">一时停止</span>
                         </>
                     ) : (
                         <>
-                            <PlayCircle className="w-5 h-5" />
-                            <span className="text-[14px] font-medium tracking-wide truncate">
+                            <PlayCircle className="w-4 h-4" />
+                            <span className="text-[15px] font-medium tracking-wide">
                                 {isPaused ? "再開" : "全文朗读"}
                             </span>
                         </>
@@ -112,14 +116,14 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
                     <button
                         onClick={(e) => { e.stopPropagation(); onStop(); }}
                         className={clsx(
-                            "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 w-24 h-10 whitespace-nowrap min-w-0 border border-transparent dark:border-white/10 animate-in fade-in slide-in-from-left-2",
+                            "flex items-center justify-center gap-2 px-4 rounded-2xl transition-all duration-300 h-12 whitespace-nowrap border border-transparent dark:border-white/10 animate-in fade-in slide-in-from-left-2",
                             "bg-transparent shadow-sm hover:shadow-md hover:scale-[1.02]"
                         )}
                         style={{ color: 'var(--text-muted)' }}
                         title="停止"
                     >
-                        <StopCircle className="w-5 h-5" />
-                        <span className="text-[14px] font-medium tracking-wide">終了</span>
+                        <StopCircle className="w-4 h-4" />
+                        <span className="text-[15px] font-medium tracking-wide">終了</span>
                     </button>
                 )}
             </div>
@@ -128,4 +132,3 @@ const ReaderHeader: React.FC<ReaderHeaderProps> = ({
 };
 
 export default ReaderHeader;
-

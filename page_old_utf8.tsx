@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Settings2,
@@ -42,14 +42,13 @@ import ResizableVerticalSection from '@/components/ResizableVerticalSection';
 import MobileNavigator from '@/components/MobileNavigator';
 import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import { Collapsible } from '@/components/Collapsible';
-
 // Dynamic imports
 const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-muted)' }}>
       <div className="w-8 h-8 border-2 rounded-full animate-spin mb-4" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--accent-primary)' }} />
-      <p className="text-sm">読み込み中...</p>
+      <p className="text-sm">瑾伩杈笺伩涓?..</p>
     </div>
   ),
 });
@@ -63,49 +62,15 @@ const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
 
 // const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
 
-const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: () => void }) => {
-  const {
-    appMode,
-    inputText,
-    setInputText,
-    analyzedText,
-    isSpeaking,
-    isPaused,
-    centerViewMode,
-    isFromExtension,
-    setIsFromExtension,
-    setAnalyzedText,
-    // Dropdown States
-    isInputOpen,
-    setIsInputOpen, // Destructure setter
-    toggleInput,
-    showTranslation,
-    toggleTranslation,
-    hasAutoClosedTranslation,
-    setHasAutoClosedTranslation,
-    setShowTranslation
-  } = useAppStore();
-
+const CenterColumn = ({ onPlayAll, onStop, onOpenInputModal }: { onPlayAll: () => void, onStop: () => void, onOpenInputModal: () => void }) => {
+  const { appMode, inputText, analyzedText, isSpeaking, isPaused, settings, centerViewMode, isFromExtension, setIsFromExtension, setAnalyzedText } = useAppStore();
   const [isMounted, setIsMounted] = useState(false);
+  // const isDark = isMounted && settings.theme === 'dark';
 
   // Translation State
+  const [showTranslation, setShowTranslation] = useState(true);
   const [fullTranslation, setFullTranslation] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
-
-  // Auto-collapse logic for translation
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (showTranslation && !hasAutoClosedTranslation) {
-      // If open and hasn't been auto-closed yet, set timer
-      timer = setTimeout(() => {
-        setShowTranslation(false);
-        setHasAutoClosedTranslation(true);
-        console.log('[AutoCollapse] Closing translation panel after 5s');
-      }, 5000);
-    }
-    return () => clearTimeout(timer);
-  }, [showTranslation, hasAutoClosedTranslation, setShowTranslation, setHasAutoClosedTranslation]);
-
 
   // Auto-expand translation when imported from browser extension
   useEffect(() => {
@@ -113,10 +78,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       // Immediately reset to prevent re-triggering on inputText changes
       setIsFromExtension(false);
 
-      if (!showTranslation) {
-        setShowTranslation(true);
-        setIsInputOpen(false); // Ensure input is closed
-      }
+      if (!showTranslation) setShowTranslation(true);
 
       // Trigger analysis and translation
       setAnalyzedText(inputText);
@@ -133,23 +95,12 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFromExtension, inputText, setIsFromExtension, showTranslation, setAnalyzedText]);
 
-  // Handle toggling input (Mutually exclusive)
-  const handleToggleInput = () => {
-    if (!isInputOpen) {
-      // We are opening input, close translation
-      setShowTranslation(false);
-    }
-    toggleInput();
-  };
-
-  // Handle toggling translation (Manual toggle by user)
+  // Handle toggling translation
   const handleToggleTranslation = async () => {
     if (showTranslation) {
-      toggleTranslation(); // This sets hasAutoClosedTranslation=true inside store
+      setShowTranslation(false);
     } else {
-      // We are opening translation, close input
-      setIsInputOpen(false);
-      toggleTranslation();
+      setShowTranslation(true);
       if (!fullTranslation && analyzedText.trim()) {
         setIsTranslating(true);
         try {
@@ -167,10 +118,8 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
   // Effect to auto-update translation when analyzed text changes
   useEffect(() => {
     // If panel is closed, clear stale translation so next open fetches fresh
-    // EXCEPTION: Keep it if we are just collapsed. But here we want to save resources.
-    // Actually, keeping previously translated text is better UX than clearing it.
-    // Only fetch if open.
     if (!showTranslation) {
+      if (fullTranslation) setFullTranslation(null);
       return;
     }
 
@@ -234,18 +183,18 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
 
   return (
     <div
-      className="h-full flex flex-col w-full"
+      className="h-full flex flex-col w-full max-w-3xl mx-auto"
       style={{
         background: 'transparent',
       }}
     >
       {analyzedText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
-        <div className="shrink-0 z-10 px-0 pt-0 pb-4">
-          <div className="flex flex-col relative transition-all duration-300 ease-spring">
+        <div className="shrink-0 z-10 pl-2 pr-5 pt-2 pb-1">
+          <div
+            className="flex flex-col relative transition-all duration-300 ease-spring"
+          >
             {/* Header Section (Refactored to ReaderHeader) */}
             <ReaderHeader
-              isInputOpen={isInputOpen}
-              onToggleInput={handleToggleInput}
               isTranslationVisible={showTranslation}
               onToggleTranslation={handleToggleTranslation}
               isLoadingTranslation={isTranslating}
@@ -254,33 +203,19 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
               isPaused={isPaused}
               onPlay={onPlayAll}
               onStop={onStop}
+              onOpenInputModal={onOpenInputModal}
             />
 
-            {/* Input Dropdown Section */}
-            <Collapsible isOpen={isInputOpen} variant="default">
-              <div className="overflow-hidden px-0 pb-0 mt-0 mb-[15px]">
-                <div
-                  className="overflow-hidden flex flex-col"
-                  style={{ height: '50vh', maxHeight: '50vh', background: 'transparent' }}
-                >
-                  <RefactoredInput
-                    inputText={inputText}
-                    setInputText={setInputText}
-                    onClear={() => setInputText('')}
-                    compact={true}
-                  />
-                </div>
-              </div>
-            </Collapsible>
-
-            {/* Translation Dropdown Section */}
+            {/* Content Section (Animated Grid) */}
             <Collapsible isOpen={showTranslation} variant="default">
-              <div className="overflow-hidden px-0 pb-1 mt-0">
+              <div className="overflow-hidden px-0 pb-1 mt-1">
                 <div
-                  className="overflow-hidden flex flex-col"
-                  style={{ maxHeight: '50vh', background: 'transparent' }}
+                  className="px-2 py-0"
+                  style={{
+                    background: 'transparent'
+                  }}
                 >
-                  <div className="overflow-y-auto custom-scrollbar p-4 h-full">
+                  <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                     {isTranslating ? (
                       <div className="flex flex-col gap-2 animate-pulse">
                         <div className="h-4 bg-black/5 dark:bg-white/10 rounded w-3/4"></div>
@@ -288,11 +223,11 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
                       </div>
                     ) : fullTranslation ? (
                       <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="font-bold opacity-70 mr-1 select-none">全文翻译：</span>{fullTranslation}
+                        <span className="font-bold opacity-70 mr-1 select-none">鍏ㄦ枃缈昏瘧锛?/span>{fullTranslation}
                       </p>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-2 opacity-50 gap-2">
-                        <p className="text-xs">ボタンを押して翻訳を開始</p>
+                        <p className="text-xs">銉溿偪銉炽倰鎶笺仐銇︾炕瑷炽倰闁嬪</p>
                       </div>
                     )}
                   </div>
@@ -325,7 +260,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
           <div
             ref={scrollRef}
             data-visible={isMounted ? (isVisible ? "true" : "false") : undefined}
-            className="flex-1 overflow-y-auto overflow-x-hidden pt-0 pb-4 pl-0 pr-0 floating-scrollbar scroll-smooth overscroll-y-none relative z-0"
+            className="flex-1 overflow-y-auto pt-2 pb-4 pl-2 pr-1 floating-scrollbar"
           >
             <div className="min-h-full">
               {appMode === 'reader' ? (
@@ -339,9 +274,9 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
                     >
                       <PlayCircle className="w-10 h-10" style={{ color: 'var(--text-faint)' }} />
                     </div>
-                    <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
+                    <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>銉嗐偔銈广儓銈掑叆鍔涖仐銇︺亸銇犮仌銇?/p>
                     <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
-                      分析ボタンをクリックして解析を開始します
+                      鍒嗘瀽銉溿偪銉炽倰銈儶銉冦偗銇椼仸瑙ｆ瀽銈掗枊濮嬨仐銇俱仚
                     </p>
                   </div>
                 )
@@ -373,9 +308,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   const setLayout = useAppStore(s => s.setLayout);
   const setIsMobileDrawerOpen = useAppStore(s => s.setIsMobileDrawerOpen);
   const setCenterViewMode = useAppStore(s => s.setCenterViewMode);
-  // Input Modal is removed
-  // const isInputModalOpen = useAppStore(s => s.isInputModalOpen);
-  // const setIsInputModalOpen = useAppStore(s => s.setIsInputModalOpen);
+  const isInputModalOpen = useAppStore(s => s.isInputModalOpen);
+  const setIsInputModalOpen = useAppStore(s => s.setIsInputModalOpen);
   const centerViewMode = useAppStore(s => s.centerViewMode);
   const settings = useAppStore(s => s.settings);
 
@@ -390,8 +324,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
     setMounted(true);
   }, []);
 
-  // Removed InputModal sync logic as it is now inline
-  /*
+  // Sync inputText with analyzedText when modal opens
   useEffect(() => {
     if (isInputModalOpen) {
       const currentAnalyzed = useAppStore.getState().analyzedText;
@@ -399,8 +332,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         setInputText(currentAnalyzed);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInputModalOpen]);
-  */
 
   const isDark = mounted && settings.theme === 'dark';
   // const isMonochrome = settings.colorScheme === 'monochrome';
@@ -520,15 +453,13 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
     useAppStore.getState().stopTTS(); // Use store's stopTTS to reset all state including currentSentenceIndex
   };
 
-  /*
   const handleClear = () => {
     setInputText('');
     setAnalyzedText('');
     handleStop();
   };
-  */
 
-  // const isCompact = layout.leftSidebarWidth < 300;
+  const isCompact = layout.leftSidebarWidth < 300;
 
   // Scrollbar Visibility Logic
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -588,25 +519,13 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
             backdropFilter: 'blur(12px)'
           }}
         >
-          <h2 className="font-bold hidden md:block" style={{ color: 'var(--text-muted)' }}>読解モード</h2>
+          <h2 className="font-bold hidden md:block" style={{ color: 'var(--text-muted)' }}>瑾В銉兗銉?/h2>
           <div className="md:hidden" /> {/* Spacer for mobile */}
 
-          {/* Playback Controls (Mobile Toolbar) - Kept mostly same but can also leverage Header components if desired */}
-          {/* For now, keeping mobile toolbar as is for consistency with previous mobile logic unless user requested global change */}
-          {/* wait, user requested web change. Mobile might share this component? */}
-          {/* CenterContent is used for Mobile too. Mobile Header logic needs to be checked. */}
-          {/* ReaderHeader is used in Desktop CenterColumn. This `CenterContent` component below seems to be the Mobile View's center content or Desktop's? */}
-          {/* Ah, CenterColumn is the Desktop Component. CenterContent (variable below) is PASSED to MobileNavigator. */}
-          {/* So this part is Mobile Only View essentially. */}
-
+          {/* Playback Controls */}
           <div className="flex items-center gap-2">
-            {/* Input Button (Mobile) */}
+            {/* Input Button */}
             <button
-              // Reuse store toggle logic if valid for mobile? 
-              // Mobile usually uses Modal or separate screen. 
-              // Keeping original modal logic for mobile for now to avoid breaking mobile UX unless requested.
-              // User specifically mentioned "Web end". So I will touch CenterColumn (Desktop) mainly.
-              // But let's check if Mobile uses CenterColumn. No, Mobile uses CenterContent variable.
               onClick={() => useAppStore.getState().setIsInputModalOpen(true)}
               className={clsx(
                 "flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all active:scale-95",
@@ -614,7 +533,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               )}
             >
               <PenLine className="w-4 h-4" />
-              <span>入力</span>
+              <span>鍏ュ姏</span>
             </button>
 
             <button
@@ -643,7 +562,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               ) : (
                 <PlayCircle className="w-4 h-4" />
               )}
-              {isSpeaking && !isPaused ? '一時停止' : (isPaused ? '再開' : '全文再生')}
+              {isSpeaking && !isPaused ? '涓€鏅傚仠姝? : (isPaused ? '鍐嶉枊' : '鍏ㄦ枃鍐嶇敓')}
             </button>
 
             {isSpeaking && (
@@ -654,7 +573,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   background: isDark ? 'var(--bg-subtle)' : 'rgb(229, 231, 235)',
                   color: 'var(--text-secondary)'
                 }}
-                title="停止"
+                title="鍋滄"
               >
                 <StopCircle className="w-4 h-4" />
               </button>
@@ -681,9 +600,9 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                 >
                   <PlayCircle className="w-10 h-10" style={{ color: 'var(--text-faint)' }} />
                 </div>
-                <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>テキストを入力してください</p>
+                <p className="text-lg font-medium" style={{ color: 'var(--text-muted)' }}>銉嗐偔銈广儓銈掑叆鍔涖仐銇︺亸銇犮仌銇?/p>
                 <p className="text-sm mt-2 max-w-xs text-center leading-relaxed">
-                  分析ボタンをクリックして解析を開始します
+                  鍒嗘瀽銉溿偪銉炽倰銈儶銉冦偗銇椼仸瑙ｆ瀽銈掗枊濮嬨仐銇俱仚
                 </p>
               </div>
             )
@@ -709,8 +628,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
       {/* Mobile Header Removed - Replaced by MobileNavigator/BottomBar */}
 
 
-      {/* Desktop Layout (> 768px) */}
-      <div className="hidden md:block h-full w-full">
+      {/* Desktop Layout (> 1024px) */}
+      <div className="hidden lg:block h-full w-full">
         <ResizableLayout
           leftContent={
             <div className="h-full pt-4 pl-4 pb-4 pr-2"> {/* Padding for floating effect */}
@@ -738,19 +657,19 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
                     {/* Logo Area - Compact */}
                     <div
-                      className="h-14 hidden md:flex items-center px-6 shrink-0 bg-transparent border-none z-20"
+                      className="h-14 hidden lg:flex items-center px-6 shrink-0 bg-transparent border-none z-20"
                     >
                       <div className="relative w-8 h-8 mr-3">
                         <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
                       </div>
                       <h1 className="text-[16px] font-bold tracking-tight" style={{ color: settings.colorScheme === 'wafu' ? '#3c3633' : 'var(--text-secondary)' }}>
-                        読み | YOMI
+                        瑾伩 | YOMI
                       </h1>
                       <button
                         onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
                         className="ml-auto p-2 rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5"
                         style={{ color: 'var(--text-muted)' }}
-                        title="設定"
+                        title="瑷畾"
                       >
                         <Settings2 className="w-5 h-5" />
                       </button>
@@ -790,8 +709,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             style={{ color: !isChatOpen && appMode === 'reader' && centerViewMode === 'reader' ? 'var(--accent-primary)' : 'var(--text-muted)' }}
                           />
                           <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            読解モード
-                          </span>
+                            瑾В銉兗銉?                          </span>
                         </button>
 
                         {/* Kana Mode (Locked) */}
@@ -806,10 +724,9 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             className="w-6 h-6 mb-2 transition-colors flex items-center justify-center font-serif font-bold text-xl leading-none"
                             style={{ color: 'var(--text-muted)' }}
                           >
-                            あ
-                          </span>
+                            銇?                          </span>
                           <span className="font-medium text-[14px]" style={{ color: 'var(--text-muted)' }}>
-                            仮名(Lock)
+                            浠悕(Lock)
                           </span>
                         </button>
                       </div>
@@ -831,8 +748,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                         >
                           <BookMarked className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'vocab' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
                           <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            単語帳
-                            <span className="ml-1 text-xs opacity-60 font-normal">{vocabList.length}</span>
+                            鍗樿獮甯?                            <span className="ml-1 text-xs opacity-60 font-normal">{vocabList.length}</span>
                           </span>
                         </button>
 
@@ -851,8 +767,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                         >
                           <GraduationCap className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'grammar' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
                           <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            文法帳
-                            <span className="ml-1 text-xs opacity-60 font-normal">{grammarList.length}</span>
+                            鏂囨硶甯?                            <span className="ml-1 text-xs opacity-60 font-normal">{grammarList.length}</span>
                           </span>
                         </button>
                       </div>
@@ -864,14 +779,23 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
             </div>
           }
           centerContent={
-            <div className="h-full py-4 px-2"> {/* Floating wrapper */}
-              <div
-                className="h-full w-full bg-transparent backdrop-blur-xl rounded-2xl overflow-hidden relative"
-              >
-                <CenterColumn
-                  onPlayAll={handlePlayAll}
-                  onStop={handleStop}
+            <div className="h-full py-4 px-2"> {/* Minimal padding for center content */}
+              <div className="h-full w-full bg-transparent backdrop-blur-xl rounded-2xl shadow-sm overflow-hidden relative">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 z-[-1] opacity-50 pointer-events-none"
+                  style={{
+                    backgroundImage: isDark
+                      ? 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 1px, transparent 1px)'
+                      : 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                    backgroundSize: '24px 24px'
+                  }}
                 />
+
+                {isChatOpen ? (
+                  <AIChatView />
+                ) : (
+                  <CenterColumn onPlayAll={handlePlayAll} onStop={handleStop} onOpenInputModal={() => setIsInputModalOpen(true)} />
+                )}
               </div>
             </div>
           }
@@ -898,15 +822,40 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         />
       </div>
 
-      {/* Input Modal Removed - Replaced by drop-down in CenterColumn */}
-      {/* Kept Mobile Input Modal if we decide to use it, but for now we rely on CenterColumn's new dropdown? */}
-      {/* Actually Mobile View uses `MobileNavigator` which renders `CenterContent` (variable). */}
-      {/* `CenterContent` (variable) still has the old hardcoded toolbar and doesn't integrate ReaderHeader. */}
-      {/* Since the user asked for "Web End" (网页端), I focused on CenterColumn. Mobile users might still use the old toolbar unless we update CenterContent too. */}
-      {/* Given constraints, I'm modifying CenterColumn (Desktop) and leaving Mobile as is effectively. */}
+      {/* Input Modal (Desktop Only) */}
+      {isInputModalOpen && (
+        <div className="hidden lg:flex fixed inset-0 z-[100] items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div
+            className="w-[95vw] h-[90vh] max-w-4xl bg-[var(--bg-base)] rounded-2xl border border-[var(--border-muted)] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-muted)] shrink-0">
+              <h2 className="text-xl font-bold">璇昏В鍐呭缂栬緫鍣?/h2>
+              <button
+                onClick={() => setIsInputModalOpen(false)}
+                className="p-2 rounded-lg hover:bg-[var(--bg-muted)] transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
-      {/* Mobile Layout (< 768px) */}
-      <div className="md:hidden h-full relative overflow-hidden">
+            {/* Modal Content */}
+            <div className="flex-1 p-4 overflow-hidden">
+              <RefactoredInput
+                inputText={inputText}
+                setInputText={setInputText}
+                onClear={() => setInputText('')}
+                compact={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Mobile Layout (< 1024px) */}
+      <div className="lg:hidden h-full relative overflow-hidden">
         <MobileNavigator
           mainContent={CenterContent}
           infoContent={
@@ -943,7 +892,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   <Image src="/logo.png" alt="Logo" fill className="object-contain" unoptimized />
                 </div>
                 <h1 className="text-base font-bold text-[var(--text-secondary)]">
-                  YOMI | 菜单
+                  YOMI | 鑿滃崟
                 </h1>
                 <button
                   onClick={() => setIsMobileDrawerOpen(false)}
@@ -955,7 +904,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
               {/* Navigation List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <div className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-widest pl-1 mb-2">主菜单</div>
+                <div className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-widest pl-1 mb-2">涓昏彍鍗?/div>
 
                 {/* 1. Reader Mode */}
                 <button
@@ -974,8 +923,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
-                    <span className={clsx("font-bold text-sm", appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>读解模式</span>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">分析日文文章与句子</span>
+                    <span className={clsx("font-bold text-sm", appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>璇昏В妯″紡</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">鍒嗘瀽鏃ユ枃鏂囩珷涓庡彞瀛?/span>
                   </div>
                 </button>
 
@@ -985,11 +934,11 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border bg-transparent border-transparent opacity-40 grayscale"
                 >
                   <div className="w-10 h-10 rounded-xl bg-[var(--bg-muted)] text-[var(--text-muted)] flex items-center justify-center shrink-0">
-                    <span className="text-lg font-serif font-bold">あ</span>
+                    <span className="text-lg font-serif font-bold">銇?/span>
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
-                    <span className="font-bold text-sm text-[var(--text-secondary)]">假名练习</span>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">基础五十音学习(即将开放)</span>
+                    <span className="font-bold text-sm text-[var(--text-secondary)]">鍋囧悕缁冧範</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">鍩虹浜斿崄闊冲涔?鍗冲皢寮€鏀?</span>
                   </div>
                 </button>
 
@@ -1011,10 +960,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   </div>
                   <div className="flex flex-col items-start">
                     <div className="flex items-center gap-2">
-                      <span className={clsx("font-bold text-sm", centerViewMode === 'vocab' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>单词本</span>
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'vocab' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>鍗曡瘝鏈?/span>
                       {vocabList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{vocabList.length}</span>}
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)]">查看已保存的生词</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">鏌ョ湅宸蹭繚瀛樼殑鐢熻瘝</span>
                   </div>
                 </button>
 
@@ -1036,10 +985,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
                     <div className="flex items-center gap-2">
-                      <span className={clsx("font-bold text-sm", centerViewMode === 'grammar' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>语法本</span>
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'grammar' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>璇硶鏈?/span>
                       {grammarList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{grammarList.length}</span>}
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)]">掌握深度语法知识</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">鎺屾彙娣卞害璇硶鐭ヨ瘑</span>
                   </div>
                 </button>
               </div>
@@ -1051,7 +1000,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--bg-muted)] text-[var(--text-secondary)] transition-colors"
                 >
                   <Settings2 className="w-5 h-5" />
-                  <span className="font-medium text-sm">应用设置</span>
+                  <span className="font-medium text-sm">搴旂敤璁剧疆</span>
                 </button>
               </div>
             </div>
