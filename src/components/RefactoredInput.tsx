@@ -19,7 +19,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
     const fileInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isTranslating, setIsTranslating] = useState(false);
-    const { settings, setAnalyzedText, analyzedText } = useAppStore();
+    const { settings, setAnalyzedText, analyzedText, setIsInputModalOpen } = useAppStore();
     const isDark = settings.theme === 'dark';
 
     // Detect if text is mostly non-Japanese (e.g. Chinese or English)
@@ -47,13 +47,15 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
         }
     };
 
-    // Auto-resize textarea
+    // Auto-resize removed to favor flex-1 in modal
+    /*
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 500) + 'px';
         }
     }, [inputText]);
+    */
 
     // Handle paste for images (OCR)
     useEffect(() => {
@@ -157,13 +159,13 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
     return (
         <div
             ref={containerRef}
-            className="group relative p-3 transition-all flex flex-col h-full bg-transparent border-none shadow-none"
+            className="group relative p-0 transition-all flex flex-col h-full bg-transparent"
         >
             <textarea
                 ref={textareaRef}
-                className="w-full flex-1 p-1 rounded-lg resize-none !outline-none text-base bg-transparent custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none"
-                style={{ color: 'var(--text-muted)' }}
-                placeholder="Ctrl+V で画像貼り付け..."
+                className="w-full flex-1 p-4 rounded-xl resize-none !outline-none text-[18px] md:text-2xl font-medium bg-[var(--bg-muted)]/30 custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none leading-relaxed"
+                style={{ color: 'var(--text-primary)' }}
+                placeholder="在此输入新的日文内容或粘贴图片直接分析..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onFocus={() => setIsInputFocused(true)}
@@ -229,16 +231,19 @@ export default function RefactoredInput({ inputText, setInputText, onClear }: Re
 
                     {/* Analyze Button */}
                     <button
-                        onClick={() => setAnalyzedText(inputText)}
-                        disabled={!inputText.trim() || inputText === analyzedText}
+                        onClick={() => {
+                            setAnalyzedText(inputText);
+                            setIsInputModalOpen(false); // Auto close after analysis
+                        }}
+                        disabled={!inputText.trim()}
                         className={clsx(
-                            "flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100",
-                            inputText !== analyzedText && inputText.trim() ? "bg-[var(--accent-primary)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-primary)] border border-[var(--border-default)]"
+                            "flex items-center gap-2 px-8 py-3 rounded-2xl transition-all shadow-lg active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100",
+                            inputText.trim() ? "bg-[var(--accent-primary)] text-white scale-105" : "bg-[var(--bg-muted)] text-[var(--text-primary)] border border-[var(--border-default)]"
                         )}
                         title="分析"
                     >
-                        <Search className="w-5 h-5" />
-                        <span className="font-bold text-sm">分析</span>
+                        <Search className="w-6 h-6" />
+                        <span className="font-bold text-lg">开始分析</span>
                     </button>
                 </div>
             </div>

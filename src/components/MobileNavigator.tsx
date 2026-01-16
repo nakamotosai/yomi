@@ -171,10 +171,10 @@ export default function MobileNavigator({
                             onClick={() => setIsInputModalOpen(false)}
                         />
                         <div
-                            className="absolute bottom-0 left-0 right-0 h-[60vh] z-[110] flex flex-col bg-[var(--bg-base)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] rounded-t-3xl border-t border-[var(--border-default)]"
+                            className="absolute bottom-0 left-0 right-0 h-[90vh] z-[110] flex flex-col bg-[var(--bg-base)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] rounded-t-3xl border-t border-[var(--border-default)]"
                         >
                             <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
-                                <h2 className="font-bold text-lg">输入文本</h2>
+                                <h2 className="font-bold text-lg">读解内容编辑器</h2>
                                 <button onClick={() => setIsInputModalOpen(false)} className="p-2 rounded-full hover:bg-[var(--bg-muted)]">
                                     <X className="w-6 h-6" />
                                 </button>

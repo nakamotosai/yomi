@@ -143,7 +143,7 @@ export const useAppStore = create<AppState>()(
             layout: {
                 leftSidebarWidth: 360,
                 rightSidebarWidth: 360,
-                leftTopHeight: 250,
+                leftTopHeight: 380,
                 leftInputHeight: 180,
                 rightBottomHeight: 240,
             },
@@ -214,7 +214,7 @@ export const useAppStore = create<AppState>()(
             setAnalyzedText: (text) => set({ analyzedText: text }),
         }),
         {
-            name: 'yomi-app-store-v7',
+            name: 'yomi-app-store-v9',
             partialize: (state) => ({
                 settings: state.settings,
                 inputText: state.inputText,

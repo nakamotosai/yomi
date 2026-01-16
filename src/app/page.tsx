@@ -308,6 +308,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   const setLayout = useAppStore(s => s.setLayout);
   const setIsMobileDrawerOpen = useAppStore(s => s.setIsMobileDrawerOpen);
   const setCenterViewMode = useAppStore(s => s.setCenterViewMode);
+  const isInputModalOpen = useAppStore(s => s.isInputModalOpen);
+  const setIsInputModalOpen = useAppStore(s => s.setIsInputModalOpen);
   const centerViewMode = useAppStore(s => s.centerViewMode);
   const settings = useAppStore(s => s.settings);
 
@@ -316,12 +318,22 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   // Subscribe to isChatOpen to trigger re-renders when chat opens/closes
   const { isChatOpen } = useGeminiStore();
   const [showSettings, setShowSettings] = useState(false);
-  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Sync inputText with analyzedText when modal opens
+  useEffect(() => {
+    if (isInputModalOpen) {
+      const currentAnalyzed = useAppStore.getState().analyzedText;
+      if (currentAnalyzed && currentAnalyzed !== inputText) {
+        setInputText(currentAnalyzed);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInputModalOpen]);
 
   const isDark = mounted && settings.theme === 'dark';
   // const isMonochrome = settings.colorScheme === 'monochrome';
@@ -625,7 +637,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               <ResizableVerticalSection
                 mode="top-fixed"
                 // Increase top height allocation for the Hero AI Card
-                initialTopHeight={Math.max(layout.leftTopHeight, 320)}
+                initialTopHeight={layout.leftTopHeight}
                 onTopHeightChange={(h: number) => setLayout({ ...layout, leftTopHeight: h })}
                 minTopHeight={250}
                 gap={16}
@@ -814,40 +826,32 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         />
       </div>
 
-      {/* Input Modal */}
+      {/* Input Modal (Desktop Only) */}
       {isInputModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+        <div className="hidden lg:flex fixed inset-0 z-[100] items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div
-            className="w-full max-w-2xl bg-[var(--bg-base)] rounded-2xl border border-[var(--border-muted)] shadow-2xl overflow-hidden animate-in zoom-in-95"
+            className="w-[95vw] h-[90vh] max-w-4xl bg-[var(--bg-base)] rounded-2xl border border-[var(--border-muted)] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-muted)]">
-              <h2 className="text-lg font-bold">テキストを入力</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-muted)] shrink-0">
+              <h2 className="text-xl font-bold">读解内容编辑器</h2>
               <button
                 onClick={() => setIsInputModalOpen(false)}
                 className="p-2 rounded-lg hover:bg-[var(--bg-muted)] transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="p-6">
+            <div className="flex-1 p-4 overflow-hidden">
               <RefactoredInput
                 inputText={inputText}
                 setInputText={setInputText}
-                onClear={handleClear}
+                onClear={() => setInputText('')}
                 compact={false}
               />
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => setIsInputModalOpen(false)}
-                  className="px-6 py-2.5 bg-[var(--accent-primary)] text-white rounded-xl font-bold shadow-lg shadow-[var(--accent-primary)]/20 hover:scale-[1.02] active:scale-95 transition-all text-[16px]"
-                >
-                  完了
-                </button>
-              </div>
             </div>
           </div>
         </div>
