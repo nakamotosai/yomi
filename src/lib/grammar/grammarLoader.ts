@@ -54,7 +54,7 @@ function extractPlainText(content: unknown[]): string {
 // 解析单个term_bank JSON文件
 async function parseTermBank(url: string): Promise<GrammarEntry[]> {
     const entries: GrammarEntry[] = [];
-    const cacheName = 'yomi-grammar-cache-v1';
+    const cacheName = 'yomi-grammar-cache-v3'; // 更新版本号以强制清理旧缓存
 
     try {
         let response: Response | undefined;
@@ -113,8 +113,8 @@ async function parseTermBank(url: string): Promise<GrammarEntry[]> {
                 }
             }
 
-            // 跳过过短或过于通用的条目
-            if (term.length < 2) continue;
+            // 【重要】不再跳过 1 字符语法，以支持 〜ず, 〜て 等关键项
+            if (term.length === 0) continue;
 
             entries.push({
                 id: `${term}-${title}`,

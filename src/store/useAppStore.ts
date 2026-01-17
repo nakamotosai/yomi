@@ -51,8 +51,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 interface AppState {
     appMode: 'reader' | 'kana';
     setAppMode: (mode: 'reader' | 'kana') => void;
-    centerViewMode: 'reader' | 'vocab' | 'grammar';
-    setCenterViewMode: (mode: 'reader' | 'vocab' | 'grammar') => void;
+    centerViewMode: 'reader' | 'vocab' | 'grammar' | 'ai';
+    setCenterViewMode: (mode: 'reader' | 'vocab' | 'grammar' | 'ai') => void;
     inputText: string;
     setInputText: (text: string) => void;
     isAnalyzing: boolean;
@@ -121,6 +121,18 @@ interface AppState {
 
     hasAutoClosedTranslation: boolean;
     setHasAutoClosedTranslation: (hasClosed: boolean) => void;
+
+    fullTranslation: string | null;
+    setFullTranslation: (text: string | null) => void;
+
+    translationCache: Record<string, string>;
+    cacheTranslation: (text: string, translation: string) => void;
+
+    aiExplanationCache: Record<string, string>;
+    cacheAIExplanation: (key: string, text: string) => void;
+
+    uiLanguage: 'zh' | 'ja';
+    setUiLanguage: (lang: 'zh' | 'ja') => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -244,7 +256,25 @@ export const useAppStore = create<AppState>()(
             setShowTranslation: (show) => set({ showTranslation: show }),
 
             hasAutoClosedTranslation: false,
-            setHasAutoClosedTranslation: (hasClosed) => set({ hasAutoClosedTranslation: hasClosed })
+            setHasAutoClosedTranslation: (hasClosed) => set({ hasAutoClosedTranslation: hasClosed }),
+
+            fullTranslation: null,
+            setFullTranslation: (text) => set({ fullTranslation: text }),
+
+            // Translation Cache
+            translationCache: {},
+            cacheTranslation: (text, translation) => set((state) => ({
+                translationCache: { ...state.translationCache, [text]: translation }
+            })),
+
+            // AI Explanation Cache
+            aiExplanationCache: {},
+            cacheAIExplanation: (key, text) => set((state) => ({
+                aiExplanationCache: { ...state.aiExplanationCache, [key]: text }
+            })),
+
+            uiLanguage: 'zh',
+            setUiLanguage: (lang) => set({ uiLanguage: lang })
         }),
         {
             name: 'yomi-app-store-v9',
@@ -255,7 +285,9 @@ export const useAppStore = create<AppState>()(
                 history: state.history,
                 layout: state.layout,
                 showTranslation: state.showTranslation,
-                hasAutoClosedTranslation: state.hasAutoClosedTranslation,
+                translationCache: state.translationCache,
+                aiExplanationCache: state.aiExplanationCache,
+                uiLanguage: state.uiLanguage,
             }),
             merge: (persistedState: unknown, currentState: AppState) => ({
                 ...currentState,

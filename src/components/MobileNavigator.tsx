@@ -8,6 +8,7 @@ import { useGeminiStore } from '@/store/useGeminiStore';
 import MobileBottomBar from './MobileBottomBar';
 import { MobileDrawer } from './MobileComponents';
 import RefactoredInput from './RefactoredInput';
+import { useI18n } from '@/lib/i18n';
 
 // View Types
 type MobileView = 'main' | 'info' | 'ai' | 'vocab' | 'grammar';
@@ -47,6 +48,7 @@ export default function MobileNavigator({
         setIsInputModalOpen
     } = useAppStore();
     const { isChatOpen, setChatOpen } = useGeminiStore();
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
 
     // Clear ghost selection on mount to prevent auto-jump
@@ -174,7 +176,7 @@ export default function MobileNavigator({
                             className="absolute bottom-0 left-0 right-0 h-[90vh] z-[110] flex flex-col bg-[var(--bg-base)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] rounded-t-3xl border-t border-[var(--border-default)]"
                         >
                             <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
-                                <h2 className="font-bold text-lg">读解内容编辑器</h2>
+                                <h2 className="font-bold text-lg">{t('nav.reader_editor')}</h2>
                                 <button onClick={() => setIsInputModalOpen(false)} className="p-2 rounded-full hover:bg-[var(--bg-muted)]">
                                     <X className="w-6 h-6" />
                                 </button>
@@ -245,18 +247,18 @@ export default function MobileNavigator({
 
                                 {currentView !== 'ai' && (
                                     <span className="absolute left-1/2 -translate-x-1/2 font-bold text-[var(--text-primary)] text-sm md:text-base whitespace-nowrap">
-                                        {currentView === 'info' && '单词详解'}
-                                        {currentView === 'vocab' && '我的单词本'}
-                                        {currentView === 'grammar' && '语法知识库'}
+                                        {currentView === 'info' && t('header.vocab_detail')}
+                                        {currentView === 'vocab' && t('header.my_vocab')}
+                                        {currentView === 'grammar' && t('header.grammar_kb')}
                                     </span>
                                 )}
 
                                 {currentView !== 'ai' && (
                                     <button
                                         onClick={handleBack}
-                                        className="flex items-center gap-1 text-[var(--text-secondary)] p-2 rounded-lg active:bg-[var(--bg-muted)] transition-colors"
+                                        className="flex items-center justify-center p-2 rounded-xl bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 transition-all"
+                                        title="返回"
                                     >
-                                        <span className="font-medium text-sm">返回</span>
                                         <X className="w-5 h-5" />
                                     </button>
                                 )}
@@ -267,7 +269,7 @@ export default function MobileNavigator({
                                                 useGeminiStore.getState().resetChat();
                                             }
                                         }}
-                                        className="p-2 -mr-2 text-[var(--text-muted)] hover:text-red-500 transition-colors active:scale-95"
+                                        className="p-2 rounded-xl bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 transition-all"
                                         title="清除所有对话"
                                     >
                                         <Trash2 className="w-5 h-5" />

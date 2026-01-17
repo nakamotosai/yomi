@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { createWorker, PSM } from 'tesseract.js';
 import { translateText } from '@/lib/translate';
 import { useAppStore } from '@/store/useAppStore';
+import { useI18n } from '@/lib/i18n';
 
 interface RefactoredInputProps {
     inputText: string;
@@ -20,8 +21,8 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
     const containerRef = useRef<HTMLDivElement>(null);
     const [isTranslating, setIsTranslating] = useState(false);
     const { settings, setAnalyzedText, analyzedText, setIsInputModalOpen, setIsInputOpen } = useAppStore();
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
-
     // Detect if text is mostly non-Japanese (e.g. Chinese or English)
     const needsTranslation = React.useMemo(() => {
         if (!inputText.trim()) return false;
@@ -41,7 +42,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
             }
         } catch (error) {
             console.error("Translation failed", error);
-            alert("翻訳に失敗しました");
+            alert(t('reader.translate_fail'));
         } finally {
             setIsTranslating(false);
         }
@@ -126,7 +127,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
     const processImage = async (file: File | Blob) => {
         try {
             const currentText = inputText;
-            setInputText('OCR解析中...');
+            setInputText(t('reader.ocr_running'));
             const processedImageUrl = await preprocessImage(file);
             const worker = await createWorker('jpn', 1);
             await worker.setParameters({
@@ -140,12 +141,12 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                 setInputText(cleanedText);
             } else {
                 setInputText(currentText);
-                alert('テキストを検出できませんでした。');
+                alert(t('reader.ocr_no_text'));
             }
         } catch (err) {
             console.error('OCR Error:', err);
             setInputText(inputText);
-            alert('OCRエラーが発生しました。');
+            alert(t('reader.ocr_fail'));
         }
     };
 
@@ -159,7 +160,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
     return (
         <div
             ref={containerRef}
-            className="group relative p-0 transition-all flex flex-col h-full bg-transparent pb-0"
+            className="group relative p-0 transition-all flex flex-col h-full bg-transparent pb-4" // Increased padding to prevent button clipping
         >
             <textarea
                 ref={textareaRef}
@@ -167,8 +168,8 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                     "w-full flex-1 rounded-xl resize-none !outline-none font-normal leading-relaxed bg-[var(--bg-muted)]/30 custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none",
                     compact ? "p-3 text-[15px]" : "p-4 text-[18px] md:text-2xl"
                 )}
-                style={{ color: 'var(--text-primary)' }}
-                placeholder="在此输入新的日文内容或粘贴图片直接分析..."
+                style={{ color: 'rgb(100 116 139)' }} // slate-500
+                placeholder={t('reader.input_placeholder')}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onFocus={() => setIsInputFocused(true)}
@@ -178,13 +179,13 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
             {/* Bottom Tools */}
             <div
                 className={clsx(
-                    "flex items-center justify-between mt-1 px-1",
+                    "flex items-center justify-between mt-1 px-3", // Increased side padding
                     compact ? "pt-1.5" : "pt-2"
                 )}
                 style={{ borderTop: `1px solid var(--border-muted)` }}
             >
                 <div className="text-[10px] font-mono flex items-center gap-2 shrink-0" style={{ color: 'var(--text-muted)' }}>
-                    <span>{inputText.length}字</span>
+                    <span>{inputText.length}{t('info.characters')}</span>
 
                     {/* Translation Button */}
                     {needsTranslation && (
@@ -203,7 +204,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                             ) : (
                                 <Languages className="w-3 h-3" />
                             )}
-                            翻訳
+                            {t('common.translate')}
                         </button>
                     )}
                 </div>
@@ -224,7 +225,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                             compact ? "p-1.5" : "p-3"
                         )}
                         style={{ color: 'var(--text-muted)' }}
-                        title="画像OCR"
+                        title={t('reader.image_ocr')}
                     >
                         <ImagePlus className={clsx(compact ? "w-5 h-5" : "w-6 h-6")} />
                     </button>
@@ -237,7 +238,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                             compact ? "p-1.5" : "p-3"
                         )}
                         style={{ color: 'var(--text-muted)' }}
-                        title="クリア"
+                        title={t('common.clear')}
                     >
                         <Eraser className={clsx(compact ? "w-5 h-5" : "w-6 h-6")} />
                     </button>
@@ -251,16 +252,19 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
                         }}
                         disabled={!inputText.trim()}
                         className={clsx(
-                            "flex items-center gap-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100 border", // Standardized card style
+                            "flex items-center gap-2 rounded-xl transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100",
                             compact ? "px-4 py-1.5 text-sm" : "px-8 py-3 text-lg",
                             inputText.trim()
-                                ? "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)] hover:bg-[var(--bg-muted)]" // Standard card colors
-                                : "bg-[var(--bg-muted)] text-[var(--text-primary)] border-[var(--border-default)]"
+                                ? "rainbow-highlight interactive-tag cursor-pointer text-[var(--accent-primary)]"
+                                : "bg-transparent border border-[var(--border-muted)] text-[var(--text-muted)] cursor-default"
                         )}
-                        title="分析"
+                        style={{
+                            border: inputText.trim() ? 'none' : '1px solid var(--border-default)',
+                        }}
+                        title={t('common.analyze')}
                     >
-                        <Search className={clsx(compact ? "w-4 h-4 opacity-70" : "w-6 h-6")} />
-                        <span className="font-medium">分析</span> {/* font-bold -> font-medium for standard feel */}
+                        <Search className={clsx(compact ? "w-4 h-4 opacity-70" : "w-6 h-6", inputText.trim() ? "text-[var(--accent-primary)]" : "text-[var(--text-muted)]")} />
+                        <span className="font-bold">{t('common.analyze')}</span>
                     </button>
                 </div>
             </div>

@@ -5,6 +5,7 @@ import { GrammarMatch } from '@/types/grammar';
 import { matchGrammar } from '@/lib/grammar/grammarMatcher';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
+import { useI18n } from '@/lib/i18n';
 
 interface GrammarTipProps {
     sentence: string;
@@ -17,6 +18,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
     const setSelectedGrammar = useAppStore(s => s.setSelectedGrammar);
     const settings = useAppStore(s => s.settings);
     const isSpeaking = useAppStore(s => s.isSpeaking);
+    const { t } = useI18n();
 
     // Dynamic Grammar Color Logic:
     const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
@@ -57,7 +59,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
                 <div className="shrink-0 w-12 flex items-center mt-0.5 select-none">
                     <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: grammarBarColor }}></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                        文法
+                        {t('info.grammar_tag')}
                     </h3>
                 </div>
 
@@ -77,7 +79,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
                                     cleanTitle = cleanTitle.replace(/[~～]/g, '');
                                     ttsManager.speak(cleanTitle.trim(), settings, {});
                                 }}
-                                className="inline-flex items-center px-2 py-0.5 rounded text-base transition-all border cursor-pointer hover:scale-105 hover:brightness-95 bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20 text-[var(--scheme-grammar)]"
+                                className="inline-flex items-center px-2 py-0.5 rounded text-base transition-all duration-200 border cursor-pointer hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95 bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20 text-[var(--scheme-grammar)]"
                             >
                                 {match.entry.title.replace(/[（(][^）)]*[）)]/g, '').replace(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/g, '').trim()}
                             </button>

@@ -5,6 +5,7 @@ import { ReactReader } from 'react-reader';
 import { BookOpen, Download } from 'lucide-react';
 import clsx from 'clsx';
 import type { Rendition } from 'epubjs';
+import { useI18n } from '@/lib/i18n';
 
 interface EpubReaderProps {
     onTextExtracted: (text: string) => void;
@@ -16,6 +17,7 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
     const [fileContent, setFileContent] = useState<ArrayBuffer | null>(null);
     const [rendition, setRendition] = useState<Rendition | null>(null);
     const [showReader, setShowReader] = useState(false);
+    const { t } = useI18n();
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -59,7 +61,7 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
             }
         } catch (err) {
             console.error('Failed to extract text:', err);
-            alert('テキストの抽出に失敗しました。');
+            alert(t('reader.extract_fail'));
         }
     };
 
@@ -77,15 +79,15 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
                         <BookOpen className="w-6 h-6" />
                     </div>
                     <div>
-                        <p className="font-medium text-[var(--text-primary)]">EPUBファイルを選択</p>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">クリックして電子書籍を読み込み</p>
+                        <p className="font-medium text-[var(--text-primary)]">{t('reader.select_epub')}</p>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">{t('reader.click_load_epub')}</p>
                     </div>
                 </div>
             ) : (
                 <div className="flex flex-col gap-4">
                     <div className="flex justify-between items-center bg-[var(--bg-subtle)] p-3 rounded-lg border border-[var(--border-default)]">
                         <span className="text-sm font-medium text-[var(--text-secondary)]">
-                            電子書籍リーダー
+                            {t('reader.epub_reader')}
                         </span>
                         <div className="flex gap-2">
                             <button
@@ -93,7 +95,7 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                             >
                                 <Download className="w-3.5 h-3.5" />
-                                現在のページを分析
+                                {t('reader.analyze_page')}
                             </button>
                             <button
                                 onClick={() => {
@@ -102,7 +104,7 @@ export default function EpubReader({ onTextExtracted, className }: EpubReaderPro
                                 }}
                                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2"
                             >
-                                閉じる
+                                {t('common.close')}
                             </button>
                         </div>
                     </div>

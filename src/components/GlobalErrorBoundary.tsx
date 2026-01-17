@@ -1,7 +1,11 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { useAppStore } from '@/store/useAppStore';
+import zh from '@/locales/zh.json';
+import ja from '@/locales/ja.json';
 
+const translations = { zh, ja };
 interface Props {
     children: ReactNode;
 }
@@ -38,10 +42,13 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
     render() {
         if (this.state.hasError) {
+            const lang = useAppStore.getState().uiLanguage || 'zh';
+            const dict = (translations as any)[lang]?.common || translations.zh.common;
+
             return (
                 <div className="p-8 max-w-2xl mx-auto mt-20 bg-red-50 border border-red-200 rounded-xl">
-                    <h2 className="text-2xl font-bold text-red-700 mb-4">应用遇到严重错误</h2>
-                    <p className="text-red-600 mb-4">错误信息已自动记录到后台日志。</p>
+                    <h2 className="text-2xl font-bold text-red-700 mb-4">{dict.crash_title}</h2>
+                    <p className="text-red-600 mb-4">{dict.crash_hint}</p>
                     <div className="bg-white p-4 rounded border border-red-100 font-mono text-sm overflow-auto mb-6 text-red-800">
                         {this.state.error?.message}
                     </div>
@@ -49,7 +56,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                         onClick={() => window.location.reload()}
                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                     >
-                        刷新页面
+                        {dict.refresh}
                     </button>
                 </div>
             );

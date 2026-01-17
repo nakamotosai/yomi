@@ -9,6 +9,7 @@ import { ttsManager } from '@/lib/tts/manager';
 
 import { PartOfSpeech, WordToken, VocabItem } from '@/types';
 import clsx from 'clsx';
+import { useI18n } from '@/lib/i18n';
 
 export default function VocabListView() {
     const { vocabList, removeVocab, clearVocab } = useVocabStore();
@@ -16,6 +17,7 @@ export default function VocabListView() {
     const setSelectedToken = useAppStore(s => s.setSelectedToken);
     const setIsMobileSheetOpen = useAppStore(s => s.setIsMobileSheetOpen);
     const settings = useAppStore(s => s.settings);
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
 
     // ... exports functions ...
@@ -120,10 +122,10 @@ export default function VocabListView() {
             .replace(/'/g, '&apos;');
 
         const posLabels: Record<string, string> = {
-            'noun': '名词', 'verb': '动词', 'adjective': '形容词',
-            'adverb': '副词', 'particle': '助词', 'conjunction': '连词',
-            'auxiliary': '助动词', 'pronoun': '代词', 'interjection': '感叹词',
-            'prefix': '前缀', 'suffix': '后缀', 'other': '其他', 'symbol': '符号'
+            'noun': t('lists.pos_noun'), 'verb': t('lists.pos_verb'), 'adjective': t('lists.pos_adj'),
+            'adverb': t('lists.pos_adverb'), 'particle': t('lists.pos_particle'), 'conjunction': t('lists.pos_particle'),
+            'auxiliary': t('lists.pos_particle'), 'pronoun': t('lists.pos_noun'), 'interjection': t('lists.pos_others'),
+            'prefix': t('lists.pos_others'), 'suffix': t('lists.pos_others'), 'other': t('lists.pos_others'), 'symbol': t('lists.pos_others')
         };
 
         // Helper: 生成多行段落（按换行符分割）
@@ -161,7 +163,7 @@ export default function VocabListView() {
             // POS + Base form in one line
             let metaLine = posLabel;
             if (item.baseForm && item.baseForm !== item.word) {
-                metaLine += ` · 原形: ${item.baseForm}`;
+                metaLine += ` · ${t('lists.base_form')}: ${item.baseForm}`;
             }
             paragraphs += `
       <w:p>
@@ -170,14 +172,14 @@ export default function VocabListView() {
       </w:p>`;
 
             // Meaning (multi-line support)
-            paragraphs += renderMultilineParagraphs('释义: ', item.meaning);
+            paragraphs += renderMultilineParagraphs(`${t('lists.meaning')}: `, item.meaning);
 
             // Context (if available)
             if (item.context) {
                 paragraphs += `
       <w:p>
         <w:pPr><w:spacing w:before="80"/></w:pPr>
-        <w:r><w:rPr><w:b/><w:color w:val="437E6F"/></w:rPr><w:t>例句: </w:t></w:r>
+        <w:r><w:rPr><w:b/><w:color w:val="437E6F"/></w:rPr><w:t>${t('lists.example')}: </w:t></w:r>
         <w:r><w:rPr><w:i/><w:color w:val="555555"/></w:rPr><w:t>${escapeXml(item.context)}</w:t></w:r>
       </w:p>`;
             }
@@ -213,12 +215,12 @@ export default function VocabListView() {
                         <button
                             onClick={() => setCenterViewMode('reader')}
                             className="p-1.5 -ml-2 mr-1 hover:bg-[var(--hover-bg)] rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                            title="戻る"
+                            title={t('common.back')}
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <BookMarked className="w-5 h-5" style={{ color: 'var(--scheme-primary)' }} />
-                        <h2 className="text-lg font-bold text-[var(--text-primary)]">単語帳</h2>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('lists.vocab_title')}</h2>
                         <span className="text-sm text-[var(--text-muted)]">({vocabList.length})</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -228,25 +230,25 @@ export default function VocabListView() {
                                     onClick={handleExportCSV}
                                     className={`px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white'} dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20`}
                                 >
-                                    保存 CSV
+                                    {t('lists.export_csv')}
                                 </button>
                                 <button
                                     onClick={handleExportDOCX}
                                     className={`px-3 py-1.5 text-xs font-bold tracking-wide rounded-lg transition-colors border ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white'} dark:bg-[var(--scheme-primary)]/15 text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]/20`}
                                 >
-                                    保存 Word
+                                    {t('lists.export_word')}
                                 </button>
                                 <div className="w-px h-4 bg-[var(--border-default)] mx-1" />
                                 <button
                                     onClick={() => {
-                                        if (confirm('全ての単語を削除しますか？')) {
+                                        if (confirm(t('lists.clear_confirm'))) {
                                             clearVocab();
                                         }
                                     }}
                                     className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors text-[var(--scheme-primary)] hover:bg-[var(--scheme-primary)]/10"
                                 >
                                     <Trash2 className="w-3 h-3" />
-                                    全削除
+                                    {t('common.clear_all')}
                                 </button>
                             </>
                         )}
@@ -267,20 +269,20 @@ export default function VocabListView() {
                     {vocabList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center pb-20" style={{ color: 'var(--text-faint)' }}>
                             <BookMarked className="w-12 h-12 mb-3 opacity-30" />
-                            <p className="text-sm font-medium">単語帳は空です</p>
-                            <p className="text-xs mt-1">単語をクリックして ⭐ を押すと保存されます</p>
+                            <p className="text-sm font-medium">{t('lists.vocab_empty')}</p>
+                            <p className="text-xs mt-1">{t('lists.vocab_hint')}</p>
                         </div>
                     ) : (
                         <div className="flex flex-col gap-8 pb-10">
                             {(() => {
                                 // Define groups and their mapping
                                 const groups = [
-                                    { id: 'noun', label: '名词 (Noun)', pos: [PartOfSpeech.NOUN, PartOfSpeech.PRONOUN, PartOfSpeech.PROPER_NOUN] },
-                                    { id: 'verb', label: '动词 (Verb)', pos: [PartOfSpeech.VERB] },
-                                    { id: 'adjective', label: '形容词 (Adjective)', pos: [PartOfSpeech.ADJECTIVE] },
-                                    { id: 'adverb', label: '副词 (Adverb)', pos: [PartOfSpeech.ADVERB] },
-                                    { id: 'particle', label: '助词・连词 (Particle/Conj)', pos: [PartOfSpeech.PARTICLE, PartOfSpeech.CONJUNCTION, PartOfSpeech.AUXILIARY] },
-                                    { id: 'others', label: '其他 (Others)', pos: [] } // Catch-all
+                                    { id: 'noun', label: t('lists.pos_noun'), pos: [PartOfSpeech.NOUN, PartOfSpeech.PRONOUN, PartOfSpeech.PROPER_NOUN] },
+                                    { id: 'verb', label: t('lists.pos_verb'), pos: [PartOfSpeech.VERB] },
+                                    { id: 'adjective', label: t('lists.pos_adj'), pos: [PartOfSpeech.ADJECTIVE] },
+                                    { id: 'adverb', label: t('lists.pos_adverb'), pos: [PartOfSpeech.ADVERB] },
+                                    { id: 'particle', label: t('lists.pos_particle'), pos: [PartOfSpeech.PARTICLE, PartOfSpeech.CONJUNCTION, PartOfSpeech.AUXILIARY] },
+                                    { id: 'others', label: t('lists.pos_others'), pos: [] } // Catch-all
                                 ];
 
                                 // Group the vocab items
@@ -389,7 +391,7 @@ export default function VocabListView() {
                                                                     removeVocab(item.id);
                                                                 }}
                                                                 className="absolute top-2 right-2 w-6 h-6 bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)] rounded-md border border-[var(--scheme-accent)]/10 transition-all hover:bg-[var(--scheme-accent-bg)]/80 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
-                                                                title="取消收藏"
+                                                                title={t('lists.unstar')}
                                                             >
                                                                 <Star className="w-3.5 h-3.5 fill-current" />
                                                             </button>

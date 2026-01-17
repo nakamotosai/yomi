@@ -3,12 +3,16 @@
 import React, { useRef, useEffect } from 'react';
 import { useGeminiStore } from '@/store/useGeminiStore';
 import { useAppStore } from '@/store/useAppStore';
-import { ChevronLeft, User, Bot, Send, Trash2, Square } from 'lucide-react';
+import { ChevronLeft, User, Bot, Send, Trash2, Square, Bookmark, BookMarked, MessageSquare } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import clsx from 'clsx';
+import { useI18n } from '@/lib/i18n';
 
 export default function AIChatView({ hideHeader = false }: { hideHeader?: boolean }) {
-    const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration } = useGeminiStore();
-    const settings = useAppStore(s => s.settings);
+    const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration, bookmarks, toggleBookmark } = useGeminiStore();
+    const { settings, setCenterViewMode } = useAppStore();
+    const { t } = useI18n();
+    const [showBookmarks, setShowBookmarks] = React.useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom on new messages
@@ -19,6 +23,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
     }, [history, isChatGenerating]);
 
     const [input, setInput] = React.useState('');
+    const [isFocused, setIsFocused] = React.useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const handleSend = async () => {
@@ -50,7 +55,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
     }, [input]);
 
     const handleClear = () => {
-        if (window.confirm('确定要清空所有聊天记录吗？')) {
+        if (window.confirm(t('ai.clear_confirm'))) {
             resetChat();
         }
     };
@@ -62,23 +67,50 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-muted)] bg-transparent backdrop-blur-md z-10">
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => setChatOpen(false)}
-                            className="p-2 -ml-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-secondary)] transition-colors"
+                            onClick={() => {
+                                if (showBookmarks) {
+                                    setShowBookmarks(false);
+                                } else {
+                                    setChatOpen(false);
+                                    setCenterViewMode('reader');
+                                }
+                            }}
+                            className="p-2 -ml-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
                         >
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         <div className="flex flex-col">
-                            <h2 className="font-bold text-[var(--text-primary)] text-sm md:text-base">向 AI 日语老师提问任何关于日语学习的问题</h2>
+                            <h2 className="font-bold text-[var(--text-primary)] text-sm md:text-base">
+                                {showBookmarks ? "AI 先生收藏夹" : t('ai.ask_hint')}
+                            </h2>
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleClear}
-                        className="p-2 rounded-lg hover:bg-rose-500/10 text-[var(--text-muted)] hover:text-rose-500 transition-all group"
-                        title="清空聊天记录"
-                    >
-                        <Trash2 className="w-4 h-4 group-hover:scale-110" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowBookmarks(!showBookmarks)}
+                            className={clsx(
+                                "p-2 rounded-xl transition-all hover:shadow-sm active:scale-95 cursor-pointer flex items-center gap-2",
+                                showBookmarks
+                                    ? "rainbow-highlight text-[var(--accent-primary)] font-bold px-4"
+                                    : "bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                            )}
+                            title={showBookmarks ? "返回对话" : "查看收藏"}
+                        >
+                            {showBookmarks ? <MessageSquare className="w-4 h-4" /> : <BookMarked className="w-4 h-4" />}
+                            {showBookmarks && <span className="text-xs">返回对话</span>}
+                        </button>
+
+                        {!showBookmarks && (
+                            <button
+                                onClick={handleClear}
+                                className="p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
+                                title={t('ai.clear_chat')}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -92,7 +124,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                         <div className="w-16 h-16 rounded-full bg-[var(--scheme-accent-surface)] flex items-center justify-center">
                             <Bot className="w-8 h-8 text-[var(--scheme-accent)]" />
                         </div>
-                        <p>请在下方输入框提问，开始对话...</p>
+                        <p>{t('ai.start_conv')}</p>
                     </div>
                 ) : (
                     history.map((msg, idx) => (
@@ -110,17 +142,12 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                 {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                             </div>
 
-                            {/* Bubble */}
-                            < div className={`
-                                max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm transition-all
-                                ${msg.role === 'user'
-                                    ? 'rounded-tr-none bg-[var(--chat-user-bubble)] backdrop-blur-sm border border-white/5'
-                                    : `backdrop-blur-sm border border-[var(--border-default)] rounded-tl-none shadow-sm ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white/40 dark:bg-black/20'}`
-                                }
-                            `}
-                                style={msg.role === 'user' ? {
-                                    color: 'var(--chat-user-text)'
-                                } : {}}
+                            <div className={clsx(
+                                "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed transition-all relative",
+                                msg.role === 'user'
+                                    ? "rounded-tr-none bg-[var(--bg-muted)] border border-[var(--border-default)] text-[var(--text-secondary)] shadow-sm"
+                                    : "rounded-tl-none rainbow-highlight text-[var(--text-primary)] shadow-md"
+                            )}
                             >
                                 {msg.role === 'user' ? (
                                     <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -130,9 +157,21 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                     </div>
                                 )}
                                 {msg.role === 'model' && msg.content && (
-                                    <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex justify-end">
+                                    <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex items-center justify-between">
+                                        <button
+                                            onClick={() => toggleBookmark(msg)}
+                                            className={clsx(
+                                                "p-1.5 rounded-lg transition-all flex items-center gap-1 group/btn",
+                                                bookmarks.some(b => b.timestamp === msg.timestamp)
+                                                    ? "text-yellow-500 bg-yellow-500/10"
+                                                    : "text-[var(--text-faint)] hover:text-yellow-500 hover:bg-yellow-500/5"
+                                            )}
+                                        >
+                                            <Bookmark className={clsx("w-3.5 h-3.5", bookmarks.some(b => b.timestamp === msg.timestamp) ? "fill-current" : "group-hover/btn:fill-yellow-500/30")} />
+                                            <span className="text-[10px] font-medium">{bookmarks.some(b => b.timestamp === msg.timestamp) ? "已收藏" : "收藏"}</span>
+                                        </button>
                                         <span className="text-[10px] text-[var(--text-faint)] select-none">
-                                            字数: {msg.content.length}
+                                            {t('ai.char_count')}: {msg.content.length}
                                         </span>
                                     </div>
                                 )}
@@ -141,6 +180,40 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                     ))
                 )
                 }
+
+                {/* Bookmarks List Overlay */}
+                {showBookmarks && (
+                    <div className="absolute inset-0 z-50 bg-[var(--bg-base)] flex flex-col p-4 space-y-4 overflow-y-auto floating-scrollbar pb-24">
+                        {bookmarks.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
+                                <BookMarked className="w-12 h-12 opacity-20" />
+                                <p>还没有收藏任何 AI 老师的回答</p>
+                            </div>
+                        ) : (
+                            bookmarks.map((msg, idx) => (
+                                <div key={idx} className="rainbow-highlight rounded-2xl p-5 shadow-md relative group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-2 text-[var(--text-faint)] text-[10px]">
+                                            <Bot className="w-3 h-3" />
+                                            <span>AI 先生的精彩解读</span>
+                                            <span>•</span>
+                                            <span>{new Date(msg.timestamp).toLocaleDateString()}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => toggleBookmark(msg)}
+                                            className="text-yellow-500 hover:scale-110 active:scale-95 transition-all"
+                                        >
+                                            <Bookmark className="w-4 h-4 fill-current" />
+                                        </button>
+                                    </div>
+                                    <div className="markdown-body prose dark:prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
 
                 {/* Loading Indicator */}
                 {
@@ -152,10 +225,10 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                             >
                                 <Bot className="w-4 h-4" />
                             </div>
-                            <div className={`backdrop-blur-sm border border-[var(--border-default)] rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center gap-2 ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white/40 dark:bg-black/20'}`}>
-                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            <div className="rainbow-highlight rounded-2xl rounded-tl-none px-4 py-3 shadow-md flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                             </div>
                         </div>
                     )
@@ -164,31 +237,39 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
 
             {/* Input Area */}
             < div className="p-4 border-t border-[var(--border-muted)] bg-transparent" >
-                <div className={`flex items-center gap-2 rounded-xl px-3 py-1 border border-[var(--border-default)] focus-within:ring-2 focus-within:ring-[var(--scheme-accent)]/20 transition-all min-h-[56px] ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-black/5 dark:bg-white/5'}`}>
+                <div className={clsx(
+                    "flex items-center gap-2 rounded-xl px-4 py-2 transition-all min-h-[56px] relative overflow-visible z-20",
+                    isFocused ? "rainbow-highlight" : "bg-[var(--bg-muted)] border border-[var(--border-default)]"
+                )}
+                    style={{
+                        boxShadow: isFocused ? 'var(--rainbow-glow)' : 'none'
+                    }}
+                >
                     <textarea
                         ref={textareaRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="向AI日语老师提问..."
-                        className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        placeholder={t('ai.input_placeholder')}
+                        className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
                         rows={1}
                         style={{
-                            color: 'var(--chat-user-text)',
-                            '--tw-placeholder-opacity': '0.6',
-                            scrollbarWidth: 'none',
-                            lineHeight: '1.4'
+                            color: 'var(--text-primary)',
+                            lineHeight: '1.5'
                         } as any}
                     />
                     <button
                         onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
                         disabled={!input.trim() && !isChatGenerating}
-                        className="p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 mb-0.5 border border-[var(--border-default)] shadow-sm hover:shadow-md active:scale-95 group"
-                        style={{
-                            backgroundColor: 'var(--chat-user-bubble)',
-                            color: 'var(--chat-user-text)'
-                        }}
-                        title={isChatGenerating ? "停止分析" : "发送消息"}
+                        className={clsx(
+                            "p-2.5 rounded-xl transition-all shrink-0 active:scale-95 group",
+                            (input.trim() || isChatGenerating)
+                                ? "rainbow-highlight text-[var(--accent-primary)] shadow-sm cursor-pointer"
+                                : "text-[var(--text-muted)] opacity-30 cursor-default"
+                        )}
+                        title={isChatGenerating ? t('ai.stop_analysis') : t('ai.send')}
                     >
                         {isChatGenerating ? (
                             <Square className="w-4 h-4 fill-current animate-pulse" />

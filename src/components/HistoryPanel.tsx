@@ -7,6 +7,7 @@ import { COLOR_THEMES } from '@/lib/colorThemes';
 import { ttsManager } from '@/lib/tts/manager';
 import { Clock, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { useI18n } from '@/lib/i18n';
 
 export default function HistoryPanel() {
     const history = useAppStore(state => state.history) || [];
@@ -14,6 +15,7 @@ export default function HistoryPanel() {
     const clearHistory = useAppStore(state => state.clearHistory); // Get action
     const settings = useAppStore(state => state.settings);
     const isSpeaking = useAppStore(state => state.isSpeaking);
+    const { t } = useI18n();
 
     if (history.length === 0) {
         return (
@@ -25,7 +27,7 @@ export default function HistoryPanel() {
                 }}
             >
                 <Clock className="w-8 h-8 mb-2 opacity-20" />
-                <p className="text-sm">履歴はまだありません</p>
+                <p className="text-sm">{t('history.empty')}</p>
             </div>
         );
     }
@@ -38,8 +40,8 @@ export default function HistoryPanel() {
             {/* Floating Clear Button */}
             <button
                 onClick={clearHistory}
-                className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-full transition-all bg-white/50 dark:bg-white/5 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 hover:text-rose-500 text-[var(--text-muted)] backdrop-blur-sm"
-                title="履歴を削除"
+                className="absolute top-2.5 right-2.5 z-20 p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 backdrop-blur-sm cursor-pointer"
+                title={t('history.clear_all')}
             >
                 <Trash2 className="w-4 h-4" />
             </button>
@@ -103,7 +105,8 @@ export default function HistoryPanel() {
                                 }
                             }}
                             className={clsx(
-                                "inline-flex items-center px-3 py-1.5 mr-2 mb-2 rounded-lg transition-all text-base font-medium hover:scale-105 hover:brightness-95",
+                                "inline-flex items-center px-3 py-1.5 mr-2 mb-2 rounded-lg transition-all duration-200 text-base font-medium cursor-pointer",
+                                "hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95",
                                 (!isWafu && !isMonochrome) && [colorScheme.bg, colorScheme.text]
                             )}
                             style={wafuStyle}

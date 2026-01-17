@@ -6,6 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 import clsx from 'clsx';
 import { ttsManager } from '@/lib/tts/manager';
 import { Collapsible } from './Collapsible';
+import { useI18n } from '@/lib/i18n';
 
 interface TranslationTipProps {
     original: string;
@@ -15,6 +16,7 @@ interface TranslationTipProps {
 
 export default function TranslationTip({ original, translation, onTranslate }: TranslationTipProps) {
     const { settings, isSpeaking } = useAppStore();
+    const { t } = useI18n();
     const [isExpanded, setIsExpanded] = useState(false);
     // Dynamic Verb Color Logic:
     // Standard (Morandi) uses specific Orange (#C8733A).
@@ -26,7 +28,7 @@ export default function TranslationTip({ original, translation, onTranslate }: T
     const isLoading = false;
 
     // Use explicit translation or fallback placeholder
-    const displayTranslation = translation || '（点击翻译）';
+    const displayTranslation = translation || `（${t('info.click_translate')}）`;
 
     const handleToggle = () => {
         // If no translation and collapsed, trigger translation on expand? 
@@ -58,7 +60,7 @@ export default function TranslationTip({ original, translation, onTranslate }: T
                     <div className="shrink-0 w-12 flex items-center select-none translate-y-[1px]">
                         <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: verbColor }}></span>
                         <h3 className="text-base font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                            翻译
+                            {t('info.translation')}
                         </h3>
                     </div>
 
@@ -93,7 +95,7 @@ export default function TranslationTip({ original, translation, onTranslate }: T
                         <div className="shrink-0 w-12 flex items-center select-none translate-y-[1px]">
                             <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: verbColor }}></span>
                             <h3 className="text-base font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                                原文
+                                {t('info.original')}
                             </h3>
                         </div>
                         <div className="flex-1 text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
@@ -106,13 +108,10 @@ export default function TranslationTip({ original, translation, onTranslate }: T
                                         onEnd: () => { }
                                     });
                                 }}
-                                className="inline-flex w-5 h-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--hover-bg)] ml-2 align-middle transform -translate-y-0.5"
-                                style={{ color: 'var(--text-muted)' }}
+                                className="ml-2 inline-flex p-1.5 rounded-xl bg-[var(--bg-muted)] text-slate-500 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 transition-all align-middle transform -translate-y-0.5"
                                 title="朗读此句"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                </svg>
+                                <Volume2 className="w-3.5 h-3.5" />
                             </button>
                         </div>
                     </div>

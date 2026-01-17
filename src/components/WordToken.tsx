@@ -46,7 +46,7 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
                 <div className={fontSizeClasses.furiganaHeight}></div>
 
                 {/* 标点符号本体 - 无背景，纯文字 */}
-                <div className={clsx("px-0 py-0.5 font-medium text-[var(--text-muted)]", fontSizeClasses.main)}>
+                <div className={clsx("px-0 py-0.5 font-medium text-slate-500", fontSizeClasses.main)}>
                     {token.surface}
                 </div>
             </div>
@@ -106,7 +106,7 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
     // 文字颜色：始终使用主题颜色（即使背景透明）
     // If Wafu or Monochrome is active, standard textClass is ignored in favor of style override
     const textClass = (!isWafu && !isMonochrome && isColorEnabled) ? themeColors.text : ((isWafu || isMonochrome) && isColorEnabled ? '' : '');
-    const textStyle = (!isWafu && !isMonochrome && isColorEnabled) ? {} : ((isWafu || isMonochrome) && isColorEnabled ? {} : { color: 'var(--text-muted)' });
+    const textStyle = (!isWafu && !isMonochrome && isColorEnabled) ? {} : ((isWafu || isMonochrome) && isColorEnabled ? {} : { color: 'rgb(100 116 139)' }); // slate-500
 
     // Logic: Show Furigana?
     const isEnglish = /^[a-zA-Z0-9\s.,!?'"()-]+$/.test(token.surface);
@@ -179,7 +179,7 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
                                 "bg-transparent"
                             )
                             : clsx(bgClass, textClass), // Box style (Standard OR Wafu)
-                    !isSelected && !isSpeaking && "hover:brightness-95",
+                    !isSelected && !isSpeaking && "hover:scale-110 hover:brightness-110 hover:shadow-sm hover:z-10 active:scale-95 cursor-pointer",
                     // Karaoke animations based on style
                     isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'glow-scale' && "scale-110 z-10",
                     isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'float-up' && "karaoke-float-up z-10",

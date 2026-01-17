@@ -19,6 +19,7 @@ interface GeminiState {
     // Chat State
     history: ChatMessage[];
     isChatOpen: boolean;
+    abortController: AbortController | null;
 
     // Actions
     sendMessage: (text: string) => Promise<void>;
@@ -29,6 +30,10 @@ interface GeminiState {
     // Note: onUpdate is now optional/deprecated as components should subscribe to streamedResults
     generateText: (prompt: string, systemPrompt: string, onUpdate?: (text: string) => void, options?: { temperature?: number, top_p?: number, cacheKey?: string, forceRefresh?: boolean }) => Promise<{ text: string, fromCache: boolean }>;
     cancelGeneration: (key?: string) => void;
+    // Bookmarks
+    bookmarks: ChatMessage[];
+    toggleBookmark: (message: ChatMessage) => void;
+    clearBookmarks: () => void;
 }
 
 // In the new architecture, we call the backend API which handles the SDK.
@@ -296,21 +301,38 @@ export const useGeminiStore = create<GeminiState>()(
             },
 
             cancelGeneration: (key?: string) => {
+                const state = get();
+                if (state.abortController) {
+                    state.abortController.abort();
+                }
                 if (key) {
                     set((state) => {
                         const newMap = new Map(state.streamedResults);
                         newMap.delete(key);
-                        return { streamedResults: newMap };
+                        return { streamedResults: newMap, abortController: null };
                     });
                 } else {
-                    set({ streamedResults: new Map() });
+                    set({ streamedResults: new Map(), abortController: null });
                 }
-            }
+            },
+
+            // Bookmarks Implementation
+            bookmarks: [],
+            toggleBookmark: (message) => set((state) => {
+                const exists = state.bookmarks.find(b => b.timestamp === message.timestamp);
+                if (exists) {
+                    return { bookmarks: state.bookmarks.filter(b => b.timestamp !== message.timestamp) };
+                } else {
+                    return { bookmarks: [...state.bookmarks, message] };
+                }
+            }),
+            clearBookmarks: () => set({ bookmarks: [] })
         }),
         {
             name: 'yomi-gemini-storage', // Key for localStorage
             partialize: (state) => ({
                 history: state.history,
+                bookmarks: state.bookmarks, // Persist bookmarks
                 // Do NOT persist activeGenerations across page reloads
             }),
         }

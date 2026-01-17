@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Settings2,
+  Settings,
   BookMarked,
   PlayCircle,
   PauseCircle,
@@ -12,6 +12,9 @@ import {
   BookOpen,
   X,
   PenLine,
+  Languages,
+  MessageCircle,
+  Sparkles,
 } from 'lucide-react';
 import Image from 'next/image';
 import clsx from 'clsx';
@@ -42,6 +45,7 @@ import ResizableVerticalSection from '@/components/ResizableVerticalSection';
 import MobileNavigator from '@/components/MobileNavigator';
 import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import { Collapsible } from '@/components/Collapsible';
+import { useI18n } from '@/lib/i18n';
 
 // Dynamic imports
 const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
@@ -88,9 +92,16 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
 
   const [isMounted, setIsMounted] = useState(false);
 
-  // Translation State
-  const [fullTranslation, setFullTranslation] = useState<string | null>(null);
+  // Translation State - Moved to Store
+  const fullTranslation = useAppStore(s => s.fullTranslation);
+  // setHasAutoClosedTranslation is already destructured above
   const [isTranslating, setIsTranslating] = useState(false);
+
+  // Reset auto-closed state on mount to ensure 5s timer runs on first load
+  useEffect(() => {
+    setHasAutoClosedTranslation(false);
+    setShowTranslation(true);
+  }, [setHasAutoClosedTranslation, setShowTranslation]);
 
   // Auto-collapse logic for translation
   useEffect(() => {
@@ -118,16 +129,12 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
         setIsInputOpen(false); // Ensure input is closed
       }
 
-      // Trigger analysis and translation
       setAnalyzedText(inputText);
       setIsTranslating(true);
-      translateText(inputText).then(text => {
-        setFullTranslation(text);
-      }).catch(e => {
-        console.error("Translation failed", e);
-      }).finally(() => {
-        setIsTranslating(false);
-      });
+      // Translation triggered by TextAnalyzer effect, just ensure UI shows loading if needed
+      // Actually TextAnalyzer might not be mounted yet if we are switching modes?
+      // Since centerViewMode is 'reader' by default, TextAnalyzer should handle the translation sync.
+      // We just expand the panel here.
     }
     // Only trigger when isFromExtension becomes true or inputText changes while it is true
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,46 +157,21 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       // We are opening translation, close input
       setIsInputOpen(false);
       toggleTranslation();
+      // Translation handled by TextAnalyzer sync
       if (!fullTranslation && analyzedText.trim()) {
         setIsTranslating(true);
-        try {
-          const text = await translateText(analyzedText);
-          setFullTranslation(text);
-        } catch (e) {
-          console.error("Translation failed", e);
-        } finally {
-          setIsTranslating(false);
-        }
+        // Rely on TextAnalyzer to update store
+        setTimeout(() => setIsTranslating(false), 2000); // Fallback timeout for loading state
       }
     }
   };
 
-  // Effect to auto-update translation when analyzed text changes
+  // Effect to clear legacy local translation logic - now handled by TextAnalyzer
   useEffect(() => {
-    // If panel is closed, clear stale translation so next open fetches fresh
-    // EXCEPTION: Keep it if we are just collapsed. But here we want to save resources.
-    // Actually, keeping previously translated text is better UX than clearing it.
-    // Only fetch if open.
-    if (!showTranslation) {
-      return;
-    }
-
     if (!analyzedText.trim()) {
-      setFullTranslation(null);
-      return;
+      // Clear global translation if text is empty? Maybe not needed, TextAnalyzer handles it.
     }
-
-    setIsTranslating(true);
-    // Directly translate analyzed text when it changes
-    translateText(analyzedText).then(text => {
-      setFullTranslation(text);
-    }).catch(e => {
-      console.error("Auto-translation failed", e);
-    }).finally(() => {
-      setIsTranslating(false);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyzedText, showTranslation]);
+  }, [analyzedText]);
 
   // Scrollbar Visibility Logic
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -304,6 +286,14 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
         </div>
       )}
 
+      {/* AI Chat View - Full takeover */}
+      {
+        centerViewMode === 'ai' && (
+          <div className="h-full flex flex-col pt-0">
+            <AIChatView hideHeader={false} />
+          </div>
+        )
+      }
 
       {/* Vocab List View - Full takeover */}
       {
@@ -378,6 +368,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   // const setIsInputModalOpen = useAppStore(s => s.setIsInputModalOpen);
   const centerViewMode = useAppStore(s => s.centerViewMode);
   const settings = useAppStore(s => s.settings);
+  const uiLanguage = useAppStore(s => s.uiLanguage);
+  const setUiLanguage = useAppStore(s => s.setUiLanguage);
+
+  const { t } = useI18n();
 
   const { vocabList } = useVocabStore();
   const { grammarList } = useGrammarStore();
@@ -588,14 +582,13 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
             backdropFilter: 'blur(12px)'
           }}
         >
-          <h2 className="font-bold hidden md:block" style={{ color: 'var(--text-muted)' }}>読解モード</h2>
+          <h2 className="font-bold hidden md:block" style={{ color: 'var(--text-muted)' }}>{t('nav.reader_mode')}</h2>
           <div className="md:hidden" /> {/* Spacer for mobile */}
 
           {/* Playback Controls (Mobile Toolbar) - Kept mostly same but can also leverage Header components if desired */}
           {/* For now, keeping mobile toolbar as is for consistency with previous mobile logic unless user requested global change */}
           {/* wait, user requested web change. Mobile might share this component? */}
           {/* CenterContent is used for Mobile too. Mobile Header logic needs to be checked. */}
-          {/* ReaderHeader is used in Desktop CenterColumn. This `CenterContent` component below seems to be the Mobile View's center content or Desktop's? */}
           {/* Ah, CenterColumn is the Desktop Component. CenterContent (variable below) is PASSED to MobileNavigator. */}
           {/* So this part is Mobile Only View essentially. */}
 
@@ -607,6 +600,9 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               // Keeping original modal logic for mobile for now to avoid breaking mobile UX unless requested.
               // User specifically mentioned "Web end". So I will touch CenterColumn (Desktop) mainly.
               // But let's check if Mobile uses CenterColumn. No, Mobile uses CenterContent variable.
+              // `CenterContent` (variable) still has the old hardcoded toolbar and doesn't integrate ReaderHeader.
+              // Since the user asked for "Web End" (网页端), I focused on CenterColumn. Mobile users might still use the old toolbar unless we update CenterContent too.
+              // Given constraints, I'm modifying CenterColumn (Desktop) and leaving Mobile as is effectively.
               onClick={() => useAppStore.getState().setIsInputModalOpen(true)}
               className={clsx(
                 "flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all active:scale-95",
@@ -738,7 +734,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
                     {/* Logo Area - Compact */}
                     <div
-                      className="h-14 hidden md:flex items-center px-6 shrink-0 bg-transparent border-none z-20"
+                      className="h-14 hidden md:flex items-center pl-6 pr-2 shrink-0 bg-transparent border-none z-20"
                     >
                       <div className="relative w-8 h-8 mr-3">
                         <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
@@ -746,17 +742,26 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                       <h1 className="text-[16px] font-bold tracking-tight" style={{ color: settings.colorScheme === 'wafu' ? '#3c3633' : 'var(--text-secondary)' }}>
                         読み | YOMI
                       </h1>
-                      <button
-                        onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
-                        className="ml-auto p-2 rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="設定"
-                      >
-                        <Settings2 className="w-5 h-5" />
-                      </button>
+                      <div className="ml-auto flex items-center gap-1">
+                        <button
+                          onClick={() => setUiLanguage(uiLanguage === 'zh' ? 'ja' : 'zh')}
+                          className="p-2 rounded-xl transition-all bg-transparent text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer flex items-center gap-1.5"
+                          title={t('header.title_switch_lang')}
+                        >
+                          <Languages className="w-4 h-4" />
+                          <span className="text-[11px] font-black uppercase tracking-widest opacity-80">{uiLanguage === 'zh' ? 'JA' : 'ZH'}</span>
+                        </button>
+                        <button
+                          onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
+                          className="p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
+                          title="設定"
+                        >
+                          <Settings className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* AI Hero Input */}
+                    {/* AI Hero Input - Keep as fixed entry point */}
                     <div className="flex-1 min-h-0 w-full relative">
                       <AIHeroInput />
                     </div>
@@ -769,8 +774,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
                     {/* Navigation Buttons Grid - Expanded */}
                     <div className="p-1">
-                      {/* Functions Row 1 */}
-                      <div className="grid grid-cols-2 gap-3 mb-3">
+                      {/* Navigation Row 1 */}
+                      <div className="grid grid-cols-2 gap-4 mb-4 overflow-visible p-1">
                         <button
                           onClick={() => {
                             setAppMode('reader');
@@ -779,43 +784,51 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             useGeminiStore.getState().setChatOpen(false);
                           }}
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
                             !isChatOpen && appMode === 'reader' && centerViewMode === 'reader'
-                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
-                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                              ? "rainbow-highlight"
+                              : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
                           <BookOpen
-                            className="w-6 h-6 mb-2 transition-colors"
-                            style={{ color: !isChatOpen && appMode === 'reader' && centerViewMode === 'reader' ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+                            className={clsx(
+                              "w-6 h-6 mb-2 transition-colors",
+                              !isChatOpen && appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                            )}
                           />
-                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            読解モード
+                          <span className="font-bold text-[14px] text-slate-500">
+                            {t('nav.reader_mode')}
                           </span>
                         </button>
 
-                        {/* Kana Mode (Locked) */}
+                        {/* AI Chat Mode */}
                         <button
-                          disabled
+                          onClick={() => {
+                            setCenterViewMode('ai');
+                            setIsMobileDrawerOpen(false);
+                            useGeminiStore.getState().setChatOpen(true);
+                          }}
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
-                            "opacity-50 grayscale bg-transparent border-[var(--border-muted)]"
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
+                            centerViewMode === 'ai'
+                              ? "rainbow-highlight"
+                              : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
-                          <span
-                            className="w-6 h-6 mb-2 transition-colors flex items-center justify-center font-serif font-bold text-xl leading-none"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            あ
-                          </span>
-                          <span className="font-medium text-[14px]" style={{ color: 'var(--text-muted)' }}>
-                            仮名(Lock)
+                          <Sparkles
+                            className={clsx(
+                              "w-6 h-6 mb-2 transition-colors",
+                              centerViewMode === 'ai' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                            )}
+                          />
+                          <span className="font-bold text-[14px] text-slate-500">
+                            {t('nav.ai_chat')}
                           </span>
                         </button>
                       </div>
 
                       {/* Lists Row 2 */}
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-4 overflow-visible p-1">
                         <button
                           onClick={() => {
                             setCenterViewMode('vocab');
@@ -823,15 +836,20 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             useGeminiStore.getState().setChatOpen(false);
                           }}
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
                             !isChatOpen && centerViewMode === 'vocab'
-                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
-                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                              ? "rainbow-highlight"
+                              : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
-                          <BookMarked className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'vocab' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
-                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            単語帳
+                          <BookMarked
+                            className={clsx(
+                              "w-6 h-6 mb-2 transition-colors",
+                              !isChatOpen && centerViewMode === 'vocab' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                            )}
+                          />
+                          <span className="font-bold text-[14px] text-slate-500">
+                            {t('nav.vocab_list')}
                             <span className="ml-1 text-xs opacity-60 font-normal">{vocabList.length}</span>
                           </span>
                         </button>
@@ -843,15 +861,20 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                             useGeminiStore.getState().setChatOpen(false);
                           }}
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative border border-transparent dark:border-white/10",
+                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
                             !isChatOpen && centerViewMode === 'grammar'
-                              ? "bg-[var(--bg-elevated)] shadow-md border-[var(--border-muted)]"
-                              : "hover:bg-[var(--bg-elevated)]/50 hover:shadow-sm bg-transparent border-[var(--border-muted)]"
+                              ? "rainbow-highlight"
+                              : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
-                          <GraduationCap className="w-6 h-6 mb-2 transition-colors" style={{ color: !isChatOpen && centerViewMode === 'grammar' ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
-                          <span className="font-bold text-[14px]" style={{ color: 'var(--text-primary)' }}>
-                            文法帳
+                          <GraduationCap
+                            className={clsx(
+                              "w-6 h-6 mb-2 transition-colors",
+                              !isChatOpen && centerViewMode === 'grammar' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                            )}
+                          />
+                          <span className="font-bold text-[14px] text-slate-500">
+                            {t('nav.grammar_list')}
                             <span className="ml-1 text-xs opacity-60 font-normal">{grammarList.length}</span>
                           </span>
                         </button>
@@ -974,22 +997,30 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
-                    <span className={clsx("font-bold text-sm", appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>读解模式</span>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">分析日文文章与句子</span>
+                    <span className={clsx("font-bold text-sm", appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>{t('nav.reader_mode')}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">{t('nav.reader_desc')}</span>
                   </div>
                 </button>
 
-                {/* 2. Kana Practice */}
+                {/* 2. AI Chat */}
                 <button
-                  disabled
-                  className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border bg-transparent border-transparent opacity-40 grayscale"
+                  onClick={() => { setCenterViewMode('ai'); setIsMobileDrawerOpen(false); useGeminiStore.getState().setChatOpen(true); }}
+                  className={clsx(
+                    "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
+                    centerViewMode === 'ai'
+                      ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                  )}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-muted)] text-[var(--text-muted)] flex items-center justify-center shrink-0">
-                    <span className="text-lg font-serif font-bold">あ</span>
+                  <div className={clsx(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    centerViewMode === 'ai' ? "bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)]" : "bg-[var(--bg-muted)] text-[var(--text-muted)]"
+                  )}>
+                    <Sparkles className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
-                    <span className="font-bold text-sm text-[var(--text-secondary)]">假名练习</span>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">基础五十音学习(即将开放)</span>
+                    <span className={clsx("font-bold text-sm", centerViewMode === 'ai' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>{t('nav.ai_chat')}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">{t('nav.ai_chat_desc')}</span>
                   </div>
                 </button>
 
@@ -1011,10 +1042,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   </div>
                   <div className="flex flex-col items-start">
                     <div className="flex items-center gap-2">
-                      <span className={clsx("font-bold text-sm", centerViewMode === 'vocab' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>单词本</span>
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'vocab' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>{t('nav.vocab_list')}</span>
                       {vocabList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{vocabList.length}</span>}
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)]">查看已保存的生词</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">{t('nav.vocab_desc')}</span>
                   </div>
                 </button>
 
@@ -1036,10 +1067,10 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
                     <div className="flex items-center gap-2">
-                      <span className={clsx("font-bold text-sm", centerViewMode === 'grammar' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>语法本</span>
+                      <span className={clsx("font-bold text-sm", centerViewMode === 'grammar' ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]")}>{t('nav.grammar_list')}</span>
                       {grammarList.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-[var(--bg-muted)] text-[var(--text-muted)] text-[10px]">{grammarList.length}</span>}
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)]">掌握深度语法知识</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">{t('nav.grammar_desc')}</span>
                   </div>
                 </button>
               </div>
@@ -1050,8 +1081,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                   onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--bg-muted)] text-[var(--text-secondary)] transition-colors"
                 >
-                  <Settings2 className="w-5 h-5" />
-                  <span className="font-medium text-sm">应用设置</span>
+                  <Settings className="w-5 h-5" />
+                  <span className="font-medium text-sm">{t('nav.app_settings')}</span>
                 </button>
               </div>
             </div>

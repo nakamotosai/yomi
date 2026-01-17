@@ -5,6 +5,7 @@ import { Menu, PenLine, Sparkles, BookOpen } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import clsx from 'clsx';
 import { useGeminiStore } from '@/store/useGeminiStore';
+import { useI18n } from '@/lib/i18n';
 
 interface MobileBottomBarProps {
     onMenuClick: () => void;
@@ -14,7 +15,8 @@ interface MobileBottomBarProps {
 }
 
 export default function MobileBottomBar({ onMenuClick, onReaderClick, onAIClick, currentView }: MobileBottomBarProps) {
-    const { settings, appMode } = useAppStore();
+    const { settings } = useAppStore();
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
 
     return (
@@ -33,7 +35,7 @@ export default function MobileBottomBar({ onMenuClick, onReaderClick, onAIClick,
                 style={{ color: 'var(--text-secondary)' }}
             >
                 <Menu className="w-6 h-6" />
-                <span className="text-[10px] font-medium opacity-80">菜单</span>
+                <span className="text-[10px] font-medium opacity-80">{t('nav.menu')}</span>
             </button>
 
             {/* Center: AI */}
@@ -46,7 +48,7 @@ export default function MobileBottomBar({ onMenuClick, onReaderClick, onAIClick,
                 style={{ color: currentView === 'ai' ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
             >
                 <Sparkles className="w-6 h-6" />
-                <span className="text-[10px] font-medium opacity-80">AI老师</span>
+                <span className="text-[10px] font-medium opacity-80">{t('ai.teacher')}</span>
             </button>
 
             {/* Right: Reader Mode */}
@@ -61,7 +63,7 @@ export default function MobileBottomBar({ onMenuClick, onReaderClick, onAIClick,
                 <div className="relative">
                     <BookOpen className="w-6 h-6" />
                 </div>
-                <span className="text-[10px] font-medium opacity-80">读解</span>
+                <span className="text-[10px] font-medium opacity-80">{t('nav.reader_mode')}</span>
             </button>
         </div>
     );

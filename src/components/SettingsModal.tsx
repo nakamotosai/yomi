@@ -4,13 +4,13 @@ import React, { useEffect, useState } from 'react';
 import {
     X, Type, Eye, EyeOff, Music, Server, Globe, BookOpen, Palette,
     Speaker, Languages, Sparkles, Sun, Moon, Info, RotateCcw,
-    Github, Keyboard, ExternalLink
+    Github, Keyboard, ExternalLink, Settings
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAppStore } from '@/store/useAppStore';
+import { useI18n } from '@/lib/i18n';
 import { ttsManager } from '@/lib/tts/manager';
-import { PartOfSpeech, AppSettings } from '@/types';
-import { COLOR_THEMES, ThemeId } from '@/lib/colorThemes';
+import { PartOfSpeech } from '@/types';
 import clsx from 'clsx';
 
 interface SettingsModalProps {
@@ -21,7 +21,8 @@ interface SettingsModalProps {
 type TabId = 'appearance' | 'highlight' | 'reading' | 'audio' | 'about';
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-    const { settings, updateSettings, toggleSetting } = useAppStore();
+    const { settings, updateSettings } = useAppStore();
+    const { t } = useI18n();
     const [availableVoices, setAvailableVoices] = useState<{ id: string; name: string }[]>([]);
     const [activeTab, setActiveTab] = useState<TabId>('appearance');
     const isDark = settings.theme === 'dark';
@@ -36,29 +37,19 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!isOpen) return null;
 
     const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
-        { id: 'appearance', label: '外观', icon: Palette },
-        { id: 'highlight', label: '高亮', icon: Sparkles },
-        { id: 'reading', label: '阅读', icon: BookOpen },
-        { id: 'audio', label: '语音', icon: Speaker },
-        { id: 'about', label: '关于', icon: Info },
+        { id: 'appearance', label: t('settings.tabs.appearance'), icon: Palette },
+        { id: 'highlight', label: t('settings.tabs.highlight'), icon: Sparkles },
+        { id: 'reading', label: t('settings.tabs.reading'), icon: BookOpen },
+        { id: 'audio', label: t('settings.tabs.audio'), icon: Speaker },
+        { id: 'about', label: t('settings.tabs.about'), icon: Info },
     ];
 
     const handleResetSettings = () => {
-        if (confirm('确定要重置所有设置为默认值吗？')) {
-            localStorage.removeItem('yomi-app-store-v4');
+        if (confirm(t('settings.about.reset_confirm'))) {
+            localStorage.removeItem('yomi-app-store-v9');
             window.location.reload();
         }
     };
-
-    // 通用样式
-    const cardStyle = {
-        background: 'var(--bg-elevated)',
-        border: `1px solid var(--border-default)`,
-    };
-
-    const sectionTitleStyle = { color: 'var(--text-faint)' };
-    const labelStyle = { color: 'var(--text-primary)' };
-    const descStyle = { color: 'var(--text-muted)' };
 
     return (
         <div
@@ -69,8 +60,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div
                 className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
                 style={{
-                    height: '560px',
-                    maxHeight: '85vh',
+                    height: '600px',
+                    maxHeight: '90vh',
                     background: 'var(--bg-elevated)',
                     border: `1px solid var(--border-default)`
                 }}
@@ -84,10 +75,17 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         background: 'var(--bg-elevated)'
                     }}
                 >
-                    <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>设置</h2>
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-xl bg-[var(--scheme-primary)]/10 text-[var(--scheme-primary)]">
+                            <Settings className="w-5 h-5" />
+                        </div>
+                        <h2 className="text-xl font-black tracking-tight text-[var(--text-primary)]">
+                            {t('settings.title')}
+                        </h2>
+                    </div>
                     <button
                         onClick={onClose}
-                        className="p-2 -mr-2 rounded-full transition-colors"
+                        className="p-2 -mr-2 rounded-full transition-colors hover:bg-[var(--bg-subtle)]"
                         style={{ color: 'var(--text-muted)' }}
                     >
                         <X className="w-5 h-5" />
@@ -114,23 +112,16 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                     background: isActive
                                         ? (isDark ? 'transparent' : 'rgba(255, 255, 255, 0.9)')
                                         : 'transparent',
-                                    boxShadow: isActive && !isDark
-                                        ? '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)'
-                                        : 'none',
-                                    border: isActive && !isDark
-                                        ? '1px solid rgba(148, 163, 184, 0.2)'
-                                        : '1px solid transparent'
                                 }}
                             >
                                 <tab.icon className="w-4 h-4" />
                                 {tab.label}
-                                {/* 深色模式保留彩虹下划线 */}
-                                {isActive && isDark && (
+                                {isActive && (
                                     <div
                                         className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
                                         style={{
                                             background: 'linear-gradient(to right, #ec4899, #8b5cf6, #3b82f6)',
-                                            boxShadow: '0 -2px 8px rgba(139, 92, 246, 0.5)'
+                                            boxShadow: isDark ? '0 -2px 8px rgba(139, 92, 246, 0.5)' : 'none'
                                         }}
                                     />
                                 )}
@@ -139,7 +130,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     })}
                 </div>
 
-                {/* Content Area - Scrollable - 毛玻璃效果 */}
+                {/* Content Area - Scrollable */}
                 <div
                     className="flex-1 overflow-y-auto p-6"
                     style={{
@@ -150,274 +141,214 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         WebkitBackdropFilter: 'blur(20px)'
                     }}
                 >
-
-                    {/* ==================== 外观 TAB ==================== */}
+                    {/* Appearance Tab */}
                     {activeTab === 'appearance' && (
-                        <div className="space-y-4">
-                            {/* 主题 + 字体风格 - 一行两列 */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* 主题切换 */}
-                                <div>
-                                    <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>主题</h3>
-                                    <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: isDark ? 'transparent' : 'rgba(0,0,0,0.03)' }}>
-                                        {[
-                                            { id: 'light', label: '浅色', icon: Sun },
-                                            { id: 'dark', label: '深色', icon: Moon }
-                                        ].map((t) => (
-                                            <button
-                                                key={t.id}
-                                                onClick={() => updateSettings({ theme: t.id as 'light' | 'dark' })}
-                                                className={clsx(
-                                                    "flex-1 py-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5",
-                                                    isDark && settings.theme === t.id && "rainbow-highlight"
-                                                )}
-                                                style={{
-                                                    background: settings.theme === t.id
-                                                        ? (isDark ? 'rgba(0,0,0,0.4)' : 'white')
-                                                        : 'transparent',
-                                                    backdropFilter: settings.theme === t.id && isDark ? 'blur(8px)' : 'none',
-                                                    WebkitBackdropFilter: settings.theme === t.id && isDark ? 'blur(8px)' : 'none',
-                                                    border: isDark
-                                                        ? (settings.theme === t.id ? 'none' : '1px solid rgba(255,255,255,0.15)')
-                                                        : 'none',
-                                                    borderRadius: '8px',
-                                                    color: settings.theme === t.id ? (isDark ? 'white' : 'var(--text-primary)') : 'var(--text-muted)',
-                                                    boxShadow: settings.theme === t.id && !isDark ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                                }}
-                                            >
-                                                <t.icon className="w-3.5 h-3.5" />
-                                                <span>{t.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* 字体风格 */}
-                                <div>
-                                    <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>字体</h3>
-                                    <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: isDark ? 'transparent' : 'rgba(0,0,0,0.03)' }}>
-                                        {[
-                                            { id: 'serif', label: '宋体' },
-                                            { id: 'sans', label: '黑体' }
-                                        ].map((font) => (
-                                            <button
-                                                key={font.id}
-                                                onClick={() => updateSettings({ fontFamily: font.id as 'sans' | 'serif' })}
-                                                className={clsx(
-                                                    "flex-1 py-2 rounded-md text-xs font-medium transition-all",
-                                                    isDark && settings.fontFamily === font.id && "rainbow-highlight"
-                                                )}
-                                                style={{
-                                                    background: settings.fontFamily === font.id
-                                                        ? (isDark ? 'rgba(0,0,0,0.4)' : 'white')
-                                                        : 'transparent',
-                                                    backdropFilter: settings.fontFamily === font.id && isDark ? 'blur(8px)' : 'none',
-                                                    WebkitBackdropFilter: settings.fontFamily === font.id && isDark ? 'blur(8px)' : 'none',
-                                                    border: isDark
-                                                        ? (settings.fontFamily === font.id ? 'none' : '1px solid rgba(255,255,255,0.15)')
-                                                        : 'none',
-                                                    borderRadius: '8px',
-                                                    color: settings.fontFamily === font.id ? (isDark ? 'white' : 'var(--text-primary)') : 'var(--text-muted)',
-                                                    boxShadow: settings.fontFamily === font.id && !isDark ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                                }}
-                                            >
-                                                {font.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 字体大小 */}
-                            <div>
-                                <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>字体大小</h3>
-                                <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: isDark ? 'transparent' : 'rgba(0,0,0,0.03)' }}>
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <Palette className="w-4 h-4" />
+                                    {t('settings.appearance.theme')}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3">
                                     {[
-                                        { id: 'small', label: '小' },
-                                        { id: 'medium', label: '中' },
-                                        { id: 'large', label: '大' }
-                                    ].map((size) => (
+                                        { id: 'light', label: t('settings.appearance.theme_light'), icon: Sun },
+                                        { id: 'dark', label: t('settings.appearance.theme_dark'), icon: Moon }
+                                    ].map((opt) => (
                                         <button
-                                            key={size.id}
-                                            onClick={() => updateSettings({ fontSize: size.id as 'small' | 'medium' | 'large' })}
+                                            key={opt.id}
+                                            onClick={() => updateSettings({ theme: opt.id as any })}
                                             className={clsx(
-                                                "flex-1 py-2 rounded-md text-xs font-medium transition-all",
-                                                isDark && settings.fontSize === size.id && "rainbow-highlight"
+                                                "flex items-center justify-center gap-2 p-3 rounded-xl border transition-all",
+                                                settings.theme === opt.id ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)] text-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--text-faint)]"
                                             )}
-                                            style={{
-                                                background: settings.fontSize === size.id
-                                                    ? (isDark ? 'rgba(0,0,0,0.4)' : 'white')
-                                                    : 'transparent',
-                                                backdropFilter: settings.fontSize === size.id && isDark ? 'blur(8px)' : 'none',
-                                                WebkitBackdropFilter: settings.fontSize === size.id && isDark ? 'blur(8px)' : 'none',
-                                                border: isDark
-                                                    ? (settings.fontSize === size.id ? 'none' : '1px solid rgba(255,255,255,0.15)')
-                                                    : 'none',
-                                                borderRadius: '8px',
-                                                color: settings.fontSize === size.id ? (isDark ? 'white' : 'var(--text-primary)') : 'var(--text-muted)',
-                                                boxShadow: settings.fontSize === size.id && !isDark ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                            }}
                                         >
-                                            {size.label}
+                                            <opt.icon className="w-4 h-4" />
+                                            <span className="font-medium">{opt.label}</span>
                                         </button>
                                     ))}
                                 </div>
-                            </div>
+                            </section>
 
-                            {/* 配色方案 (Color Scheme) */}
-                            <div>
-                                <h3 className="text-xs font-medium mb-2" style={sectionTitleStyle}>配色风格</h3>
-                                <div className="grid grid-cols-2 gap-2">
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <Type className="w-4 h-4" />
+                                    {t('settings.appearance.font')}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => updateSettings({ fontFamily: 'sans' })}
+                                        className={clsx(
+                                            "p-3 rounded-xl border transition-all text-center",
+                                            settings.fontFamily === 'sans' ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)] text-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--text-faint)]"
+                                        )}
+                                    >
+                                        <span className="font-medium">{t('settings.appearance.font_sans')}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => updateSettings({ fontFamily: 'serif' })}
+                                        className={clsx(
+                                            "p-3 rounded-xl border transition-all text-center font-serif",
+                                            settings.fontFamily === 'serif' ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)] text-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--text-faint)]"
+                                        )}
+                                    >
+                                        <span className="font-medium">{t('settings.appearance.font_serif')}</span>
+                                    </button>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <div className="w-4 h-4 flex items-center justify-center text-[10px] border-2 border-current rounded-sm font-bold">A</div>
+                                    {t('settings.appearance.font_size')}
+                                </h3>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {(['small', 'medium', 'large'] as const).map((size) => (
+                                        <button
+                                            key={size}
+                                            onClick={() => updateSettings({ fontSize: size })}
+                                            className={clsx(
+                                                "p-3 rounded-xl border transition-all text-center capitalize",
+                                                settings.fontSize === size ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)] text-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--text-faint)]"
+                                            )}
+                                        >
+                                            <span className="font-medium">{t(`settings.appearance.size_${size}`)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <Palette className="w-4 h-4" />
+                                    {t('settings.appearance.color_scheme')}
+                                </h3>
+                                <div className="space-y-3">
                                     {[
-                                        { id: 'morandi', label: '莫兰迪', desc: '现代高级灰', colors: ['#9B8AA5', '#437E6F'] },
-                                        { id: 'wafu', label: '和风', desc: '传统日式色', colors: ['#c5e1a5', '#d66a6a'] },
-                                        { id: 'monochrome', label: '墨韵', desc: '纯粹黑白灰', colors: ['#374151', '#e5e7eb'] },
+                                        { id: 'morandi', color: 'bg-slate-500', label: t('settings.appearance.scheme_morandi'), desc: t('settings.appearance.scheme_morandi_desc') },
+                                        { id: 'wafu', color: 'bg-red-400', label: t('settings.appearance.scheme_wafu'), desc: t('settings.appearance.scheme_wafu_desc') },
+                                        { id: 'monochrome', color: 'bg-black', label: t('settings.appearance.scheme_mono'), desc: t('settings.appearance.scheme_mono_desc') },
                                     ].map((scheme) => (
                                         <button
                                             key={scheme.id}
-                                            onClick={() => updateSettings({ colorScheme: scheme.id as 'morandi' | 'wafu' | 'monochrome' })}
+                                            onClick={() => updateSettings({ colorScheme: scheme.id as any })}
                                             className={clsx(
-                                                "flex flex-col items-center justify-center p-3 rounded-xl border transition-all relative overflow-hidden",
-                                                settings.colorScheme === scheme.id ? "ring-2 ring-offset-1 ring-blue-500/50" : ""
+                                                "w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left",
+                                                settings.colorScheme === scheme.id ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] hover:border-[var(--text-faint)]"
                                             )}
-                                            style={{
-                                                background: settings.colorScheme === scheme.id
-                                                    ? (isDark ? 'rgba(255,255,255,0.1)' : 'white')
-                                                    : 'transparent',
-                                                borderColor: settings.colorScheme === scheme.id
-                                                    ? 'transparent'
-                                                    : 'var(--border-default)',
-                                            }}
                                         >
-                                            <div className="flex gap-1 mb-2">
-                                                {scheme.colors.map((c, i) => (
-                                                    <div key={i} className="w-4 h-4 rounded-full shadow-sm" style={{ background: c }} />
-                                                ))}
+                                            <div className={clsx("w-10 h-10 rounded-xl shadow-inner", scheme.color)} />
+                                            <div className="flex-1">
+                                                <div className={clsx("font-bold", settings.colorScheme === scheme.id ? "text-[var(--scheme-primary)]" : "text-[var(--text-primary)]")}>{scheme.label}</div>
+                                                <div className="text-xs text-[var(--text-muted)]">{scheme.desc}</div>
                                             </div>
-                                            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{scheme.label}</span>
-                                            <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{scheme.desc}</span>
-
-                                            {/* Selection Indicator */}
-                                            {settings.colorScheme === scheme.id && (
-                                                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500" />
-                                            )}
                                         </button>
                                     ))}
                                 </div>
-                            </div>
+                            </section>
                         </div>
                     )}
 
-                    {/* ==================== 高亮 TAB ==================== */}
+                    {/* Highlight Tab */}
                     {activeTab === 'highlight' && (
-                        <div className="space-y-6">
-                            {/* 词性配色 + 颜色高亮 */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* 词性配色风格 - 已移除，只有一种风格 */}
-
-                                {/* 词性颜色高亮 */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-xs font-medium" style={sectionTitleStyle}>颜色高亮</h3>
-                                        <div className="flex gap-1.5 text-[10px]">
-                                            <button onClick={() => updateSettings({ activeColorPOS: Object.values(PartOfSpeech) })} style={{ color: 'var(--text-primary)' }}>全选</button>
-                                            <span style={{ color: 'var(--text-faint)' }}>|</span>
-                                            <button onClick={() => updateSettings({ activeColorPOS: [] })} style={{ color: 'var(--text-muted)' }}>全关</button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        {[
-                                            { label: '名词', color: '#84A69D', members: [PartOfSpeech.NOUN, PartOfSpeech.PREFIX, PartOfSpeech.SUFFIX] },
-                                            { label: '动词', color: '#C8733A', members: [PartOfSpeech.VERB, PartOfSpeech.AUXILIARY] },
-                                            { label: '形容词/副词', color: '#B8956B', members: [PartOfSpeech.ADJECTIVE, PartOfSpeech.ADVERB] },
-                                            { label: '助词/连词', color: '#A67C7C', members: [PartOfSpeech.PARTICLE, PartOfSpeech.CONJUNCTION, PartOfSpeech.INTERJECTION, PartOfSpeech.OTHER, PartOfSpeech.SYMBOL] },
-                                        ].map((group) => {
-                                            const currentList = settings.activeColorPOS || [];
-                                            const isFullyActive = group.members.every(m => currentList.includes(m));
-                                            return (
-                                                <button
-                                                    key={group.label}
-                                                    onClick={() => {
-                                                        let newActive: PartOfSpeech[];
-                                                        if (isFullyActive) {
-                                                            newActive = currentList.filter(p => !group.members.includes(p));
-                                                        } else {
-                                                            newActive = [...new Set([...currentList, ...group.members])];
-                                                        }
-                                                        updateSettings({ activeColorPOS: newActive });
-                                                    }}
-                                                    className={clsx(
-                                                        "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-left",
-                                                        isDark && isFullyActive && "rainbow-highlight"
-                                                    )}
-                                                    style={{
-                                                        background: isFullyActive
-                                                            ? (isDark ? 'rgba(0,0,0,0.4)' : 'white')
-                                                            : 'transparent',
-                                                        backdropFilter: isFullyActive && isDark ? 'blur(8px)' : 'none',
-                                                        WebkitBackdropFilter: isFullyActive && isDark ? 'blur(8px)' : 'none',
-                                                        border: isDark
-                                                            ? (isFullyActive ? 'none' : '1px solid rgba(255,255,255,0.15)')
-                                                            : 'none',
-                                                        borderRadius: '8px',
-                                                        boxShadow: isFullyActive && !isDark ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                                    }}
-                                                >
-                                                    <div
-                                                        className="w-2.5 h-2.5 rounded-full transition-opacity"
-                                                        style={{ background: group.color, opacity: isFullyActive ? 1 : 0.3 }}
-                                                    />
-                                                    <span className="text-xs" style={{ color: isFullyActive ? (isDark ? 'white' : 'var(--text-primary)') : 'var(--text-muted)' }}>
-                                                        {group.label}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <section>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-bold text-[var(--text-muted)] flex items-center gap-2">
+                                        <Palette className="w-4 h-4" />
+                                        {t('settings.highlight.pos_colors')}
+                                    </h3>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => updateSettings({ activeColorPOS: Object.values(PartOfSpeech) })}
+                                            className="text-xs font-bold text-[var(--scheme-primary)] hover:opacity-70"
+                                        >
+                                            {t('settings.highlight.select_all')}
+                                        </button>
+                                        <button
+                                            onClick={() => updateSettings({ activeColorPOS: [] })}
+                                            className="text-xs font-bold text-[var(--text-muted)] hover:opacity-70"
+                                        >
+                                            {t('settings.highlight.clear_all')}
+                                        </button>
                                     </div>
                                 </div>
-                            </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { pos: PartOfSpeech.NOUN, label: t('settings.highlight.pos_noun'), color: '#84A69D' },
+                                        { pos: PartOfSpeech.VERB, label: t('settings.highlight.pos_verb'), color: '#C8733A' },
+                                        { pos: PartOfSpeech.ADJECTIVE, label: t('settings.highlight.pos_adj'), color: '#B8956B' },
+                                        { pos: PartOfSpeech.PARTICLE, label: t('settings.highlight.pos_particle'), color: '#A67C7C' },
+                                    ].map(({ pos, label, color }) => {
+                                        const isActive = settings.activeColorPOS.includes(pos);
+                                        return (
+                                            <button
+                                                key={pos}
+                                                onClick={() => {
+                                                    const newPos = isActive
+                                                        ? settings.activeColorPOS.filter(p => p !== pos)
+                                                        : [...settings.activeColorPOS, pos];
+                                                    updateSettings({ activeColorPOS: newPos });
+                                                }}
+                                                className={clsx(
+                                                    "flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
+                                                    isActive ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] hover:border-[var(--text-faint)]"
+                                                )}
+                                            >
+                                                <div
+                                                    className="w-3 h-3 rounded-full shrink-0"
+                                                    style={{ backgroundColor: color }}
+                                                />
+                                                <span className={clsx("text-sm font-bold", isActive ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]")}>
+                                                    {label}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </section>
 
-                            {/* 卡拉OK高亮 */}
-                            <section className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>卡拉OK模式</h3>
-                                <div className="space-y-3 rounded-xl p-1 shadow-sm" style={cardStyle}>
+                            <section className="pt-4 border-t border-[var(--border-default)]">
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-4 flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4" />
+                                    {t('settings.highlight.karaoke')}
+                                </h3>
+                                <div className="space-y-4">
                                     <SettingToggle
-                                        icon={<Sparkles className="w-4 h-4" style={{ color: 'var(--color-adjective)' }} />}
-                                        label="卡拉OK高亮"
-                                        description="朗读时高亮当前单词"
-                                        checked={settings.karaokeMode}
-                                        onChange={() => toggleSetting('karaokeMode')}
+                                        label={t('settings.highlight.karaoke_label')}
+                                        description={t('settings.highlight.karaoke_desc')}
+                                        enabled={settings.karaokeMode}
+                                        onChange={(v) => updateSettings({ karaokeMode: v })}
+                                        icon={Sparkles}
                                         isDark={isDark}
                                     />
-                                    {/* Karaoke Style Selector - Only show when karaokeMode is enabled */}
+
                                     {settings.karaokeMode && (
-                                        <div className="ml-6 mt-2 mb-2">
-                                            <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--text-muted)' }}>
-                                                动画风格
-                                            </label>
-                                            <div className="grid grid-cols-2 gap-1.5">
+                                        <div className="pl-11 space-y-3">
+                                            <div className="text-xs font-bold text-[var(--text-muted)] mb-2">{t('settings.highlight.anim_style')}</div>
+                                            <div className="grid grid-cols-1 gap-2">
                                                 {[
-                                                    { id: 'glow-only', label: '💫 只发光', desc: '柔和效果' },
-                                                    { id: 'glow-scale', label: '✨ 发光放大', desc: '经典效果' },
-                                                    { id: 'float-up', label: '🪶 轻盈上抬', desc: '优雅效果' },
-                                                    { id: 'sky-drop', label: '🌤️ 天降文字', desc: '依次掉落' },
-                                                    { id: 'border', label: '🔲 动态边框', desc: '词性配色外框' },
-                                                    { id: 'bounce', label: '🎵 弹性跳动', desc: '活泼效果' },
-                                                    { id: 'text-magnify', label: '🔍 文字放大', desc: '纯文字放大' },
-                                                    { id: 'underline', label: '📖 底部高亮', desc: '极简效果' },
+                                                    { id: 'glow-only', label: t('settings.highlight.style_glow'), desc: t('settings.highlight.style_glow_desc') },
+                                                    { id: 'glow-scale', label: t('settings.highlight.style_glow_scale'), desc: t('settings.highlight.style_glow_scale_desc') },
+                                                    { id: 'float-up', label: t('settings.highlight.style_float'), desc: t('settings.highlight.style_float_desc') },
+                                                    { id: 'sky-drop', label: t('settings.highlight.style_drop'), desc: t('settings.highlight.style_drop_desc') },
+                                                    { id: 'border', label: t('settings.highlight.style_border'), desc: t('settings.highlight.style_border_desc') },
+                                                    { id: 'bounce', label: t('settings.highlight.style_bounce'), desc: t('settings.highlight.style_bounce_desc') },
+                                                    { id: 'text-magnify', label: t('settings.highlight.style_magnify'), desc: t('settings.highlight.style_magnify_desc') },
+                                                    { id: 'underline', label: t('settings.highlight.style_underline'), desc: t('settings.highlight.style_underline_desc') },
                                                 ].map((style) => (
                                                     <button
                                                         key={style.id}
-                                                        onClick={() => updateSettings({ karaokeStyle: style.id as AppSettings['karaokeStyle'] })}
+                                                        onClick={() => updateSettings({ karaokeStyle: style.id as any })}
                                                         className={clsx(
-                                                            "px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left",
-                                                            settings.karaokeStyle === style.id
-                                                                ? (isDark ? "bg-white/10 text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20")
-                                                                : (isDark ? "bg-white/5 text-gray-400 hover:bg-white/10" : "bg-gray-50 text-gray-600 hover:bg-gray-100")
+                                                            "flex items-center justify-between p-3 rounded-xl border transition-all text-left",
+                                                            settings.karaokeStyle === style.id ? "bg-[var(--scheme-primary)]/5 border-[var(--scheme-primary)]/30 text-[var(--scheme-primary)]" : "bg-transparent border-transparent hover:bg-[var(--bg-subtle)]"
                                                         )}
                                                     >
-                                                        <div>{style.label}</div>
-                                                        <div className="text-[10px] opacity-60">{style.desc}</div>
+                                                        <div>
+                                                            <div className={clsx("text-sm font-bold", settings.karaokeStyle === style.id ? "text-[var(--scheme-primary)]" : "text-[var(--text-primary)]")}>{style.label}</div>
+                                                            <div className="text-[10px] text-[var(--text-muted)] opacity-70">{style.desc}</div>
+                                                        </div>
+                                                        {settings.karaokeStyle === style.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--scheme-primary)]" />}
                                                     </button>
                                                 ))}
                                             </div>
@@ -428,70 +359,66 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </div>
                     )}
 
-                    {/* ==================== 阅读 TAB ==================== */}
+                    {/* Reading Tab */}
                     {activeTab === 'reading' && (
-                        <div className="space-y-6">
-                            {/* 假名显示 */}
-                            <section className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>假名显示</h3>
-                                <div className="space-y-3 rounded-xl p-1 shadow-sm" style={cardStyle}>
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <BookOpen className="w-4 h-4" />
+                                    {t('settings.reading.title')}
+                                </h3>
+                                <div className="space-y-1 rounded-2xl border border-[var(--border-default)] overflow-hidden">
                                     <SettingToggle
-                                        icon={<Type className="w-4 h-4" style={{ color: 'var(--color-noun)' }} />}
-                                        label="显示假名 (Furigana)"
-                                        description="在汉字上方显示读音"
-                                        checked={settings.showFurigana}
-                                        onChange={() => toggleSetting('showFurigana')}
+                                        label={t('settings.reading.furigana')}
+                                        description={t('settings.reading.furigana_desc')}
+                                        enabled={settings.showFurigana}
+                                        onChange={(v) => updateSettings({ showFurigana: v })}
+                                        icon={Type}
                                         isDark={isDark}
                                     />
                                     <Divider />
                                     <SettingToggle
-                                        icon={<BookOpen className="w-4 h-4" style={{ color: '#f97316' }} />}
-                                        label="隐藏简单词假名"
-                                        description="自动隐藏 N5/N4 级别常用词的读音"
-                                        checked={settings.hideCommonFurigana}
-                                        onChange={() => toggleSetting('hideCommonFurigana')}
-                                        isDark={isDark}
-                                    />
-                                </div>
-                            </section>
-
-                            {/* 学习辅助 */}
-                            <section className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>学习辅助</h3>
-                                <div className="space-y-3 rounded-xl p-1 shadow-sm" style={cardStyle}>
-                                    <SettingToggle
-                                        icon={<Music className="w-4 h-4" style={{ color: 'var(--color-verb)' }} />}
-                                        label="显示声调 (Pitch Accent)"
-                                        description="使用音高线标注单词声调"
-                                        checked={settings.showPitchAccent}
-                                        onChange={() => toggleSetting('showPitchAccent')}
+                                        label={t('settings.reading.common_furigana')}
+                                        description={t('settings.reading.common_furigana_desc')}
+                                        enabled={settings.hideCommonFurigana}
+                                        onChange={(v) => updateSettings({ hideCommonFurigana: v })}
+                                        icon={BookOpen}
                                         isDark={isDark}
                                     />
                                     <Divider />
                                     <SettingToggle
-                                        icon={<Languages className="w-4 h-4" style={{ color: 'var(--color-adverb)' }} />}
-                                        label="显示中文翻译"
-                                        description="在每个句子下方显示翻译"
-                                        checked={settings.showTranslation}
-                                        onChange={() => toggleSetting('showTranslation')}
+                                        label={t('settings.reading.pitch_accent')}
+                                        description={t('settings.reading.pitch_accent_desc')}
+                                        enabled={settings.showPitchAccent}
+                                        onChange={(v) => updateSettings({ showPitchAccent: v })}
+                                        icon={Music}
                                         isDark={isDark}
                                     />
                                     <Divider />
                                     <SettingToggle
-                                        icon={settings.hideParticles ? <EyeOff className="w-4 h-4" style={{ color: 'var(--color-auxiliary)' }} /> : <Eye className="w-4 h-4" style={{ color: 'var(--text-faint)' }} />}
-                                        label="助词填空模式"
-                                        description="将助词隐藏为 ____ 进行练习"
-                                        checked={settings.hideParticles}
-                                        onChange={() => toggleSetting('hideParticles')}
+                                        label={t('settings.reading.translation')}
+                                        description={t('settings.reading.translation_desc')}
+                                        enabled={settings.showTranslation}
+                                        onChange={(v) => updateSettings({ showTranslation: v })}
+                                        icon={Languages}
                                         isDark={isDark}
                                     />
                                     <Divider />
                                     <SettingToggle
-                                        icon={<Speaker className="w-4 h-4" style={{ color: 'var(--color-verb)' }} />}
-                                        label="点击自动朗读"
-                                        description="点击单词卡片时自动播放读音"
-                                        checked={settings.autoReadOnClick || false}
-                                        onChange={() => toggleSetting('autoReadOnClick')}
+                                        label={t('settings.reading.particle_quiz')}
+                                        description={t('settings.reading.particle_quiz_desc')}
+                                        enabled={settings.hideParticles}
+                                        onChange={(v) => updateSettings({ hideParticles: v })}
+                                        icon={EyeOff}
+                                        isDark={isDark}
+                                    />
+                                    <Divider />
+                                    <SettingToggle
+                                        label={t('settings.reading.auto_read')}
+                                        description={t('settings.reading.auto_read_desc')}
+                                        enabled={settings.autoReadOnClick}
+                                        onChange={(v) => updateSettings({ autoReadOnClick: v })}
+                                        icon={Speaker}
                                         isDark={isDark}
                                     />
                                 </div>
@@ -499,229 +426,163 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </div>
                     )}
 
-                    {/* ==================== 语音 TAB ==================== */}
+                    {/* Audio Tab */}
                     {activeTab === 'audio' && (
-                        <div className="space-y-6">
-                            <section className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>TTS 引擎</h3>
-                                <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <section>
+                                <h3 className="text-sm font-bold text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                                    <Speaker className="w-4 h-4" />
+                                    {t('settings.audio.engine')}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3">
                                     {[
-                                        { id: 'native', label: '微软 Edge', icon: Globe },
-                                        { id: 'voicevox', label: 'VOICEVOX', icon: Server },
-                                    ].map((opt) => {
-                                        const isSelected = settings.ttsProvider === opt.id;
-                                        return (
-                                            <button
-                                                key={opt.id}
-                                                disabled={opt.id === 'voicevox'}
-                                                onClick={() => updateSettings({ ttsProvider: opt.id as 'native' | 'voicevox' })}
-                                                className={clsx(
-                                                    "flex flex-col items-center justify-center gap-2 py-4 rounded-xl text-sm font-medium transition-all",
-                                                    isDark && isSelected && "rainbow-highlight",
-                                                    opt.id === 'voicevox' && "opacity-40 cursor-not-allowed grayscale"
-                                                )}
-                                                style={{
-                                                    background: isSelected
-                                                        ? (isDark ? 'transparent' : 'var(--bg-elevated)')
-                                                        : (isDark ? 'var(--bg-muted)' : 'white'),
-                                                    border: isSelected && isDark ? 'none' : `1px solid ${isSelected ? 'var(--border-default)' : 'var(--border-default)'}`,
-                                                    color: isSelected ? (isDark ? 'white' : 'var(--text-primary)') : 'var(--text-muted)',
-                                                    boxShadow: !isDark && isSelected ? 'var(--shadow-md)' : 'none'
-                                                }}
-                                            >
-                                                <opt.icon className="w-6 h-6 mb-1 opacity-80" />
-                                                {opt.label}
-                                                {opt.id === 'voicevox' && <span className="text-[10px] font-bold opacity-60">(敬请期待)</span>}
-                                            </button>
-                                        );
-                                    })}
+                                        { id: 'native', label: t('settings.audio.engine_edge'), icon: Globe },
+                                        { id: 'voicevox', label: 'VOICEVOX', icon: Server, disabled: true }
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.id}
+                                            disabled={opt.disabled}
+                                            onClick={() => updateSettings({ ttsProvider: opt.id as any })}
+                                            className={clsx(
+                                                "flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all",
+                                                settings.ttsProvider === opt.id ? "bg-[var(--scheme-primary)]/10 border-[var(--scheme-primary)] text-[var(--scheme-primary)]" : "bg-transparent border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--text-faint)]",
+                                                opt.disabled && "opacity-40 cursor-not-allowed grayscale"
+                                            )}
+                                        >
+                                            <opt.icon className="w-6 h-6 mb-1" />
+                                            <span className="font-bold text-sm">{opt.label}</span>
+                                            {opt.disabled && <span className="text-[10px] opacity-60">({t('settings.audio.coming_soon')})</span>}
+                                        </button>
+                                    ))}
                                 </div>
                             </section>
 
-                            {settings.ttsProvider === 'native' && (
-                                <div className="space-y-2 p-4 rounded-xl shadow-sm" style={cardStyle}>
-                                    <label className="text-sm font-medium" style={labelStyle}>选择声音 (Edge)</label>
+                            <section className="space-y-4">
+                                <div className="p-4 rounded-xl border border-[var(--border-default)] space-y-3">
+                                    <label className="text-sm font-bold text-[var(--text-primary)] block">
+                                        {t('settings.audio.voice')}
+                                    </label>
                                     <select
-                                        className={clsx(
-                                            "w-full p-2 rounded-lg focus:outline-none appearance-none",
-                                            isDark && "rainbow-input"
-                                        )}
-                                        style={{
-                                            background: isDark ? 'var(--bg-subtle)' : 'var(--bg-subtle)',
-                                            border: isDark ? '1px solid transparent' : `1px solid var(--border-default)`,
-                                            color: 'var(--text-primary)',
-                                            colorScheme: isDark ? 'dark' : 'light'
-                                        }}
+                                        className="w-full p-2.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--scheme-primary)]"
                                         value={settings.nativeVoiceURI || ''}
                                         onChange={(e) => updateSettings({ nativeVoiceURI: e.target.value })}
                                     >
-                                        <option value="">默认 (Default)</option>
+                                        <option value="">{t('common.default')}</option>
                                         {availableVoices.map(v => (
                                             <option key={v.id} value={v.id}>{v.name}</option>
                                         ))}
                                     </select>
                                 </div>
-                            )}
 
-                            {settings.ttsProvider === 'voicevox' && (
-                                <div className="space-y-4 p-4 rounded-xl shadow-sm animate-in fade-in" style={cardStyle}>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium" style={labelStyle}>选择角色 (Speaker)</label>
-                                        <select
-                                            className={clsx(
-                                                "w-full p-2 rounded-lg focus:outline-none appearance-none",
-                                                isDark && "rainbow-input"
-                                            )}
-                                            style={{
-                                                background: isDark ? 'var(--bg-subtle)' : 'rgb(249, 250, 251)',
-                                                border: isDark ? '1px solid transparent' : `1px solid var(--border-default)`,
-                                                color: 'var(--text-primary)',
-                                                colorScheme: isDark ? 'dark' : 'light'
-                                            }}
-                                            value={settings.voicevoxSpeakerId || 3}
-                                            onChange={(e) => updateSettings({ voicevoxSpeakerId: parseInt(e.target.value) || 3 })}
-                                        >
-                                            {availableVoices.map(v => (
-                                                <option key={v.id} value={v.id}>{v.name}</option>
-                                            ))}
-                                        </select>
-                                        <p className="text-xs" style={descStyle}>VOICEVOX 引擎暂时不可用 (Coming Soon)</p>
+                                <div className="p-4 rounded-xl border border-[var(--border-default)] space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-bold text-[var(--text-primary)]">
+                                            {t('settings.audio.speed')}
+                                        </label>
+                                        <span className="text-sm font-black px-2 py-1 rounded-lg bg-[var(--scheme-primary)]/10 text-[var(--scheme-primary)]">
+                                            {settings.playbackSpeed}x
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="2.0"
+                                        step="0.1"
+                                        value={settings.playbackSpeed}
+                                        onChange={(e) => updateSettings({ playbackSpeed: parseFloat(e.target.value) })}
+                                        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-[var(--border-default)] accent-[var(--scheme-primary)]"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-bold">
+                                        <span>0.5x</span>
+                                        <span>1.0x</span>
+                                        <span>2.0x</span>
                                     </div>
                                 </div>
-                            )}
-
-                            <div className="p-4 rounded-xl shadow-sm space-y-3" style={cardStyle}>
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium" style={labelStyle}>语速</label>
-                                    <span
-                                        className="text-sm font-mono px-2 py-0.5 rounded"
-                                        style={{
-                                            background: isDark ? 'var(--accent-primary-light)' : 'rgb(239, 246, 255)',
-                                            color: isDark ? 'var(--accent-primary)' : 'var(--text-primary)'
-                                        }}
-                                    >
-                                        x{settings.playbackSpeed}
-                                    </span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0.5"
-                                    max="2.0"
-                                    step="0.1"
-                                    value={settings.playbackSpeed}
-                                    onChange={(e) => updateSettings({ playbackSpeed: parseFloat(e.target.value) })}
-                                    className={clsx(
-                                        "w-full h-2 rounded-lg cursor-pointer",
-                                        isDark ? "rainbow-range" : "appearance-none"
-                                    )}
-                                    style={{
-                                        background: isDark ? 'transparent' : 'rgb(241, 245, 249)',
-                                        accentColor: isDark ? undefined : 'var(--text-primary)'
-                                    }}
-                                />
-                                <div className="flex justify-between text-xs" style={descStyle}>
-                                    <span>0.5x</span>
-                                    <span>正常</span>
-                                    <span>2.0x</span>
-                                </div>
-                            </div>
+                            </section>
                         </div>
                     )}
 
-                    {/* ==================== 关于 TAB ==================== */}
+                    {/* About Tab */}
                     {activeTab === 'about' && (
-                        <div className="space-y-6">
-                            {/* 应用信息 */}
-                            <section className="text-center py-6">
-                                <div className="relative w-16 h-16 mx-auto mb-4">
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <section className="text-center py-4">
+                                <div className="relative w-20 h-20 mx-auto mb-4">
                                     <Image
                                         src="/logo.png"
                                         alt="YOMI Logo"
                                         fill
-                                        className="rounded-2xl shadow-lg object-contain"
+                                        className="rounded-3xl shadow-xl object-contain border-4 border-white dark:border-slate-800"
                                         unoptimized
                                     />
                                 </div>
-                                <h3 className="text-xl font-bold" style={labelStyle}>読み | YOMI</h3>
-                                <p className="text-sm mt-1" style={descStyle}>日语阅读学习助手</p>
-                                <p className="text-xs mt-2" style={sectionTitleStyle}>版本 0.1.0 (Early Access)</p>
+                                <h3 className="text-2xl font-black text-[var(--text-primary)]">読み | YOMI</h3>
+                                <p className="text-sm font-medium text-[var(--text-muted)] mt-1">{t('settings.about.description')}</p>
+                                <p className="text-[10px] font-bold text-[var(--text-faint)] mt-3">VERSION 0.1.0 EARLY ACCESS</p>
                             </section>
 
-                            {/* 快捷键 */}
-                            <section className="space-y-3">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2" style={sectionTitleStyle}>
-                                    <Keyboard className="w-3 h-3" />
-                                    快捷键
-                                </h3>
-                                <div className="rounded-xl p-4 shadow-sm space-y-2" style={cardStyle}>
-                                    <div className="flex justify-between text-sm">
-                                        <span style={descStyle}>播放/暂停</span>
-                                        <kbd
-                                            className="px-2 py-0.5 rounded text-xs font-mono"
-                                            style={{ background: isDark ? 'var(--bg-subtle)' : 'rgb(241, 245, 249)', color: 'var(--text-primary)' }}
+                            <div className="space-y-3">
+                                <section>
+                                    <h3 className="text-xs font-bold text-[var(--text-muted)] mb-2 flex items-center gap-2 px-1">
+                                        <Keyboard className="w-3.5 h-3.5" />
+                                        {t('settings.about.shortcuts')}
+                                    </h3>
+                                    <div className="p-4 rounded-2xl border border-[var(--border-default)] space-y-3 bg-[var(--bg-subtle)]/30">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-[var(--text-muted)] font-medium">{t('settings.about.shortcut_play')}</span>
+                                            <kbd className="px-2.5 py-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--text-primary)] font-mono text-xs shadow-sm">Space</kbd>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-[var(--text-muted)] font-medium">{t('settings.about.shortcut_word')}</span>
+                                            <span className="text-xs font-bold text-[var(--text-faint)]">{t('settings.about.click_detail')}</span>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xs font-bold text-[var(--text-muted)] mb-2 flex items-center gap-2 px-1">
+                                        <Globe className="w-3.5 h-3.5" />
+                                        {t('settings.about.links')}
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <a
+                                            href="https://github.com/nakamotosai/yomi"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-3 p-4 rounded-2xl border border-[var(--border-default)] hover:border-[var(--scheme-primary)] transition-all bg-[var(--bg-subtle)]/30 group"
                                         >
-                                            Space
-                                        </kbd>
+                                            <Github className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--scheme-primary)]" />
+                                            <span className="text-sm font-bold text-[var(--text-primary)]">GitHub</span>
+                                            <ExternalLink className="w-4 h-4 ml-auto text-[var(--text-faint)]" />
+                                        </a>
                                     </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span style={descStyle}>点击单词</span>
-                                        <span className="text-xs" style={sectionTitleStyle}>查看详情</span>
-                                    </div>
-                                </div>
-                            </section>
+                                </section>
+                            </div>
 
-                            {/* 链接 */}
-                            <section className="space-y-3">
-                                <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={sectionTitleStyle}>链接</h3>
-                                <div className="space-y-2">
-                                    <a
-                                        href="https://github.com"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-3 p-3 rounded-xl transition-colors"
-                                        style={cardStyle}
-                                    >
-                                        <Github className="w-5 h-5" style={descStyle} />
-                                        <span className="text-sm font-medium" style={labelStyle}>GitHub</span>
-                                        <ExternalLink className="w-4 h-4 ml-auto" style={sectionTitleStyle} />
-                                    </a>
-                                </div>
-                            </section>
-
-                            {/* 重置设置 */}
-                            <section className="pt-4" style={{ borderTop: `1px solid var(--border-default)` }}>
+                            <section className="pt-6">
                                 <button
                                     onClick={handleResetSettings}
-                                    className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-xl transition-colors"
-                                    style={{ color: '#ef4444' }}
+                                    className="w-full flex items-center justify-center gap-2 py-4 text-sm font-black rounded-2xl border border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all"
                                 >
                                     <RotateCcw className="w-4 h-4" />
-                                    重置所有设置
+                                    {t('settings.about.reset')}
                                 </button>
                             </section>
                         </div>
                     )}
                 </div>
 
-                {/* Footer - 毛玻璃效果 */}
+                {/* Footer */}
                 <div
-                    className="flex-none p-3 text-center text-xs"
+                    className="flex-none p-4 text-center text-[10px] font-black tracking-widest uppercase opacity-40"
                     style={{
-                        borderTop: isDark
-                            ? '1px solid rgba(255, 255, 255, 0.1)'
-                            : '1px solid rgba(148, 163, 184, 0.15)',
-                        background: isDark
-                            ? 'rgba(30, 30, 40, 0.9)'
-                            : 'rgba(255, 255, 255, 0.7)',
-                        backdropFilter: 'blur(16px)',
-                        WebkitBackdropFilter: 'blur(16px)',
+                        borderTop: `1px solid var(--border-default)`,
                         color: 'var(--text-faint)'
                     }}
                 >
                     読み | YOMI Early Access • v0.1.0
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
 
@@ -729,47 +590,40 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 // Sub-components
 // ------------------------------------------------------------------
 
-function SettingToggle({ icon, label, description, checked, onChange, isDark }: {
-    icon: React.ReactNode,
+function SettingToggle({ icon: Icon, label, description, enabled, onChange, isDark }: {
+    icon: React.ElementType,
     label: string,
     description: string,
-    checked: boolean,
-    onChange: () => void,
+    enabled: boolean,
+    onChange: (v: boolean) => void,
     isDark: boolean
 }) {
     return (
-        <label className="flex items-center justify-between p-3 cursor-pointer group rounded-lg transition-colors">
-            <div className="flex items-center gap-3">
-                <div
-                    className="p-2 rounded-lg transition-colors"
-                    style={{ background: 'var(--bg-subtle)' }}
-                >
-                    {icon}
+        <label className="flex items-center justify-between p-4 cursor-pointer group hover:bg-[var(--scheme-primary)]/5 transition-colors">
+            <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-muted)] group-hover:text-[var(--scheme-primary)] group-hover:bg-[var(--scheme-primary)]/10 transition-colors">
+                    <Icon className="w-5 h-5" />
                 </div>
                 <div>
-                    <div className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{label}</div>
-                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{description}</div>
+                    <div className="font-bold text-sm text-[var(--text-primary)]">{label}</div>
+                    <div className="text-xs text-[var(--text-muted)]">{description}</div>
                 </div>
             </div>
-            <div
-                className="w-11 h-6 rounded-full transition-all relative"
-                style={{
-                    background: checked
-                        ? (isDark ? 'linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6)' : 'var(--text-primary)')
-                        : (isDark ? 'var(--bg-subtle)' : 'var(--bg-subtle)'),
-                    boxShadow: checked && isDark ? '0 0 10px rgba(139, 92, 246, 0.4)' : 'none'
-                }}
-            >
-                <input type="checkbox" className="hidden" checked={checked} onChange={onChange} />
-                <div
-                    className="w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm"
-                    style={{ left: checked ? 'calc(100% - 1.25rem)' : '0.25rem' }}
-                />
+            <div className="relative inline-flex items-center" onClick={(e) => { e.preventDefault(); onChange(!enabled); }}>
+                <div className={clsx(
+                    "w-11 h-6 rounded-full transition-all duration-300",
+                    enabled ? (isDark ? "bg-[var(--scheme-primary)] shadow-[0_0_10px_rgba(139,92,246,0.5)]" : "bg-[var(--scheme-primary)]") : "bg-[var(--border-default)]"
+                )}>
+                    <div className={clsx(
+                        "absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-all duration-300 shadow-sm",
+                        enabled ? "translate-x-5" : "translate-x-0"
+                    )} />
+                </div>
             </div>
         </label>
     );
 }
 
 function Divider() {
-    return <div className="h-px mx-14" style={{ background: 'var(--border-default)' }} />;
+    return <div className="h-px w-full bg-[var(--border-default)] opacity-50" />;
 }

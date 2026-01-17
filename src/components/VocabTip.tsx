@@ -9,6 +9,7 @@ import { Star } from 'lucide-react';
 import { COLOR_THEMES } from '@/lib/colorThemes';
 import clsx from 'clsx';
 import { Collapsible } from './Collapsible';
+import { useI18n } from '@/lib/i18n';
 
 interface VocabTipProps {
     tokens: WordToken[];
@@ -76,71 +77,9 @@ function filterWorthyVocab(tokens: WordToken[]): WordToken[] {
     return worthy.slice(0, limit);
 }
 
-// 从词典定义中提取中文释义
-function extractChineseMeaning(definitions: string[]): string {
-    for (const def of definitions) {
-        const lines = def.split('\n');
-        for (const line of lines) {
-            const trimmed = line.trim();
-
-            if (!trimmed) continue;
-            if (/^【.*?】$/.test(trimmed)) continue;
-            if (/^[ぁ-んァ-ン・ー\s-]+\[/.test(trimmed)) continue;
-
-            if (trimmed.includes('。/')) {
-                const parts = trimmed.split('。/');
-                if (parts.length > 1) {
-                    let meaning = parts.slice(1).join('。/').trim();
-                    meaning = meaning.replace(/^[①-⑩◯\d.、]+/, '').trim();
-                    if (meaning.length > 30) meaning = meaning.slice(0, 30) + '…';
-                    if (meaning.length > 0) return meaning;
-                }
-            }
-        }
-    }
-    return '';
-}
-
-async function fetchShortMeaning(word: string): Promise<string> {
-    try {
-        // Try client-side loader first (Zero network latency if loaded)
-        // Optimization: Use the local dictionary index that InfoPanel is already loading
-        const { yomitanLoader } = await import('@/lib/dictionary/yomitanLoader');
-        const results = await yomitanLoader.search(word);
-
-        if (results && results.length > 0) {
-            const meaning = extractChineseMeaning(results[0].definitions);
-            if (meaning) return meaning;
-        }
-
-        // Only if local fails (e.g. not loaded yet), fallback to API (which is now optimized)
-        const res = await fetch(`/api/dictionary/yomitan?keyword=${encodeURIComponent(word)}`);
-        const data = await res.json();
-
-        if (data.success && data.results.length > 0) {
-            const meaning = extractChineseMeaning(data.results[0].definitions);
-            if (meaning) return meaning;
-        }
-
-        // Fallback: Google Translate
-        const translateRes = await fetch('/api/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: word, targetLang: 'zh-CN', sourceLang: 'ja' }),
-        });
-        const translateData = await translateRes.json();
-        if (translateData.translation) {
-            return translateData.translation;
-        }
-
-        return '暂无释义';
-    } catch {
-        return '暂无释义';
-    }
-}
-
 export default function VocabTip({ tokens }: VocabTipProps) {
     const { setSelectedToken, setCurrentSentence, settings, isSpeaking } = useAppStore();
+    const { t } = useI18n();
 
     // Dynamic Noun Color Logic:
     const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
@@ -168,7 +107,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                 <div className="shrink-0 w-12 flex items-center mt-1 select-none">
                     <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: nounBarColor }}></span>
                     <h3 className="text-base font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                        生词
+                        {t('info.vocab_tag')}
                     </h3>
                 </div>
 
@@ -209,7 +148,8 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                     key={idx}
                                     onClick={(e) => handleWordClick(token, e)}
                                     className={clsx(
-                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-colors border cursor-pointer hover:brightness-110",
+                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-all duration-200 border cursor-pointer",
+                                        "hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95",
                                         (!isWafu && settings.colorScheme !== 'monochrome') && bgClass,
                                         (!isWafu && settings.colorScheme !== 'monochrome') && textClass,
                                         (!isWafu && settings.colorScheme !== 'monochrome') && borderClass

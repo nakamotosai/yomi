@@ -5,18 +5,23 @@ import { Sparkles, Send } from 'lucide-react';
 import { useGeminiStore } from '@/store/useGeminiStore';
 import clsx from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
+import { useI18n } from '@/lib/i18n';
 
 export default function AIHeroInput() {
-    const [input, setInput] = useState('');
+    const [inputText, setInputText] = useState('');
+    const [isFocused, setIsFocused] = useState(false);
     const { setChatOpen, sendMessage, isChatGenerating } = useGeminiStore();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const { settings } = useAppStore();
+    const { settings, setCenterViewMode } = useAppStore();
+    const { t } = useI18n();
     const isWafu = settings.colorScheme === 'wafu';
 
+    const isActive = inputText.trim() || isFocused;
+
     const handleSend = async () => {
-        if (!input.trim()) return;
-        const text = input.trim();
-        setInput('');
+        if (!inputText.trim()) return;
+        const text = inputText.trim();
+        setInputText('');
 
         // Reset height
         if (textareaRef.current) {
@@ -24,6 +29,7 @@ export default function AIHeroInput() {
         }
 
         // Open chat first
+        setCenterViewMode('ai');
         setChatOpen(true);
 
         // Send message to AI
@@ -38,7 +44,7 @@ export default function AIHeroInput() {
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setInput(e.target.value);
+        setInputText(e.target.value);
         // Auto-resize
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -59,32 +65,50 @@ export default function AIHeroInput() {
 
             {/* Header / Greeting */}
             <div className="relative z-10 shrink-0">
-                <div className="flex items-center gap-2 mb-2 opacity-80" style={{ color: 'var(--text-muted)' }}>
+                <div className="flex items-center gap-2 mb-2 opacity-80 text-slate-500">
                     <Sparkles className="w-5 h-5" />
-                    <span className="text-sm font-bold tracking-wide">AI 先生</span>
+                    <span className="text-sm font-bold tracking-wide">{t('ai.teacher')}</span>
                 </div>
-                <h2 className="text-2xl font-black tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
-                    今日は<br />何を作りますか？
+                <h2 className="text-2xl font-black tracking-tight leading-tight text-slate-500">
+                    {t('ai.hero_greeting').split('\n').map((line, i) => (
+                        <React.Fragment key={i}>
+                            {line}
+                            {i === 0 && <br />}
+                        </React.Fragment>
+                    ))}
                 </h2>
-                <p className="text-sm mt-1 opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                    質問、翻訳、文法解説...
+                <p className="text-sm mt-1 opacity-60 text-slate-500">
+                    {t('ai.hero_placeholder')}
                 </p>
             </div>
 
             {/* Input Area */}
             <div className="flex-1 relative z-10 flex flex-col justify-end">
                 <div className={clsx(
-                    "w-full rounded-2xl p-2 transition-all duration-300 ring-1",
-                    "bg-[var(--bg-base)]/50 backdrop-blur-md", // Transparent base
-                    "focus-within:bg-[var(--bg-elevated)] focus-within:shadow-lg focus-within:ring-2",
-                    isWafu ? "ring-[#8b5e3c]/20 focus-within:ring-[#8b5e3c]/40" : "ring-[var(--border-default)] focus-within:ring-[var(--accent-primary)]/30"
-                )}>
+                    "w-full rounded-3xl transition-all duration-300 relative overflow-visible z-20 p-2",
+                    isActive
+                        ? "rainbow-highlight"
+                        : clsx(
+                            "bg-[var(--bg-base)]/50 backdrop-blur-md ring-1 shadow-sm",
+                            isWafu ? "ring-[#8b5e3c]/20" : "ring-[var(--border-default)]"
+                        ),
+                )}
+                    style={{
+                        border: 'none',
+                        background: isActive
+                            ? (settings.theme === 'dark' ? 'rgba(20, 20, 28, 0.6)' : '#fff')
+                            : 'transparent',
+                        boxShadow: isActive ? 'var(--rainbow-glow)' : 'none'
+                    }}
+                >
                     <textarea
                         ref={textareaRef}
-                        value={input}
-                        onChange={handleChange}
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="在此输入问题..."
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        placeholder={t('ai.input_placeholder')}
                         rows={1}
                         className="w-full bg-transparent !border-0 !outline-none !shadow-none !ring-0 focus:!ring-0 focus-visible:!ring-0 focus-visible:!outline-none text-base p-3 resize-none floating-scrollbar leading-relaxed placeholder:opacity-50 appearance-none"
                         style={{
@@ -99,17 +123,19 @@ export default function AIHeroInput() {
                     <div className="flex justify-end px-1 pb-1">
                         <button
                             onClick={handleSend}
-                            disabled={!input.trim()}
+                            disabled={!inputText.trim()}
                             className={clsx(
-                                "flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95",
-                                input.trim()
-                                    ? (isWafu ? "bg-[#8b5e3c] text-[#f4e4bc] shadow-md" : "bg-[var(--accent-primary)] text-white shadow-md")
-                                    : "bg-transparent opacity-50 cursor-not-allowed"
+                                "group flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl transition-all duration-300 font-bold text-sm",
+                                inputText.trim()
+                                    ? "rainbow-highlight text-[var(--accent-primary)] shadow-lg shadow-indigo-500/20 scale-100 hover:scale-[1.02] active:scale-95"
+                                    : "bg-[var(--bg-muted)] text-[var(--text-muted)] opacity-30 cursor-not-allowed"
                             )}
-                            style={!input.trim() ? { color: 'var(--text-muted)' } : {}}
                         >
-                            <span>发送</span>
-                            <Send className="w-4 h-4" />
+                            <span>{t('ai.send')}</span>
+                            <Send className={clsx(
+                                "w-4 h-4 transition-transform duration-300",
+                                inputText.trim() && "group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                            )} />
                         </button>
                     </div>
                 </div>

@@ -5,12 +5,14 @@ import { GraduationCap, X, Trash2, Star, ArrowLeft } from 'lucide-react';
 import { useGrammarStore, SavedGrammar } from '@/store/useGrammarStore';
 import { useAppStore } from '@/store/useAppStore';
 import { ttsManager } from '@/lib/tts/manager';
+import { useI18n } from '@/lib/i18n';
 
 export default function GrammarListView() {
     const { grammarList, removeGrammar, clearGrammar } = useGrammarStore();
     const setCenterViewMode = useAppStore(s => s.setCenterViewMode);
     const setSelectedGrammar = useAppStore(s => s.setSelectedGrammar);
     const settings = useAppStore(s => s.settings);
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
 
     const handleGrammarClick = (grammar: SavedGrammar) => {
@@ -33,26 +35,26 @@ export default function GrammarListView() {
                         <button
                             onClick={() => setCenterViewMode('reader')}
                             className="p-1.5 -ml-2 mr-1 hover:bg-[var(--hover-bg)] rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                            title="戻る"
+                            title={t('common.back')}
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <GraduationCap className="w-5 h-5" style={{ color: 'var(--scheme-grammar)' }} />
-                        <h2 className="text-lg font-bold text-[var(--text-primary)]">文法帳</h2>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('lists.grammar_title')}</h2>
                         <span className="text-sm text-[var(--text-muted)]">({grammarList.length})</span>
                     </div>
                     <div className="flex items-center gap-2">
                         {grammarList.length > 0 && (
                             <button
                                 onClick={() => {
-                                    if (confirm('全ての文法を削除しますか？')) {
+                                    if (confirm(t('lists.clear_confirm'))) {
                                         clearGrammar();
                                     }
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[var(--scheme-grammar)] hover:bg-[var(--scheme-grammar)]/10 rounded transition-colors"
                             >
                                 <Trash2 className="w-3 h-3" />
-                                全削除
+                                {t('common.clear_all')}
                             </button>
                         )}
                         <div className="w-px h-4 bg-[var(--border-default)] mx-1" />
@@ -72,8 +74,8 @@ export default function GrammarListView() {
                     {grammarList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center pb-20" style={{ color: 'var(--text-faint)' }}>
                             <GraduationCap className="w-12 h-12 mb-3 opacity-30" />
-                            <p className="text-sm font-medium">文法帳は空です</p>
-                            <p className="text-xs mt-1">文法をクリックして ⭐ を押すと保存されます</p>
+                            <p className="text-sm font-medium">{t('lists.grammar_empty')}</p>
+                            <p className="text-xs mt-1">{t('lists.grammar_hint')}</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-3 auto-rows-fr">
@@ -103,7 +105,7 @@ export default function GrammarListView() {
                                             removeGrammar(item.id);
                                         }}
                                         className="absolute top-2 right-2 w-6 h-6 bg-[var(--scheme-accent-bg)] text-[var(--scheme-accent)] rounded-md border border-[var(--scheme-accent)]/10 transition-all hover:bg-[var(--scheme-accent-bg)]/80 hover:scale-105 flex items-center justify-center opacity-0 group-hover:opacity-100"
-                                        title="取消收藏"
+                                        title={t('lists.unstar')}
                                     >
                                         <Star className="w-3.5 h-3.5 fill-current" />
                                     </button>

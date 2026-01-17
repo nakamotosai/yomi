@@ -4,12 +4,14 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnalysisResult, WordToken } from '@/types';
 import { analyzeJapaneseText } from '@/lib/nlp/analyzer';
 import { translateText } from '@/lib/translate';
+import { Volume2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import WordTokenComponent from './WordToken';
 import VocabTip from './VocabTip';
 import GrammarTip from './GrammarTip';
 import TranslationTip from './TranslationTip';
 import clsx from 'clsx';
+import { useI18n } from '@/lib/i18n';
 
 interface TextAnalyzerProps {
     text: string;
@@ -20,8 +22,11 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [translations, setTranslations] = useState<Map<string, string>>(new Map());
-    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist, playlist, currentSentenceIndex } = useAppStore();
+    const { selectedToken, setSelectedToken, setCurrentSentence, settings, isSpeaking, setIsSpeaking, setSpeakingTokenId, speakingTokenId, setIsMobileSheetOpen, setPlaylist, playlist, currentSentenceIndex, setFullTranslation, fullTranslation, cacheTranslation, translationCache } = useAppStore();
+    const { t } = useI18n();
     const isDark = settings.theme === 'dark';
+
+    // No debounce needed as input is manually triggered via "Analyze" button
 
 
     // Store token map for boundary events
@@ -53,11 +58,11 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         } catch (err: unknown) {
             if (!isMountedRef.current) return;
             console.error('Analysis error:', err);
-            const errorMessage = err instanceof Error ? err.message : '分析中にエラーが発生しました';
+            const errorMessage = err instanceof Error ? err.message : t('common.analyze_error');
             setError(errorMessage);
             setIsLoading(false);
         }
-    }, [text, setSelectedToken, setSpeakingTokenId]);
+    }, [text, setSelectedToken, setSpeakingTokenId, t]);
 
     // Manual Full Translation Trigger
     const handleFullTranslation = async () => {
@@ -77,6 +82,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     newMap.set(s.id, trans);
                 });
                 setTranslations(newMap);
+                setFullTranslation(translatedText);
             }
         } catch (e) {
             console.warn('Bulk translation failed', e);
@@ -192,55 +198,77 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         }
     }, [result, setPlaylist]);
 
-    // Unified debounced full translation trigger
+    // Unified full translation trigger (Immediate)
     useEffect(() => {
         if (!text.trim() || !result || result.sentences.length === 0) return;
         if (!isMountedRef.current) return;
 
-        const timer = setTimeout(async () => {
-            if (!isMountedRef.current) return;
-            console.log(`[TextAnalyzer] Fetching single full translation for entire text...`);
+        // 0. Check Cache First (Synchronous)
+        const currentCache = useAppStore.getState().translationCache;
+        const cachedParams = currentCache[text];
 
+        if (cachedParams) {
+            console.log(`[TextAnalyzer] Cache HIT for translation: Immediate apply.`);
+            const translatedLines = cachedParams.split('\n');
+            const idMap = new Map<string, string>();
+            result.sentences.forEach((s, idx) => {
+                const trans = translatedLines[idx] || '';
+                idMap.set(s.id, trans);
+            });
+            setTranslations(idMap);
+            setFullTranslation(cachedParams);
+            return;
+        }
+
+        // Cache Miss: Fetch Immediately (User manually triggered analysis)
+        console.log(`[TextAnalyzer] Fetching single full translation for entire text...`);
+
+        const fetchTranslation = async () => {
+            if (!isMountedRef.current) return;
             try {
-                const translatedText = await translateText(text);
-                if (isMountedRef.current && translatedText) {
-                    // Split by lines and map to IDs
-                    const translatedLines = translatedText.split('\n').filter(l => l.trim().length > 0);
-                    const newMap = new Map();
+                // Single request strategy with enforced line breaks for alignment
+                // 1. Join all sentences with newlines to force the API to maintain structure
+                const fullTextToTranslate = result.sentences.map(s => s.original).join('\n');
+
+                // 2. Single API Call
+                const translatedBlock = await translateText(fullTextToTranslate);
+
+                if (isMountedRef.current && translatedBlock) {
+                    // 3. Align & Split
+                    const translatedLines = translatedBlock.split('\n');
+
+                    const idMap = new Map<string, string>();
+                    const validParts: string[] = [];
+
                     result.sentences.forEach((s, idx) => {
-                        // Attempt to match line by line
                         const trans = translatedLines[idx] || '';
-                        newMap.set(s.id, trans);
+                        idMap.set(s.id, trans);
+                        validParts.push(trans);
                     });
-                    setTranslations(newMap);
+
+                    // 4. Update Cards
+                    setTranslations(idMap);
+
+                    // 5. Update Full Translation Panel & Cache
+                    const finalBlock = validParts.join('\n');
+
+                    cacheTranslation(text, finalBlock);
+                    setFullTranslation(finalBlock);
                 }
             } catch (e) {
                 console.warn('Full text translation failed', e);
             }
-        }, 1500); // Wait 1.5s after text stabilizes to call API once
+        };
 
-        return () => clearTimeout(timer);
-    }, [text, result]);
+        fetchTranslation();
 
-    // Analyze text with debounce
+    }, [text, result, setFullTranslation, cacheTranslation]);
+
+    // Analyze text immediately (Input is manually committed)
     useEffect(() => {
-        // Reset state immediately on typing
         if (text.trim()) {
-            // We don't want to clear result immediately to prevent flickering?
-            // User said: "Reset full translation... collapse panel".
-            // If we keep the old result but clear translations, it looks like "Not Translated".
-            // Let's clear translations immediately.
-            // Wrap in setTimeout to avoid "setState synchronously" warning from strict linter
-            setTimeout(() => {
-                setTranslations(new Map());
-            }, 0);
-        }
-
-        const timer = setTimeout(() => {
             analyze();
-        }, 1000); // 1s debounce
-
-        return () => clearTimeout(timer);
+        }
     }, [text, analyze]);
 
     const handleTokenSelect = (token: WordToken, sentenceOriginal?: string) => {
@@ -256,8 +284,8 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         return (
             <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-muted)' }}>
                 <div className="w-8 h-8 border-2 rounded-full animate-spin mb-4" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--accent-primary)' }} />
-                <p className="text-sm">解析中...</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>少々お待ちください</p>
+                <p className="text-sm">{t('common.loading')}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>{t('common.please_wait')}</p>
             </div>
         );
     }
@@ -266,7 +294,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
         return (
             <div className="text-center py-12 px-4">
                 <div className="rounded-lg p-4 inline-block" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                    <p className="font-medium">エラー</p>
+                    <p className="font-medium">{t('common.error')}</p>
                     <p className="text-sm mt-1">{error}</p>
                 </div>
                 <button
@@ -274,7 +302,7 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                     className="mt-4 px-4 py-2 rounded-lg text-sm transition-colors"
                     style={{ background: 'var(--accent-primary)', color: 'white' }}
                 >
-                    再試行
+                    {t('common.retry')}
                 </button>
             </div>
         );
@@ -426,21 +454,14 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                                             useAppStore.getState().setIsSpeaking(true);
                                         }}
                                         className={clsx(
-                                            "ml-2 w-7 h-7 flex items-center justify-center rounded-full transition-all self-end mb-1",
-                                            isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id
-                                                ? "bg-emerald-100 text-emerald-600 scale-110 shadow-sm"
-                                                : "hover:text-emerald-600 hover:bg-emerald-50"
+                                            "ml-2 p-1.5 flex items-center justify-center rounded-xl transition-all self-end mb-1",
+                                            "bg-[var(--bg-muted)] text-slate-500",
+                                            "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
+                                            isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id && "animate-pulse ring-2 ring-[var(--accent-primary)] ring-opacity-50"
                                         )}
-                                        style={{ color: isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id ? undefined : 'var(--text-muted)' }}
-                                        title="この文を再生"
+                                        title={t('common.play_sentence')}
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            {isSpeaking && playlist.length === 1 && playlist[0].id === sentence.id ? (
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                            ) : (
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                            )}
-                                        </svg>
+                                        <Volume2 className="w-5 h-5" />
                                     </button>
                                 </div>
                             </div>

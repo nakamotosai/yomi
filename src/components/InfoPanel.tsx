@@ -13,11 +13,12 @@ import { ttsManager } from '@/lib/tts/manager';
 import { COLOR_THEMES, POS_GLOW_COLORS } from '@/lib/colorThemes';
 
 import clsx from 'clsx';
-import { useGeminiStore } from '@/store/useGeminiStore'; // Import hook
+import { useGeminiStore } from '@/store/useGeminiStore';
 import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import { yomitanLoader, DictionaryResult as YomitanResult } from '@/lib/dictionary/yomitanLoader';
+import { useI18n } from '@/lib/i18n';
 
 
 interface JishoJapanese {
@@ -45,28 +46,54 @@ interface YomitanResponse {
 }
 
 // 翻译词性标签到对应语言
-const translatePOS = (pos: string[], lang: 'en' | 'jp' | 'zh'): string[] => {
+const translatePOS = (pos: string[], lang: string): string[] => {
     if (lang === 'en') return pos;
 
-    const posMap: Record<string, { jp: string; zh: string }> = {
-        'Noun': { jp: '名詞', zh: '名词' },
-        'Verb': { jp: '動詞', zh: '动词' },
-        'Adjective': { jp: '形容詞', zh: '形容词' },
-        'Adverb': { jp: '副詞', zh: '副词' },
-        'Particle': { jp: '助詞', zh: '助词' },
-        'Suru verb': { jp: 'する動詞', zh: 'する动词' },
-        'I-adjective': { jp: 'い形容詞', zh: 'い形容词' },
-        'Na-adjective': { jp: 'な形容詞', zh: 'な形容词' },
-        'Intransitive verb': { jp: '自動詞', zh: '自动词' },
-        'Transitive verb': { jp: '他動詞', zh: '他动词' },
-        'Expression': { jp: '表現', zh: '表达' },
-        'Wikipedia definition': { jp: 'Wikipedia定義', zh: 'Wikipedia定义' },
+    const posMap: Record<string, { ja: string; zh: string }> = {
+        'Prope Noun': { ja: '固有名詞', zh: '专有名词' },
+        'Proper noun': { ja: '固有名詞', zh: '专有名词' }, // Jisho uses lower case sometimes
+        'Proper Noun': { ja: '固有名詞', zh: '专有名词' },
+        '名词': { ja: '名詞', zh: '名词' },
+        '动词': { ja: '動詞', zh: '动词' },
+        '形容词': { ja: '形容詞', zh: '形容词' },
+        '副词': { ja: '副詞', zh: '副词' },
+        '助词': { ja: '助詞', zh: '助词' },
+        '助动词': { ja: '助動詞', zh: '助动词' },
+        '连词': { ja: '接続詞', zh: '连词' },
+        '感叹词': { ja: '感動詞', zh: '感叹词' },
+        '前缀': { ja: '接頭辞', zh: '前缀' },
+        '后缀': { ja: '接尾辞', zh: '后缀' },
+        'Noun': { ja: '名詞', zh: '名词' },
+        'Verb': { ja: '動詞', zh: '动词' },
+        'Adjective': { ja: '形容詞', zh: '形容词' },
+        'Adverb': { ja: '副詞', zh: '副词' },
+        'Particle': { ja: '助詞', zh: '助词' },
+        'Suru verb': { ja: 'する動詞', zh: 'する动词' },
+        'I-adjective': { ja: 'い形容詞', zh: 'い形容词' },
+        'Na-adjective': { ja: 'な形容詞', zh: 'な形容词' },
+        'Intransitive verb': { ja: '自動詞', zh: '自动词' },
+        'Transitive verb': { ja: '他動詞', zh: '他动词' },
+        'Auxiliary verb': { ja: '助動詞', zh: '助动词' },
+        'Auxiliary': { ja: '助動詞', zh: '助动词' },
+        'Conjunction': { ja: '接続詞', zh: '连词' },
+        'Interjection': { ja: '感動詞', zh: '感叹词' },
+        'Prefix': { ja: '接頭辞', zh: '前缀' },
+        'Suffix': { ja: '接尾辞', zh: '后缀' },
+        'Expression': { ja: '表現', zh: '表达' },
+        'Wikipedia definition': { ja: 'Wikipedia定義', zh: 'Wikipedia定义' },
     };
 
     return pos.map(p => {
+        // Try strict match first
+        for (const [key, value] of Object.entries(posMap)) {
+            if (p.toLowerCase() === key.toLowerCase()) {
+                return (lang as any) === 'ja' ? value.ja : value.zh;
+            }
+        }
+        // Fallback to fuzzy match
         for (const [key, value] of Object.entries(posMap)) {
             if (p.toLowerCase().includes(key.toLowerCase())) {
-                return lang === 'jp' ? value.jp : value.zh;
+                return (lang as any) === 'ja' ? value.ja : value.zh;
             }
         }
         return p;
@@ -133,6 +160,7 @@ function UnifiedExampleItem({
     isSpeaking?: boolean;
     replaceTilde?: boolean;
 }) {
+    const { t } = useI18n();
     return (
         <div className="mt-3 first:mt-1 mb-3 group animate-in slide-in-from-left-2 duration-300">
             {/* 日文行 */}
@@ -142,11 +170,12 @@ function UnifiedExampleItem({
                 <button
                     onClick={() => onSpeak(japanese)}
                     className={clsx(
-                        "p-0.5 rounded transition-all shrink-0 mt-[3px] opacity-70 group-hover:opacity-100",
+                        "p-1.5 rounded-xl transition-all shrink-0 mt-[1px]",
+                        "bg-[var(--bg-muted)] text-slate-500",
+                        "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
                         isSpeaking && "animate-pulse"
                     )}
-                    style={{ color: accentColor }}
-                    title="播放"
+                    title={t('common.play')}
                 >
                     <Volume2 className="w-4 h-4" />
                 </button>
@@ -171,6 +200,7 @@ function UnifiedExampleItem({
 }
 // 渲染富文本语法解释（Distilled Data）
 function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }: { grammar: GrammarEntry, grammarColor: string, onSpeak: (text: string) => void, isGlobalSpeaking: boolean }) {
+    const { t } = useI18n();
     const [explanation, setExplanation] = useState<string | null>(null);
     const [exampleTranslation, setExampleTranslation] = useState<string>('');
 
@@ -222,7 +252,7 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
             {/* 原日文释义 */}
             {grammar.meaning && (
                 <div className="pt-2 border-t border-dashed border-[var(--border-muted)] opacity-80 text-[14px] flex items-baseline gap-1">
-                    <strong className="font-bold shrink-0" style={{ color: grammarColor }}>日文义项:</strong>
+                    <strong className="font-bold shrink-0" style={{ color: grammarColor }}>{t('info.jp_meaning')}</strong>
                     <div className="flex-1">
                         <UnifiedHighlighter text={grammar.meaning} target={grammar.title} color={grammarColor} />
                     </div>
@@ -236,6 +266,8 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
 function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: GrammarEntry; settings: AppSettings; isGlobalSpeaking: boolean }) {
     const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
     const { generateText, streamedResults, cancelGeneration } = useGeminiStore();
+    const { aiExplanationCache, cacheAIExplanation } = useAppStore(); // Use store
+    const { t } = useI18n();
     const isSaved = isGrammarSaved(grammar.id);
     const grammarCacheKey = `grammar:${grammar.title}`;
     const streamedContent = streamedResults.get(grammarCacheKey);
@@ -303,18 +335,24 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
     const handleAIExplain = async (forceRefresh = false) => {
         if (isGenerating) return;
 
-        // Prepare context
-        // Ensure model is loaded
-
+        // 1. Check Local Cache First
+        if (!forceRefresh && aiExplanationCache[grammarCacheKey]) {
+            console.log('[Grammar AI] Local Cache Hit:', grammarCacheKey);
+            setAiResult(aiExplanationCache[grammarCacheKey]);
+            setAiResultTitle('AI老师在线解读');
+            setIsCached(true);
+            setIsAIExpanded(true);
+            return;
+        }
 
         setAiResult('');
-        setAiResultTitle('AI老师在线解读');
+        setAiResultTitle(t('ai.online_explanation'));
         setIsCached(false);
         setIsAIExpanded(true); // Auto-expand when manually triggering
 
         try {
             await richGrammarLoader.loadDictionary();
-            const refData = richGrammarLoader.getExplanation(grammar.title, grammar.reading) || grammar.meaning || "暂无解释";
+            const refData = richGrammarLoader.getExplanation(grammar.title, grammar.reading) || grammar.meaning || t('reader.trans_hint');
 
             // Debugging log
             console.log('[Grammar AI] Generating request for:', grammar.title);
@@ -365,9 +403,11 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
             );
 
             // Simple Validation: Are we still on the same grammar?
-            if (currentGrammarId === grammar.id) {
+            if (currentGrammarId === grammar.id && text) {
                 setAiResult(text);
                 setIsCached(fromCache);
+                // Save to Local Cache
+                cacheAIExplanation(grammarCacheKey, text);
             }
 
 
@@ -399,7 +439,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                 onClick={handleSpeakTitle}
                                 className="text-3xl font-black tracking-tight leading-none break-words w-full cursor-pointer hover:opacity-80 transition-opacity"
                                 style={{ color: grammarColor }}
-                                title="点击朗读"
+                                title={t('info.click_read')}
                             >
                                 {grammar.title
                                     .replace(/[（(][^）)]*[）)]/g, '')
@@ -428,24 +468,24 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                             <button
                                 onClick={handleSpeakTitle}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300",
-                                    "hover:bg-[var(--scheme-grammar)]/10 hover:text-[var(--scheme-grammar)]",
-                                    isSpeaking ? "bg-[var(--scheme-grammar)]/10 text-[var(--scheme-grammar)] scale-95" : "bg-transparent text-[var(--text-muted)]"
+                                    "p-2 rounded-xl transition-all duration-200",
+                                    "bg-[var(--bg-muted)] text-slate-500",
+                                    "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
+                                    isSpeaking && "animate-pulse"
                                 )}
-                                title="朗读"
-                                style={isSpeaking ? { color: grammarColor, backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)` } : {}}
+                                title={t('common.play')}
                             >
                                 <Volume2 className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={handleSaveGrammar}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300",
-                                    "hover:bg-[var(--scheme-grammar)]/10 hover:text-[var(--scheme-grammar)]",
-                                    isSaved ? "bg-[var(--scheme-grammar)]/10 text-[var(--scheme-grammar)]" : "bg-transparent text-[var(--text-muted)]"
+                                    "p-2 rounded-xl transition-all duration-200",
+                                    "bg-[var(--bg-muted)] text-[var(--text-secondary)]",
+                                    "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
+                                    isSaved && "!text-amber-400"
                                 )}
-                                title={isSaved ? "取消收藏" : "收藏"}
-                                style={isSaved ? { color: grammarColor, backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 90%)` } : {}}
+                                title={isSaved ? t('info.unsave_vocab') : t('info.save_vocab')}
                             >
                                 <Bookmark className={clsx("w-5 h-5", isSaved && "fill-current")} />
                             </button>
@@ -460,7 +500,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                 borderColor: `color-mix(in srgb, ${grammarColor}, transparent 70%)`,
                                 backgroundColor: `color-mix(in srgb, ${grammarColor}, transparent 96%)`
                             }}>
-                            文法
+                            {t('info.grammar_tag')}
                         </span>
                     </div>
                 </div>
@@ -483,12 +523,12 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                         {isGenerating ? (
                             <>
                                 <Sparkles className="w-4 h-4 animate-spin" />
-                                <span className="font-bold text-sm">AI正在解读中...</span>
+                                <span className="font-bold text-sm">{t('ai.explaining')}</span>
                             </>
                         ) : (
                             <>
                                 <Sparkles className="w-4 h-4" />
-                                <span className="font-bold text-sm">AI老师在线解读</span>
+                                <span className="font-bold text-sm">{t('ai.online_explanation')}</span>
                             </>
                         )}
                     </button>
@@ -515,9 +555,8 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                         e.stopPropagation();
                                         handleAIExplain(true);
                                     }}
-                                    className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                                    style={{ color: grammarColor }}
-                                    title="重新生成"
+                                    className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors"
+                                    title={t('info.regenerate')}
                                 >
                                     <RotateCw className="w-3.5 h-3.5" />
                                 </button>
@@ -595,7 +634,8 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 }
 
 export default function InfoPanel() {
-    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings, isSpeaking: isGlobalSpeaking, setSelectedToken, setSelectedGrammar, layout } = useAppStore();
+    const { t, language } = useI18n();
+    const { selectedToken: token, selectedGrammar: grammar, currentSentence, settings, isSpeaking: isGlobalSpeaking, setSelectedToken, setSelectedGrammar, layout, aiExplanationCache, cacheAIExplanation } = useAppStore();
     const [panelInput, setPanelInput] = useState('');
     const { addVocab, isWordSaved, removeVocab, vocabList } = useVocabStore();
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -636,28 +676,47 @@ export default function InfoPanel() {
         setSelectedToken(token);  // 2. 再设置新的 Token
     };
 
+    const [isPanelInputFocused, setIsPanelInputFocused] = useState(false);
+
     const renderLookupInput = () => {
+        const isActive = isPanelInputFocused;
         return (
-            <div className="shrink-0 p-4 pt-2 border-t border-[var(--border-default)] bg-transparent">
+            <div className="shrink-0 p-4 pt-2 border-t border-[var(--border-default)] bg-transparent overflow-visible">
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();
                         handlePanelLookup(panelInput);
                     }}
-                    className="flex items-center gap-2 p-1.5 pl-4 pr-1.5 rounded-xl bg-[var(--bg-muted)] transition-all focus-within:bg-[var(--bg-elevated)] focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/10"
+                    className={clsx(
+                        "flex items-center gap-2 p-1.5 pl-4 pr-1.5 rounded-xl transition-all duration-300 relative overflow-visible z-20",
+                        isActive
+                            ? "rainbow-highlight"
+                            : "bg-[var(--bg-muted)] ring-1 ring-[var(--border-muted)]"
+                    )}
+                    style={{
+                        border: 'none',
+                        boxShadow: isActive ? 'var(--rainbow-glow)' : 'none'
+                    }}
                 >
                     <input
                         type="text"
                         value={panelInput}
                         onChange={(e) => setPanelInput(e.target.value)}
-                        placeholder="输入单词或语法进行查询..."
+                        onFocus={() => setIsPanelInputFocused(true)}
+                        onBlur={() => setIsPanelInputFocused(false)}
+                        placeholder={t('info.lookup_placeholder')}
                         className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none !border-none !ring-0 !outline-none text-[15px] placeholder-[var(--text-muted)] text-[var(--text-primary)] min-w-0"
                     />
                     <button
                         type="submit"
                         disabled={!panelInput.trim()}
-                        className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
-                        style={{ color: 'var(--text-muted)' }}
+                        className={clsx(
+                            "p-2 rounded-lg transition-all flex items-center justify-center",
+                            panelInput.trim()
+                                ? "rainbow-highlight interactive-tag cursor-pointer active:scale-95 text-[var(--accent-primary)]"
+                                : "text-[var(--text-muted)] cursor-default opacity-50"
+                        )}
+                        title="Search"
                     >
                         <Search className="w-5 h-5" />
                     </button>
@@ -697,6 +756,17 @@ export default function InfoPanel() {
 
     const handleAIExplain = async (forceRefresh = false) => {
         if (isGenerating || !token) return;
+
+        // 1. Check Local Cache First
+        const currentCacheKey = `word:${token.surface}`;
+        if (!forceRefresh && aiExplanationCache[currentCacheKey]) {
+            console.log('[Word AI] Local Cache Hit:', currentCacheKey);
+            setAiResult(aiExplanationCache[currentCacheKey]);
+            setAiResultTitle('AI老师在线解读');
+            setIsCached(true);
+            setIsAIExpanded(true);
+            return;
+        }
 
         setAiResult('');
         setAiResultTitle('AI老师在线解读');
@@ -759,9 +829,11 @@ export default function InfoPanel() {
             );
 
             // Validation without Refs
-            if (token.surface === currentTokenSurface) {
+            if (token.surface === currentTokenSurface && text) {
                 setAiResult(text);
                 setIsCached(fromCache);
+                // Save to Local Cache
+                cacheAIExplanation(`word:${token.surface}`, text);
             }
 
         } catch (error: any) {
@@ -956,9 +1028,9 @@ export default function InfoPanel() {
             <div className="flex flex-col h-full" style={{ background: 'transparent' }}>
                 <div className="flex-1 overflow-hidden relative w-full h-full flex flex-col items-center justify-center p-8" style={{ color: 'var(--text-faint)' }}>
                     <BookOpen className="w-12 h-12 mb-3 stroke-1" />
-                    <p className="text-sm font-medium">単語を選択してください</p>
+                    <p className="text-sm font-medium">{t('info.select_word')}</p>
                     <p className="text-xs text-center mt-1 w-32">
-                        本文中の単語をクリックすると、ここに意味が表示されます
+                        {t('info.select_word_hint')}
                     </p>
                 </div>
                 {renderLookupInput()}
@@ -1003,7 +1075,7 @@ export default function InfoPanel() {
             const item = vocabList.find(v => v.word === token.surface && v.reading === effectiveReading);
             if (item) removeVocab(item.id);
         } else {
-            let meaning = '(意味が見つかりませんでした)';
+            let meaning = t('info.meaning_not_found');
             if (yomitanEntry) {
                 meaning = yomitanEntry.definitions.join('\n');
             } else if (dictEntry) {
@@ -1028,8 +1100,8 @@ export default function InfoPanel() {
             return (
                 <div className="flex flex-col items-center justify-center py-12 text-[var(--text-muted)] opacity-60 px-4 text-center">
                     <Search className="w-8 h-8 mb-2 opacity-50" />
-                    <p className="font-medium text-sm">未找到「{token.surface}」的释义</p>
-                    <p className="text-xs mt-1 opacity-70">请检查输入或尝试搜索其他形式</p>
+                    <p className="font-medium text-sm">{t('info.not_found_prefix')}{token.surface}{t('info.not_found_suffix')}</p>
+                    <p className="text-xs mt-1 opacity-70">{t('info.check_input_hint')}</p>
                 </div>
             );
         }
@@ -1123,7 +1195,7 @@ export default function InfoPanel() {
             return (
                 <div className="flex flex-col items-center justify-center h-24 text-gray-300">
                     <p className="text-xs">
-                        {dictLang === 'en' ? 'No definitions found.' : '定義が見つかりません'}
+                        {t('info.meaning_not_found')}
                     </p>
                 </div>
             );
@@ -1143,7 +1215,7 @@ export default function InfoPanel() {
                                 </p>
                                 {sense.pos.length > 0 && (
                                     <div className="mt-1.5 flex flex-wrap gap-1 opacity-70 hover:opacity-100 transition-opacity">
-                                        {translatePOS(sense.pos, dictLang).map((p, pi) => (
+                                        {translatePOS(sense.pos, language || dictLang).map((p, pi) => (
                                             <span key={pi} className="text-[9px] text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                                 {p}
                                             </span>
@@ -1212,7 +1284,7 @@ export default function InfoPanel() {
                             <div className="flex flex-wrap items-end gap-x-3 w-full">
                                 <h2
                                     onClick={handleSpeak}
-                                    title="点击朗读"
+                                    title={t('info.click_read')}
                                     className={clsx("text-3xl font-black tracking-tight leading-none break-words cursor-pointer hover:opacity-80 transition-opacity", (!isWafu && !isMonochrome) && textClass)} style={(isWafu || isMonochrome) ? { color: `var(--wafu-${posKey}-text)` } : {}}
                                 >
                                     {token.surface}
@@ -1242,14 +1314,14 @@ export default function InfoPanel() {
                                     };
                                     useAppStore.getState().setSelectedToken(baseToken);
                                 }}
-                                className="flex items-center gap-1 mt-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all hover:opacity-80 active:scale-[0.95]"
+                                className="flex items-center gap-1 mt-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full border interactive-tag"
                                 style={{
                                     backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 92%)`,
                                     borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
                                     color: wordAccentColor
                                 }}
                             >
-                                <span>原形: {baseForm}</span>
+                                <span>{t('lists.base_form')}: {baseForm}</span>
                                 <span className="opacity-60 ml-0.5">→</span>
                             </button>
                         )}
@@ -1262,31 +1334,26 @@ export default function InfoPanel() {
                             <button
                                 onClick={handleSpeak}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300 active:scale-95",
-                                    !isSpeaking && "text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5"
+                                    "p-2 rounded-xl transition-all duration-200",
+                                    "bg-[var(--bg-muted)] text-slate-500",
+                                    "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
+                                    isSpeaking && "animate-pulse"
                                 )}
-                                style={isSpeaking ? {
-                                    backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 85%)`,
-                                    color: wordAccentColor,
-                                    boxShadow: `0 0 10px ${wordAccentColor}33`
-                                } : {}}
-                                title="朗读"
+                                title={t('common.play')}
                             >
                                 <Volume2 className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={handleSaveVocab}
                                 className={clsx(
-                                    "p-2 rounded-lg transition-all duration-300 active:scale-95",
-                                    !isSaved && "text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5"
+                                    "p-2 rounded-xl transition-all duration-200",
+                                    "bg-[var(--bg-muted)] text-[var(--text-secondary)]",
+                                    "hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95",
+                                    isSaved && "!text-amber-400"
                                 )}
-                                style={isSaved ? {
-                                    backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 85%)`,
-                                    color: wordAccentColor,
-                                    boxShadow: `0 0 10px ${wordAccentColor}33`
-                                } : {}}
-                                title={isSaved ? "已收藏" : "收藏单词"}
+                                title={isSaved ? t('info.unsave_vocab') : t('info.save_vocab')}
                             >
+                                ```
                                 <Bookmark className={clsx("w-5 h-5", isSaved && "fill-current")} />
                             </button>
                         </div>
@@ -1301,7 +1368,7 @@ export default function InfoPanel() {
                                 borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
                                 backgroundColor: `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`
                             }}>
-                            {token.pos}
+                            {translatePOS([token.pos], language)[0]}
                         </span>
                     </div>
                 </div>
@@ -1314,7 +1381,7 @@ export default function InfoPanel() {
                 <div className="mb-4">
                     <button
                         onClick={handleAIToggle}
-                        className="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:opacity-80 active:scale-[0.98] border shadow-sm mb-4"
+                        className="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 border shadow-sm mb-4 interactive-tag"
                         style={{
                             backgroundColor: aiResultTitle === 'AI老师在线解读' ? `color-mix(in srgb, ${wordAccentColor}, transparent 92%)` : `color-mix(in srgb, ${wordAccentColor}, transparent 96%)`,
                             borderColor: `color-mix(in srgb, ${wordAccentColor}, transparent 70%)`,
@@ -1325,12 +1392,12 @@ export default function InfoPanel() {
                         {isGenerating ? (
                             <>
                                 <Sparkles className="w-4 h-4 animate-spin" />
-                                <span className="font-bold text-sm">AI正在解读中...</span>
+                                <span className="font-bold text-sm">{t('ai.explaining')}</span>
                             </>
                         ) : (
                             <>
                                 <Sparkles className="w-4 h-4" />
-                                <span className="font-bold text-sm">AI老师在线解读</span>
+                                <span className="font-bold text-sm">{t('ai.online_explanation')}</span>
                             </>
                         )}
                     </button>
@@ -1358,16 +1425,15 @@ export default function InfoPanel() {
                                         e.stopPropagation();
                                         handleAIExplain(true);
                                     }}
-                                    className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                                    style={{ color: wordAccentColor }}
-                                    title="重新生成"
+                                    className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors"
+                                    title={t('info.regenerate')}
                                 >
                                     <RotateCw className="w-3.5 h-3.5" />
                                 </button>
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                                 {(() => {
-                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中...";
+                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || t('common.loading');
                                     const lines = displayText.split('\n');
                                     return lines.map((line, lineIdx) => {
                                         const trimmed = line.trim();
