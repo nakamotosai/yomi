@@ -24,24 +24,24 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#498B74]/20 dark:border-[#498B74]/20'
         },
         [PartOfSpeech.PRONOUN]: {
-            bg: 'bg-[#498B74]/15 dark:bg-[#498B74]/12',
-            text: 'text-[#498B74] dark:text-[#72C4A5]',
-            border: 'border-[#498B74]/20 dark:border-[#498B74]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
         [PartOfSpeech.PROPER_NOUN]: {
-            bg: 'bg-[#498B74]/15 dark:bg-[#498B74]/12',
-            text: 'text-[#498B74] dark:text-[#72C4A5]',
-            border: 'border-[#498B74]/20 dark:border-[#498B74]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
         [PartOfSpeech.PREFIX]: {
-            bg: 'bg-[#498B74]/15 dark:bg-[#498B74]/12',
-            text: 'text-[#498B74] dark:text-[#72C4A5]',
-            border: 'border-[#498B74]/20 dark:border-[#498B74]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
         [PartOfSpeech.SUFFIX]: {
-            bg: 'bg-[#498B74]/15 dark:bg-[#498B74]/12',
-            text: 'text-[#498B74] dark:text-[#72C4A5]',
-            border: 'border-[#498B74]/20 dark:border-[#498B74]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
 
         // --- Group 2: 动词组 (Verb Group) - Orange Series ---
@@ -52,9 +52,9 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#C8733A]/20 dark:border-[#C8733A]/20'
         },
         [PartOfSpeech.AUXILIARY]: {
-            bg: 'bg-[#C8733A]/15 dark:bg-[#C8733A]/12',
-            text: 'text-[#C8733A] dark:text-[#FFB570]',
-            border: 'border-[#C8733A]/20 dark:border-[#C8733A]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
 
         // --- Group 3: 修饰组 (Adj/Adv Group) - Red Series ---
@@ -65,9 +65,9 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#B7282E]/18 dark:border-[#B7282E]/20'
         },
         [PartOfSpeech.ADVERB]: {
-            bg: 'bg-[#B7282E]/12 dark:bg-[#B7282E]/12',
-            text: 'text-[#B7282E] dark:text-[#E05A60]',
-            border: 'border-[#B7282E]/18 dark:border-[#B7282E]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
 
         // --- Group 4: 虚词组 (Particle/Conj Group) - Purple Series ---
@@ -78,27 +78,27 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#89729E]/20 dark:border-[#89729E]/20'
         },
         [PartOfSpeech.CONJUNCTION]: {
-            bg: 'bg-[#89729E]/15 dark:bg-[#89729E]/12',
-            text: 'text-[#89729E] dark:text-[#B7A6C6]',
-            border: 'border-[#89729E]/20 dark:border-[#89729E]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
         [PartOfSpeech.INTERJECTION]: {
-            bg: 'bg-[#89729E]/15 dark:bg-[#89729E]/12',
-            text: 'text-[#89729E] dark:text-[#B7A6C6]',
-            border: 'border-[#89729E]/20 dark:border-[#89729E]/20'
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
+            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
 
         // --- Group 5: 其他组 (Other Group) - Blue Series ---
         // Includes: Symbol, Other
         [PartOfSpeech.SYMBOL]: {
-            bg: 'bg-transparent',
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
             text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
-            border: 'border-transparent' // Symbols usually don't need border
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
         [PartOfSpeech.OTHER]: {
-            bg: 'bg-[#2D6D8B]/12 dark:bg-[#2D6D8B]/15',
+            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
             text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
-            border: 'border-[#2D6D8B]/20 dark:border-[#2D6D8B]/20'
+            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
         },
     }
 };
@@ -133,27 +133,21 @@ export const COLOR_THEMES: Record<ThemeId, ColorScheme> = {
 // Glow colors for selection highlight (extracted from theme colors)
 // Updated to match New Morandi (Green, Orange, Red, Purple, Blue)
 export const POS_GLOW_COLORS: Record<PartOfSpeech, string> = {
-    // Group 1: Noun (Green)
+    // Major POS
     [PartOfSpeech.NOUN]: '#498B74',
-    [PartOfSpeech.PRONOUN]: '#498B74',
-    [PartOfSpeech.PROPER_NOUN]: '#498B74',
-    [PartOfSpeech.PREFIX]: '#498B74',
-    [PartOfSpeech.SUFFIX]: '#498B74',
-
-    // Group 2: Verb (Orange)
     [PartOfSpeech.VERB]: '#C8733A',
-    [PartOfSpeech.AUXILIARY]: '#C8733A',
-
-    // Group 3: Adj/Adv (Red)
     [PartOfSpeech.ADJECTIVE]: '#B7282E',
-    [PartOfSpeech.ADVERB]: '#B7282E',
-
-    // Group 4: Particle/Conj (Purple)
     [PartOfSpeech.PARTICLE]: '#89729E',
-    [PartOfSpeech.CONJUNCTION]: '#89729E',
-    [PartOfSpeech.INTERJECTION]: '#89729E',
 
-    // Group 5: Other (Blue)
+    // All others map to Grammar Blue
+    [PartOfSpeech.PRONOUN]: '#2D6D8B',
+    [PartOfSpeech.PROPER_NOUN]: '#2D6D8B',
+    [PartOfSpeech.PREFIX]: '#2D6D8B',
+    [PartOfSpeech.SUFFIX]: '#2D6D8B',
+    [PartOfSpeech.AUXILIARY]: '#2D6D8B',
+    [PartOfSpeech.ADVERB]: '#2D6D8B',
+    [PartOfSpeech.CONJUNCTION]: '#2D6D8B',
+    [PartOfSpeech.INTERJECTION]: '#2D6D8B',
     [PartOfSpeech.SYMBOL]: '#2D6D8B',
     [PartOfSpeech.OTHER]: '#2D6D8B',
 };

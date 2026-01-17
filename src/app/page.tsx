@@ -37,17 +37,23 @@ import AIHeroInput from '@/components/AIHeroInput';
 import RefactoredInput from '@/components/RefactoredInput';
 import InfoPanel from '@/components/InfoPanel';
 
+
 import HistoryPanel from '@/components/HistoryPanel';
+
 import VocabListView from '@/components/VocabListView';
 import GrammarListView from '@/components/GrammarListView';
 import ResizableLayout from '@/components/ResizableLayout';
 import ResizableVerticalSection from '@/components/ResizableVerticalSection';
+
 import MobileNavigator from '@/components/MobileNavigator';
 import ReaderHeader from '@/components/ReaderHeader'; // Import ReaderHeader
 import { Collapsible } from '@/components/Collapsible';
 import { useI18n } from '@/lib/i18n';
 
+import { useKanaProgressStore } from '@/store/useKanaProgressStore'; // Add Import
+
 // Dynamic imports
+
 const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
   ssr: false,
   loading: () => (
@@ -59,13 +65,12 @@ const TextAnalyzer = dynamic(() => import('@/components/TextAnalyzer'), {
 });
 
 const GlobalAudioPlayer = dynamic(() => import('@/components/GlobalAudioPlayer'), { ssr: false });
-
-
-const KanaModeView = dynamic(() => import('@/components/KanaModeView'), {
-  loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Kana Mode...</div>,
+const KanaCourseView = dynamic(() => import('@/components/kana/KanaCourseView'), {
+  loading: () => <div className="h-96 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>Loading Course...</div>,
 });
 
 // const KanaSidePanel = dynamic(() => import('@/components/kana/KanaSidePanel'), { ssr: false });
+
 
 const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: () => void }) => {
   const {
@@ -87,7 +92,8 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
     toggleTranslation,
     hasAutoClosedTranslation,
     setHasAutoClosedTranslation,
-    setShowTranslation
+    setShowTranslation,
+    isSettingsOpen
   } = useAppStore();
 
   const [isMounted, setIsMounted] = useState(false);
@@ -192,6 +198,13 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
     };
 
     const onMouseMove = (e: MouseEvent) => {
+      // Fix: Don't trigger proximity when settings or other overlays are open
+      const isModalActive = document.querySelector('[role="dialog"]') || isSettingsOpen;
+      if (isModalActive) {
+        setIsProximity(false);
+        return;
+      }
+
       const rect = el.getBoundingClientRect();
       if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
         const dist = rect.right - e.clientX;
@@ -222,7 +235,7 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
       }}
     >
       {analyzedText.trim() && appMode === 'reader' && centerViewMode === 'reader' && (
-        <div className="shrink-0 z-10 px-0 pt-0 pb-4">
+        <div className="w-full z-10 pt-0 pb-4">
           <div className="flex flex-col relative transition-all duration-300 ease-spring">
             {/* Header Section (Refactored to ReaderHeader) */}
             <ReaderHeader
@@ -336,10 +349,13 @@ const CenterColumn = ({ onPlayAll, onStop }: { onPlayAll: () => void, onStop: ()
                   </div>
                 )
               ) : (
-                <KanaModeView />
+                <KanaCourseView />
               )}
+
+
               <div className="h-20" /> {/* Bottom spacer */}
             </div>
+
           </div>
         )
       }
@@ -370,6 +386,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   const settings = useAppStore(s => s.settings);
   const uiLanguage = useAppStore(s => s.uiLanguage);
   const setUiLanguage = useAppStore(s => s.setUiLanguage);
+  const isSettingsOpen = useAppStore(s => s.isSettingsOpen);
+  const setIsSettingsOpen = useAppStore(s => s.setIsSettingsOpen);
 
   const { t } = useI18n();
 
@@ -383,6 +401,11 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Sync settings modal state to global store
+  useEffect(() => {
+    setIsSettingsOpen(showSettings);
+  }, [showSettings, setIsSettingsOpen]);
 
   // Removed InputModal sync logic as it is now inline
   /*
@@ -542,6 +565,13 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
     };
 
     const onMouseMove = (e: MouseEvent) => {
+      // Fix: Don't trigger proximity when settings or other overlays are open
+      const isModalActive = document.querySelector('[role="dialog"]') || isSettingsOpen;
+      if (isModalActive) {
+        setIsProximity(false);
+        return;
+      }
+
       const rect = el.getBoundingClientRect();
       // Check if mouse is inside the vertical range of container
       if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
@@ -684,13 +714,15 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
               </div>
             )
           ) : (
-            <KanaModeView />
+            <KanaCourseView />
           )}
           <div className="h-20" /> {/* Bottom spacer */}
         </div>
+
       </div>
     </div>
   );
+
 
   return (
     <main
@@ -710,82 +742,69 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
         <ResizableLayout
           leftContent={
             <div className="h-full pt-4 pl-4 pb-4 pr-2"> {/* Padding for floating effect */}
-              {/* Refactored to 2 separate resize sections (Nav vs InputGroup) to keep AIChatInput fixed */}
-              <ResizableVerticalSection
-                mode="top-fixed"
-                // Increase top height allocation for the Hero AI Card
-                initialTopHeight={layout.leftTopHeight}
-                onTopHeightChange={(h: number) => setLayout({ ...layout, leftTopHeight: h })}
-                minTopHeight={250}
-                gap={16}
+              {/* Unified Stream Layout Container */}
+              <div className="h-full flex flex-col rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden relative">
+                {/* Background Pattern for Card */}
+                <div className="absolute inset-0 z-[-1] opacity-30 pointer-events-none"
+                  style={{
+                    backgroundImage: isDark
+                      ? 'radial-gradient(circle at 10% 10%, rgba(255,255,255,0.03) 1px, transparent 1px)'
+                      : 'radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                    backgroundSize: '16px 16px'
+                  }}
+                />
 
-                topContent={
-                  /* Hero AI Card Section */
-                  <div className="h-full flex flex-col rounded-2xl bg-transparent backdrop-blur-xl border border-[var(--border-muted)] shadow-sm overflow-hidden relative">
-                    {/* Background Pattern for Card */}
-                    <div className="absolute inset-0 z-[-1] opacity-30 pointer-events-none"
-                      style={{
-                        backgroundImage: isDark
-                          ? 'radial-gradient(circle at 10% 10%, rgba(255,255,255,0.03) 1px, transparent 1px)'
-                          : 'radial-gradient(circle at 10% 10%, rgba(0,0,0,0.03) 1px, transparent 1px)',
-                        backgroundSize: '16px 16px'
-                      }}
-                    />
-
-                    {/* Logo Area - Compact */}
-                    <div
-                      className="h-14 hidden md:flex items-center pl-6 pr-2 shrink-0 bg-transparent border-none z-20"
-                    >
-                      <div className="relative w-8 h-8 mr-3">
-                        <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
-                      </div>
-                      <h1 className="text-[16px] font-bold tracking-tight" style={{ color: settings.colorScheme === 'wafu' ? '#3c3633' : 'var(--text-secondary)' }}>
-                        読み | YOMI
-                      </h1>
-                      <div className="ml-auto flex items-center gap-1">
-                        <button
-                          onClick={() => setUiLanguage(uiLanguage === 'zh' ? 'ja' : 'zh')}
-                          className="p-2 rounded-xl transition-all bg-transparent text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer flex items-center gap-1.5"
-                          title={t('header.title_switch_lang')}
-                        >
-                          <Languages className="w-4 h-4" />
-                          <span className="text-[11px] font-black uppercase tracking-widest opacity-80">{uiLanguage === 'zh' ? 'JA' : 'ZH'}</span>
-                        </button>
-                        <button
-                          onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
-                          className="p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
-                          title="設定"
-                        >
-                          <Settings className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* AI Hero Input - Keep as fixed entry point */}
-                    <div className="flex-1 min-h-0 w-full relative">
-                      <AIHeroInput />
-                    </div>
+                {/* Logo Area - Compact */}
+                <div
+                  className="h-14 hidden md:flex items-center pl-6 pr-2 shrink-0 bg-transparent border-none z-20"
+                >
+                  <div className="relative w-8 h-8 mr-3">
+                    <Image src="/logo.png" alt="Logo" fill className="object-contain dark:brightness-[0.7]" unoptimized />
                   </div>
-                }
+                  <h1 className="text-[16px] font-bold tracking-tight" style={{ color: 'var(--accent-primary)' }}>
+                    読み | YOMI
+                  </h1>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button
+                      onClick={() => setUiLanguage(uiLanguage === 'zh' ? 'ja' : 'zh')}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--accent-primary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
+                      title={t('header.title_switch_lang')}
+                    >
+                      <span className="text-[14px] font-bold opacity-90">{uiLanguage === 'zh' ? '日' : '中'}</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowSettings(true); setIsMobileDrawerOpen(false); }}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--accent-primary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
+                      title="设定"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
 
-                bottomContent={
-                  /* Navigation Grid Section (Moved Down) */
-                  <div className="h-full flex flex-col gap-4 overflow-y-auto">
+                {/* Content Area - Scrollable */}
+                <div className="flex-1 overflow-y-auto min-h-0 w-full relative custom-scrollbar">
+
+                  {/* Navigation Grid Section - Flowing First */}
+                  <div className="flex flex-col gap-4 px-2 pb-6">
 
                     {/* Navigation Buttons Grid - Expanded */}
                     <div className="p-1">
-                      {/* Navigation Row 1 */}
-                      <div className="grid grid-cols-2 gap-4 mb-4 overflow-visible p-1">
+                      {/* Row 1: Reading Mode (Full Width) */}
+                      <div className="p-1 pt-0 pb-4">
                         <button
+                          key="nav-btn-reader"
                           onClick={() => {
+                            console.log('Switching to Reader Mode');
                             setAppMode('reader');
                             setCenterViewMode('reader');
                             setIsMobileDrawerOpen(false);
                             useGeminiStore.getState().setChatOpen(false);
                           }}
+
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
-                            !isChatOpen && appMode === 'reader' && centerViewMode === 'reader'
+                            "w-full flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
+                            appMode === 'reader' && centerViewMode === 'reader'
                               ? "rainbow-highlight"
                               : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
@@ -793,36 +812,81 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                           <BookOpen
                             className={clsx(
                               "w-6 h-6 mb-2 transition-colors",
-                              !isChatOpen && appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                              appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
                             )}
                           />
-                          <span className="font-bold text-[14px] text-slate-500">
+                          <span className={clsx(
+                            "font-bold text-[14px]",
+                            appMode === 'reader' && centerViewMode === 'reader' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                          )}>
                             {t('nav.reader_mode')}
                           </span>
                         </button>
+                      </div>
 
-                        {/* AI Chat Mode */}
+                      {/* Row 2: AI Chat (Full Width) */}
+                      <div className="p-1 pb-4">
                         <button
                           onClick={() => {
+                            // Ensure mutual exclusivity by exiting kana mode
+                            setAppMode('reader');
                             setCenterViewMode('ai');
                             setIsMobileDrawerOpen(false);
                             useGeminiStore.getState().setChatOpen(true);
                           }}
                           className={clsx(
-                            "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
-                            centerViewMode === 'ai'
+                            "w-full flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
+                            appMode === 'reader' && centerViewMode === 'ai'
                               ? "rainbow-highlight"
                               : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
+
                           <Sparkles
                             className={clsx(
                               "w-6 h-6 mb-2 transition-colors",
-                              centerViewMode === 'ai' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                              appMode === 'reader' && centerViewMode === 'ai' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
                             )}
                           />
-                          <span className="font-bold text-[14px] text-slate-500">
+                          <span className={clsx(
+                            "font-bold text-[14px]",
+                            appMode === 'reader' && centerViewMode === 'ai' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                          )}>
                             {t('nav.ai_chat')}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Row 3: Beginners Mode (Full Width) */}
+                      <div className="p-1 pb-4">
+                        <button
+                          key="nav-btn-kana"
+                          onClick={() => {
+                            console.log('Switching to Kana Mode');
+                            setAppMode('kana');
+                            setCenterViewMode('reader'); // Ensure center view renders the container where KanaCourseView lives
+                            useKanaProgressStore.getState().setCurrentLesson(null); // Reset to Menu
+                            setIsMobileDrawerOpen(false);
+                            useGeminiStore.getState().setChatOpen(false);
+                          }}
+                          className={clsx(
+                            "w-full flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
+                            appMode === 'kana'
+                              ? "rainbow-highlight"
+                              : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
+                          )}
+                        >
+                          <GraduationCap
+                            className={clsx(
+                              "w-6 h-6 mb-2 transition-colors",
+                              appMode === 'kana' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                            )}
+                          />
+                          <span className={clsx(
+                            "font-bold text-[14px]",
+                            appMode === 'kana' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                          )}>
+                            初学者模式
                           </span>
                         </button>
                       </div>
@@ -831,13 +895,14 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                       <div className="grid grid-cols-2 gap-4 overflow-visible p-1">
                         <button
                           onClick={() => {
+                            setAppMode('reader'); // Ensure we are in reader mode context
                             setCenterViewMode('vocab');
                             setIsMobileDrawerOpen(false);
                             useGeminiStore.getState().setChatOpen(false);
                           }}
                           className={clsx(
                             "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
-                            !isChatOpen && centerViewMode === 'vocab'
+                            appMode === 'reader' && centerViewMode === 'vocab'
                               ? "rainbow-highlight"
                               : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
@@ -845,10 +910,13 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                           <BookMarked
                             className={clsx(
                               "w-6 h-6 mb-2 transition-colors",
-                              !isChatOpen && centerViewMode === 'vocab' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                              appMode === 'reader' && centerViewMode === 'vocab' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
                             )}
                           />
-                          <span className="font-bold text-[14px] text-slate-500">
+                          <span className={clsx(
+                            "font-bold text-[14px]",
+                            appMode === 'reader' && centerViewMode === 'vocab' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                          )}>
                             {t('nav.vocab_list')}
                             <span className="ml-1 text-xs opacity-60 font-normal">{vocabList.length}</span>
                           </span>
@@ -856,34 +924,43 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
 
                         <button
                           onClick={() => {
+                            setAppMode('reader'); // Ensure we are in reader mode context
                             setCenterViewMode('grammar');
                             setIsMobileDrawerOpen(false);
                             useGeminiStore.getState().setChatOpen(false);
                           }}
                           className={clsx(
                             "flex flex-col items-center justify-center p-4 rounded-xl transition-all group relative",
-                            !isChatOpen && centerViewMode === 'grammar'
+                            appMode === 'reader' && centerViewMode === 'grammar'
                               ? "rainbow-highlight"
                               : "hover:bg-[var(--bg-elevated)]/50 bg-[var(--bg-elevated)]/30 shadow-sm border border-[var(--border-muted)] interactive-tag"
                           )}
                         >
-                          <GraduationCap
+                          <PenLine
                             className={clsx(
                               "w-6 h-6 mb-2 transition-colors",
-                              !isChatOpen && centerViewMode === 'grammar' ? "text-[var(--accent-primary)]" : "text-slate-500"
+                              appMode === 'reader' && centerViewMode === 'grammar' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
                             )}
                           />
-                          <span className="font-bold text-[14px] text-slate-500">
+                          <span className={clsx(
+                            "font-bold text-[14px]",
+                            appMode === 'reader' && centerViewMode === 'grammar' ? "text-[var(--accent-primary)]" : "text-[var(--accent-primary)] opacity-60"
+                          )}>
                             {t('nav.grammar_list')}
                             <span className="ml-1 text-xs opacity-60 font-normal">{grammarList.length}</span>
                           </span>
                         </button>
                       </div>
-
                     </div>
                   </div>
-                }
-              />
+
+                </div>
+
+                {/* AI Hero Input Section - Pinned to Bottom with Divider */}
+                <div className="w-full relative px-2 py-3 shrink-0 z-20 border-t border-black/5 dark:border-white/5">
+                  <AIHeroInput />
+                </div>
+              </div>
             </div>
           }
           centerContent={
@@ -987,7 +1064,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
                     appMode === 'reader' && centerViewMode === 'reader'
                       ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
-                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
                   )}
                 >
                   <div className={clsx(
@@ -1009,7 +1086,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
                     centerViewMode === 'ai'
                       ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
-                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
                   )}
                 >
                   <div className={clsx(
@@ -1031,7 +1108,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
                     centerViewMode === 'vocab'
                       ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
-                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
                   )}
                 >
                   <div className={clsx(
@@ -1056,7 +1133,7 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
                     "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all border",
                     centerViewMode === 'grammar'
                       ? "bg-[var(--bg-elevated)] border-[var(--border-default)] shadow-sm"
-                      : "bg-transparent border-transparent text-[var(--text-secondary)]"
+                      : "bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
                   )}
                 >
                   <div className={clsx(

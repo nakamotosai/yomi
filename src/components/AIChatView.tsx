@@ -256,7 +256,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                         className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
                         rows={1}
                         style={{
-                            color: 'var(--text-primary)',
+                            color: 'var(--accent-primary) !important',
                             lineHeight: '1.5'
                         } as any}
                     />

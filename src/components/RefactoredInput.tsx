@@ -23,6 +23,7 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
     const { settings, setAnalyzedText, analyzedText, setIsInputModalOpen, setIsInputOpen } = useAppStore();
     const { t } = useI18n();
     const isDark = settings.theme === 'dark';
+    const isMorandi = settings.colorScheme === 'morandi' || !settings.colorScheme;
     // Detect if text is mostly non-Japanese (e.g. Chinese or English)
     const needsTranslation = React.useMemo(() => {
         if (!inputText.trim()) return false;
@@ -165,10 +166,10 @@ export default function RefactoredInput({ inputText, setInputText, onClear, comp
             <textarea
                 ref={textareaRef}
                 className={clsx(
-                    "w-full flex-1 rounded-xl resize-none !outline-none font-normal leading-relaxed bg-[var(--bg-muted)]/30 custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none",
+                    "w-full flex-1 rounded-xl resize-none !outline-none font-normal leading-relaxed custom-scrollbar !border-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!border-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!border-none appearance-none",
+                    isMorandi ? "bg-transparent text-[var(--accent-primary)]" : "bg-[var(--scheme-input-bg)] text-[var(--accent-primary)]",
                     compact ? "p-3 text-[15px]" : "p-4 text-[18px] md:text-2xl"
                 )}
-                style={{ color: 'rgb(100 116 139)' }} // slate-500
                 placeholder={t('reader.input_placeholder')}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}

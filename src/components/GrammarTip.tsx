@@ -79,7 +79,7 @@ export default function GrammarTip({ sentence, tokens }: GrammarTipProps) {
                                     cleanTitle = cleanTitle.replace(/[~～]/g, '');
                                     ttsManager.speak(cleanTitle.trim(), settings, {});
                                 }}
-                                className="inline-flex items-center px-2 py-0.5 rounded text-base transition-all duration-200 border cursor-pointer hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95 bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20 text-[var(--scheme-grammar)]"
+                                className="inline-flex items-center px-2 py-0.5 rounded text-base font-medium transition-all duration-200 border cursor-pointer hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95 bg-[var(--scheme-grammar)]/10 border-[var(--scheme-grammar)]/20 text-[var(--scheme-grammar)]"
                             >
                                 {match.entry.title.replace(/[（(][^）)]*[）)]/g, '').replace(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/g, '').trim()}
                             </button>

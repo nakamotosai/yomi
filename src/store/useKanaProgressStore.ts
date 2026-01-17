@@ -43,6 +43,12 @@ interface KanaProgressState {
     // 游戏分数
     gameScores: Record<string, GameScore>;
 
+    // 全局进度
+    xp: number;
+    level: number;
+    streak: number;
+    lastStudyDate: string; // YYYY-MM-DD
+
     // 当前学习状态
     currentLessonId: string | null;
     currentKanaIndex: number;
@@ -60,6 +66,8 @@ interface KanaProgressState {
     setSelectedKanaDetail: (kanaId: string | null) => void;
     getReviewKana: (count: number, excludeIds: string[]) => string[];
     resetProgress: () => void;
+    addXp: (amount: number) => void;
+    checkStreak: () => void;
 }
 
 // 初始状态
@@ -74,6 +82,10 @@ const initialState = {
     unlockedKana: [],
     kanaStats: {},
     gameScores: {},
+    xp: 0,
+    level: 1,
+    streak: 0,
+    lastStudyDate: '',
     currentLessonId: null,
     currentKanaIndex: 0,
     selectedKanaDetail: null
@@ -99,6 +111,7 @@ export const useKanaProgressStore = create<KanaProgressState>()(
                     });
                 }
             },
+
 
             // 解锁课程
             unlockLesson: (lessonId: string) => {
@@ -245,7 +258,26 @@ export const useKanaProgressStore = create<KanaProgressState>()(
             // 重置所有进度
             resetProgress: () => {
                 set(initialState);
-            }
+            },
+
+            addXp: (amount) => set((state) => {
+                const newXp = state.xp + amount;
+                // 简单的等级公式：Level = sqrt(XP / 100) + 1
+                const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+                return { xp: newXp, level: newLevel };
+            }),
+
+            checkStreak: () => set((state) => {
+                const today = new Date().toISOString().split('T')[0];
+                if (state.lastStudyDate === today) return {}; // 今天已打卡
+
+                const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+                if (state.lastStudyDate === yesterday) {
+                    return { streak: state.streak + 1, lastStudyDate: today };
+                } else {
+                    return { streak: 1, lastStudyDate: today };
+                }
+            }),
         }),
         {
             name: 'yomi-kana-progress-v1',
@@ -253,8 +285,13 @@ export const useKanaProgressStore = create<KanaProgressState>()(
                 lessonProgress: state.lessonProgress,
                 unlockedKana: state.unlockedKana,
                 kanaStats: state.kanaStats,
-                gameScores: state.gameScores
+                gameScores: state.gameScores,
+                xp: state.xp,
+                level: state.level,
+                streak: state.streak,
+                lastStudyDate: state.lastStudyDate
             })
         }
     )
 );
+

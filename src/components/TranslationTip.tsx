@@ -56,8 +56,8 @@ export default function TranslationTip({ original, translation, onTranslate }: T
                 onClick={handleToggle}
             >
                 {/* Row 1: Translation */}
-                <div className="flex items-baseline gap-3">
-                    <div className="shrink-0 w-12 flex items-center select-none translate-y-[1px]">
+                <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-12 flex items-center select-none">
                         <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: verbColor }}></span>
                         <h3 className="text-base font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
                             {t('info.translation')}
@@ -67,9 +67,9 @@ export default function TranslationTip({ original, translation, onTranslate }: T
                     <div className="flex-1 min-w-0">
                         {/* 中文翻译 - 始终全显 */}
                         <div className={clsx(
-                            "text-[15px] leading-relaxed font-medium transition-colors",
+                            "text-[15px] leading-relaxed font-medium transition-colors text-slate-500",
                             isLoading && "animate-pulse opacity-50"
-                        )} style={{ color: 'var(--text-muted)' }}>
+                        )}>
                             {displayTranslation}
                         </div>
                     </div>
@@ -91,14 +91,14 @@ export default function TranslationTip({ original, translation, onTranslate }: T
 
                 {/* Row 2: Original (Expanded) */}
                 <Collapsible isOpen={isExpanded} variant="default">
-                    <div className="mt-2 flex items-baseline gap-3">
-                        <div className="shrink-0 w-12 flex items-center select-none translate-y-[1px]">
+                    <div className="mt-2 flex items-start gap-3">
+                        <div className="shrink-0 w-12 flex items-center select-none">
                             <span className="w-[3px] h-3 rounded-sm mr-2 block" style={{ backgroundColor: verbColor }}></span>
                             <h3 className="text-base font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
                                 {t('info.original')}
                             </h3>
                         </div>
-                        <div className="flex-1 text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                        <div className="flex-1 text-[15px] leading-relaxed text-slate-500">
                             {original}
                             <button
                                 onClick={(e) => {

@@ -40,7 +40,12 @@ export default function HistoryPanel() {
             {/* Floating Clear Button */}
             <button
                 onClick={clearHistory}
-                className="absolute top-2.5 right-2.5 z-20 p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 backdrop-blur-sm cursor-pointer"
+                className={clsx(
+                    "absolute top-2.5 right-2.5 z-20 p-2 rounded-xl transition-all backdrop-blur-sm cursor-pointer active:scale-95 shadow-sm",
+                    (settings.colorScheme === 'morandi' || !settings.colorScheme)
+                        ? "bg-slate-500/10 text-slate-500 hover:bg-slate-500/20"
+                        : "bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+                )}
                 title={t('history.clear_all')}
             >
                 <Trash2 className="w-4 h-4" />

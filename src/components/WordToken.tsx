@@ -24,9 +24,8 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
     // Alias global isSpeaking to avoid conflict with prop
     const { settings, isSpeaking: isGlobalSpeaking } = useAppStore();
 
-    // 判断是否为标点符号（包括括号等）
-    const isPunctuation = token.pos === PartOfSpeech.SYMBOL ||
-        /^[、。！？「」『』（）【】・…ー～〜：；,\.!\?""''()[\]{}:;]$/.test(token.surface);
+    // 判断是否为标点符号（仅通过字符内容判断，忽略词性标记以防误判）
+    const isPunctuation = /^[、。！？「」『』（）【】・…ー～〜：；,.\!\?""''()[\]{}:;]$/.test(token.surface.trim());
 
     // 标点符号特殊渲染 - 无背景，无假名
     // 获取字体大小
@@ -56,36 +55,104 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
     // Resolve theme colors - 始终使用主题颜色
     const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
     const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
-
     // 检查该词性是否启用了颜色高亮
-    const isColorEnabled = (settings.activeColorPOS || []).includes(token.pos);
-    const isWafu = settings.colorScheme === 'wafu';
-    const isMonochrome = settings.colorScheme === 'monochrome';
-
     // Helper to map POS to safe CSS variable key (aligned with HistoryPanel/InfoPanel)
     const getWafuPosKey = (pos: string) => {
         const lower = pos.toLowerCase();
-        if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+
+        // Specific checks MUST go before generic checks (e.g. 'pronoun' contains 'noun' in Japanese: 代名詞 vs 名詞)
+
+        // 1. Interjections / Fillers / Greetings (Pre-empt Verb '動詞' check)
+        if (
+            lower.includes('interjection') ||
+            lower.includes('感動詞') ||
+            lower.includes('感叹词') ||
+            lower.includes('感动词') ||
+            lower.includes('filler') ||
+            lower.includes('フィラー') ||
+            lower.includes('greeting') ||
+            lower.includes('挨拶')
+        ) return 'interjection';
+
+        // 2. Pronouns / Proper Nouns (Pre-empt Noun '名詞' check)
         if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
         if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
-        if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
-        if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词')) return 'adjective';
-        if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+
+        // 3. Auxiliaries (Pre-empt Verb '動詞' check if '助動詞' could be confused, though '動詞' matches both)
         if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
-        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
-        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
-        if (lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词')) return 'interjection';
+
+        // 4. Prefixes / Suffixes (Specific)
         if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
         if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
+
+        // 5. Standard Major Categories (Order: Adjective > Verb > Noun > Particle)
+        // Adjective must come before Verb to catch '形容動詞' (Adjective Verb) as Adjective, not Verb
+        if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词') || lower.includes('形容')) return 'adjective';
+        if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
+        if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+        if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+
+        // 6. Minor Categories
+        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
+        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
         if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
+
         return 'other';
     };
+
+    const posKey = getWafuPosKey(token.pos);
+    const MAJOR_KEYS = ['noun', 'verb', 'adjective', 'particle'];
+
+    // Internal keys -> Enum 
+    const POS_KEY_TO_ENUM: Record<string, PartOfSpeech> = {
+        'noun': PartOfSpeech.NOUN,
+        'verb': PartOfSpeech.VERB,
+        'adjective': PartOfSpeech.ADJECTIVE,
+        'particle': PartOfSpeech.PARTICLE,
+        'pronoun': PartOfSpeech.PRONOUN,
+        'proper_noun': PartOfSpeech.PROPER_NOUN,
+        'auxiliary': PartOfSpeech.AUXILIARY,
+        'adverb': PartOfSpeech.ADVERB,
+        'conjunction': PartOfSpeech.CONJUNCTION,
+        'interjection': PartOfSpeech.INTERJECTION,
+        'prefix': PartOfSpeech.PREFIX,
+        'suffix': PartOfSpeech.SUFFIX,
+        'symbol': PartOfSpeech.SYMBOL,
+        'other': PartOfSpeech.OTHER
+    };
+
+    // Calculate normalized POS once for consistency
+    const normalizedPos = POS_KEY_TO_ENUM[posKey] || PartOfSpeech.OTHER;
+
+    // ----------------------------------------------------------------------
+    // 3. Status Checks (Use normalizedPos)
+    // ----------------------------------------------------------------------
+    let isColorEnabled = false;
+
+    if (MAJOR_KEYS.includes(posKey)) {
+        // Strict check for major POS
+        isColorEnabled = (settings.activeColorPOS || []).includes(normalizedPos);
+    } else {
+        // Permissive check for Minor POS (Blue Group)
+        // Also allow INTERJECTION and AUXILIARY to piggyback on PARTICLE settings because users often consider them "Grammar/Function words"
+        const isInterjection = posKey === 'interjection';
+        const isAuxiliary = posKey === 'auxiliary';
+        const isParticleEnabled = (settings.activeColorPOS || []).includes(PartOfSpeech.PARTICLE);
+
+        isColorEnabled =
+            (settings.activeColorPOS || []).includes(PartOfSpeech.OTHER) ||
+            (settings.activeColorPOS || []).includes(normalizedPos) ||
+            ((isInterjection || isAuxiliary) && isParticleEnabled); // Fallback: Show interjections/auxiliaries if Particles are on
+    }
+
+    const isWafu = settings.colorScheme === 'wafu';
+    const isMonochrome = settings.colorScheme === 'monochrome';
 
     // Helper to get Wafu/Monochrome override styles
     const getOverrideStyle = () => {
         if ((!isWafu && !isMonochrome) || !isColorEnabled) return {};
 
-        const key = getWafuPosKey(token.pos);
+        const key = posKey; // Re-use calculated key
 
         // For monochrome, we can reuse the same wafu-prefixed variables because we defined them in the [data-color-scheme="monochrome"] block
         // to point to the grayscale vars. This keeps the JS clean.
@@ -178,7 +245,12 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
                                 themeColors.border || 'border-transparent',
                                 "bg-transparent"
                             )
-                            : clsx(bgClass, textClass), // Box style (Standard OR Wafu)
+                            : clsx(
+                                bgClass,
+                                textClass,
+                                "border", // Ensure border width of 1px
+                                (!isWafu && !isMonochrome && isColorEnabled) ? (themeColors.border || 'border-transparent') : 'border-transparent'
+                            ), // Box style (Standard OR Wafu)
                     !isSelected && !isSpeaking && "hover:scale-110 hover:brightness-110 hover:shadow-sm hover:z-10 active:scale-95 cursor-pointer",
                     // Karaoke animations based on style
                     isSpeaking && settings.karaokeMode && settings.karaokeStyle === 'glow-scale' && "scale-110 z-10",

@@ -109,6 +109,8 @@ interface AppState {
     setIsFromExtension: (fromExtension: boolean) => void;
     analyzedText: string;
     setAnalyzedText: (text: string) => void;
+    isSettingsOpen: boolean;
+    setIsSettingsOpen: (open: boolean) => void;
 
     // New Dropdown States
     isInputOpen: boolean;
@@ -172,11 +174,12 @@ export const useAppStore = create<AppState>()(
             layout: {
                 leftSidebarWidth: 360,
                 rightSidebarWidth: 360,
-                leftTopHeight: 380,
+                leftTopHeight: 180,
                 leftInputHeight: 180,
                 rightBottomHeight: 240,
                 isManualLayout: false,
             },
+
             setLayout: (newLayout) => set((state) => ({
                 layout: { ...state.layout, ...newLayout }
             })),
@@ -242,6 +245,8 @@ export const useAppStore = create<AppState>()(
             setIsFromExtension: (fromExtension) => set({ isFromExtension: fromExtension }),
             analyzedText: DEFAULT_INPUT_TEXT,
             setAnalyzedText: (text) => set({ analyzedText: text }),
+            isSettingsOpen: false,
+            setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
 
             // Dropdown Logic Implementation
             isInputOpen: false,
@@ -277,8 +282,9 @@ export const useAppStore = create<AppState>()(
             setUiLanguage: (lang) => set({ uiLanguage: lang })
         }),
         {
-            name: 'yomi-app-store-v9',
+            name: 'yomi-app-store-v10',
             partialize: (state) => ({
+
                 settings: state.settings,
                 inputText: state.inputText,
                 analyzedText: state.analyzedText,

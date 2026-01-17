@@ -148,7 +148,7 @@ export default function VocabTip({ tokens }: VocabTipProps) {
                                     key={idx}
                                     onClick={(e) => handleWordClick(token, e)}
                                     className={clsx(
-                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-normal transition-all duration-200 border cursor-pointer",
+                                        "inline-flex items-center px-1.5 py-0.5 rounded text-base font-medium transition-all duration-200 border cursor-pointer",
                                         "hover:scale-105 hover:brightness-110 hover:shadow-sm active:scale-95",
                                         (!isWafu && settings.colorScheme !== 'monochrome') && bgClass,
                                         (!isWafu && settings.colorScheme !== 'monochrome') && textClass,

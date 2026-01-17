@@ -11,8 +11,10 @@ import { useGrammarStore } from '@/store/useGrammarStore';
 import { getDeinflectedForm } from '@/lib/nlp/analyzer';
 import { ttsManager } from '@/lib/tts/manager';
 import { COLOR_THEMES, POS_GLOW_COLORS } from '@/lib/colorThemes';
+import DashboardWidget from './DashboardWidget'; // Import Widget
 
 import clsx from 'clsx';
+
 import { useGeminiStore } from '@/store/useGeminiStore';
 import PitchAccent from './PitchAccent';
 import { translateText } from '@/lib/translate';
@@ -181,7 +183,7 @@ function UnifiedExampleItem({
                 </button>
 
                 {/* 文字内容 - 日文 */}
-                <div className="flex-1 text-[16px] leading-relaxed break-words font-medium text-[var(--text-muted)]">
+                <div className="flex-1 text-[16px] leading-relaxed break-words font-medium text-slate-500">
                     <UnifiedHighlighter text={japanese} target={targetWord} color={accentColor} replaceTilde={replaceTilde} />
                 </div>
             </div>
@@ -190,7 +192,7 @@ function UnifiedExampleItem({
             {chinese && (
                 <div className="flex items-start gap-1 mt-1 ml-[1px]">
                     <ChevronRight className="w-3.5 h-3.5 mt-[5px] shrink-0 opacity-40" style={{ color: accentColor }} />
-                    <div className="flex-1 text-[14px] leading-snug text-[var(--text-muted)] opacity-90 italic">
+                    <div className="flex-1 text-[14px] leading-snug text-slate-500 opacity-90 italic">
                         <UnifiedHighlighter text={chinese} target={targetWord} color={accentColor} isChinese />
                     </div>
                 </div>
@@ -229,7 +231,7 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
     const lines = explanation.split('\n').filter(line => line.trim());
 
     return (
-        <div className="space-y-4 text-[16px] leading-relaxed cursor-default select-text" style={{ color: 'var(--text-primary)' }}>
+        <div className="space-y-4 text-[16px] leading-relaxed cursor-default select-text text-slate-500">
             {/* 正文解读 - 应用全量高亮 */}
             {lines.map((line, idx) => (
                 <div key={idx}>
@@ -681,20 +683,19 @@ export default function InfoPanel() {
     const renderLookupInput = () => {
         const isActive = isPanelInputFocused;
         return (
-            <div className="shrink-0 p-4 pt-2 border-t border-[var(--border-default)] bg-transparent overflow-visible">
+            <div className="shrink-0 px-4 py-3 border-t border-[var(--border-default)] bg-transparent overflow-visible">
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();
                         handlePanelLookup(panelInput);
                     }}
                     className={clsx(
-                        "flex items-center gap-2 p-1.5 pl-4 pr-1.5 rounded-xl transition-all duration-300 relative overflow-visible z-20",
+                        "flex items-center gap-2 p-1.5 pl-4 pr-1.5 rounded-xl transition-all duration-300 relative overflow-visible z-20 h-[52px]",
                         isActive
                             ? "rainbow-highlight"
-                            : "bg-[var(--bg-muted)] ring-1 ring-[var(--border-muted)]"
+                            : "bg-[var(--bg-muted)] border border-[var(--border-muted)]"
                     )}
                     style={{
-                        border: 'none',
                         boxShadow: isActive ? 'var(--rainbow-glow)' : 'none'
                     }}
                 >
@@ -705,7 +706,8 @@ export default function InfoPanel() {
                         onFocus={() => setIsPanelInputFocused(true)}
                         onBlur={() => setIsPanelInputFocused(false)}
                         placeholder={t('info.lookup_placeholder')}
-                        className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none !border-none !ring-0 !outline-none text-[15px] placeholder-[var(--text-muted)] text-[var(--text-primary)] min-w-0"
+                        className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none !border-none !ring-0 !outline-none text-[15px] placeholder-[var(--text-muted)] text-[var(--accent-primary)] min-w-0"
+                        style={{ color: 'var(--accent-primary) !important' }}
                     />
                     <button
                         type="submit"
@@ -1038,6 +1040,7 @@ export default function InfoPanel() {
         );
     }
 
+
     const baseForm = getDeinflectedForm(token);
     const isInflected = baseForm !== token.surface;
 
@@ -1177,7 +1180,7 @@ export default function InfoPanel() {
 
                     // 普通正文行
                     return (
-                        <div key={i} className="text-[16px] leading-relaxed text-[var(--text-muted)]">
+                        <div key={i} className="text-[16px] leading-relaxed text-slate-500">
                             <UnifiedHighlighter text={trimmed} target={token.surface} color={wordAccentColor} />
                         </div>
                     );
@@ -1210,7 +1213,7 @@ export default function InfoPanel() {
                                 {idx + 1}
                             </span>
                             <div className="flex-1">
-                                <p className="text-[var(--text-muted)] leading-relaxed text-base">
+                                <p className="text-slate-500 leading-relaxed text-base">
                                     {sense.glosses.join('; ')}
                                 </p>
                                 {sense.pos.length > 0 && (
@@ -1353,7 +1356,6 @@ export default function InfoPanel() {
                                 )}
                                 title={isSaved ? t('info.unsave_vocab') : t('info.save_vocab')}
                             >
-                                ```
                                 <Bookmark className={clsx("w-5 h-5", isSaved && "fill-current")} />
                             </button>
                         </div>
