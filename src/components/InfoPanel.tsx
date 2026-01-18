@@ -192,7 +192,7 @@ function UnifiedExampleItem({
             {chinese && (
                 <div className="flex items-start gap-1 mt-1 ml-[1px]">
                     <ChevronRight className="w-3.5 h-3.5 mt-[5px] shrink-0 opacity-40" style={{ color: accentColor }} />
-                    <div className="flex-1 text-[14px] leading-snug text-slate-500 opacity-90 italic">
+                    <div className="flex-1 text-[16px] leading-snug text-slate-500 opacity-90 italic">
                         <UnifiedHighlighter text={chinese} target={targetWord} color={accentColor} isChinese />
                     </div>
                 </div>
@@ -952,8 +952,8 @@ export default function InfoPanel() {
                 const fallbackEntry: YomitanResult = {
                     term: word,
                     reading: word,
-                    partOfSpeech: 'Google Translate',
-                    definitions: [`${word}。/${translation}`],
+                    partOfSpeech: ['Google Translate'],
+                    definitions: [`・${word}。/${translation}`],
                     source: 'Google Translate'
                 };
                 return fallbackEntry;
@@ -1117,6 +1117,47 @@ export default function InfoPanel() {
         // 解析并渲染每一行
         return (
             <div className="space-y-4 pb-8">
+                {/* Dictionary POS Badges */}
+                {/* Dictionary POS Badges */}
+                {(() => {
+                    // Safe normalization of partOfSpeech to ensure it's an array
+                    const posRaw = yomitanEntry.partOfSpeech;
+                    const posList: string[] = Array.isArray(posRaw)
+                        ? posRaw
+                        : (typeof posRaw === 'string' && posRaw ? [posRaw] : []);
+
+                    if (posList.length === 0) return null;
+
+                    return (
+                        <div className="flex flex-wrap gap-2 mb-3 mt-1">
+                            {posList.map((posTag, idx) => {
+                                // Dynamic color based on POS tag content
+                                const getPosColor = (p: string) => {
+                                    if (p.includes('动') || p.includes('動')) return 'var(--pos-verb-text)';
+                                    if (p.includes('名')) return 'var(--pos-noun-text)';
+                                    if (p.includes('形') || p.includes('副')) return 'var(--pos-adj-text)';
+                                    return 'var(--text-secondary)';
+                                };
+                                const badgeColor = getPosColor(posTag);
+
+                                return (
+                                    <span
+                                        key={idx}
+                                        className="px-2 py-0.5 rounded-md border text-xs font-bold"
+                                        style={{
+                                            color: badgeColor,
+                                            borderColor: `color-mix(in srgb, ${badgeColor}, transparent 70%)`,
+                                            backgroundColor: `color-mix(in srgb, ${badgeColor}, transparent 95%)`
+                                        }}
+                                    >
+                                        {posTag}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    );
+                })()
+                }
                 {allLines.map((line, i) => {
                     const trimmed = line.trim();
                     if (trimmed.includes('【') && trimmed.includes('】')) return null;
@@ -1149,6 +1190,14 @@ export default function InfoPanel() {
                             chinese = content.substring(firstSpaceIdx + 1).trim();
                         } else {
                             japanese = content;
+                        }
+
+                        // Replace tilde with actual word for display
+                        // Conservative approach: Only replace if tilde is NOT at the start (excludes grammar defs like ～性)
+                        // OR if it has a clear translation and is a long sentence.
+                        // For now, simple heuristic: Don't replace start-tilde patterns usually used for suffix/grammar defs.
+                        if (japanese && yomitanEntry.term && !/^[～〜]/.test(japanese)) {
+                            japanese = japanese.replace(/[～〜]/g, yomitanEntry.term);
                         }
 
                         // 如果拆分失败（比如 chinese 还是空的，但 japanese 包含了很多空格）

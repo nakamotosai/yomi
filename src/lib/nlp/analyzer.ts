@@ -26,6 +26,8 @@ interface KuromojiToken {
     reading?: string;
     pos: string;           // 词性: 名詞, 動詞, 形容詞, 助動詞, 助詞, 接頭詞, 接尾辞 等
     pos_detail_1: string;  // 词性细节: 数, 接続助詞, 終助詞, 助数詞 等
+    pos_detail_2?: string; // 词性细节2: 人名, 一般 等
+    pos_detail_3?: string; // 词性细节3: 姓, 名 等
     basic_form: string;    // 原形/辞書形
     conjugated_type?: string;
 }
@@ -288,7 +290,132 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
         }
 
         // ========================================
-        // Rule B: 动词/形容词的形态素链合并 (最重要)
+        // Rule E: Noun Suffix Merger (General Noun + Suffix Noun)
+        // ========================================
+        // e.g. 法制 + 化 -> 法制化
+        // e.g. 感受 + 性 -> 感受性
+        if (curr.pos === '名詞' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+            if (next.pos === '名詞' && next.pos_detail_1 === '接尾') {
+                const combinedSurface = curr.surface_form + next.surface_form;
+                const combinedReading = (curr.reading || curr.surface_form) + (next.reading || next.surface_form);
+                const combinedBase = (curr.basic_form === '*' ? curr.surface_form : curr.basic_form) +
+                    (next.basic_form === '*' ? next.surface_form : next.basic_form);
+
+                merged.push({
+                    surface_form: combinedSurface,
+                    reading: combinedReading,
+                    pos: '名詞',
+                    pos_detail_1: '接尾結合', // Custom tag indicating suffix merge
+                    basic_form: combinedBase,
+                    conjugated_type: undefined,
+                });
+                i += 2;
+                continue;
+            }
+        }
+
+        // ========================================
+        // Rule F1: Person Name Merger (Surname + Given Name)
+        // ========================================
+        // e.g. 安住(姓) + 淳(名) -> 安住淳
+        if (curr.pos === '名詞' && curr.pos_detail_2 === '人名' && curr.pos_detail_3 === '姓' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+            if (next.pos === '名詞' && next.pos_detail_2 === '人名' && next.pos_detail_3 === '名') {
+                merged.push({
+                    surface_form: curr.surface_form + next.surface_form,
+                    reading: (curr.reading || curr.surface_form) + (next.reading || next.surface_form),
+                    pos: '名詞',
+                    pos_detail_1: '固有名詞',
+                    pos_detail_2: '人名',
+                    pos_detail_3: '一般',
+                    basic_form: curr.basic_form + next.basic_form,
+                    conjugated_type: undefined,
+                });
+                i += 2;
+                continue;
+            }
+        }
+
+        // ========================================
+        // Rule F2: General Kanji Compound Noun Merger
+        // ========================================
+        // e.g. 連立 + 政権 -> 連立政権, 消費 + 税 -> 消費税
+        // Constraint: Must be pure Kanji, and NOT involve Person Names (to avoid merging Name + Title)
+        if (curr.pos === '名詞' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+
+            const isCurrKanji = /^[一-龯]+$/.test(curr.surface_form);
+            const isNextKanji = /^[一-龯]+$/.test(next.surface_form);
+            const isCurrName = curr.pos_detail_2 === '人名';
+            const isNextName = next.pos_detail_2 === '人名';
+
+            if (next.pos === '名詞' && isCurrKanji && isNextKanji && !isCurrName && !isNextName) {
+                merged.push({
+                    surface_form: curr.surface_form + next.surface_form,
+                    reading: (curr.reading || curr.surface_form) + (next.reading || next.surface_form),
+                    pos: '名詞',
+                    pos_detail_1: '複合語',
+                    basic_form: curr.basic_form + next.basic_form,
+                    conjugated_type: undefined,
+                });
+                i += 2;
+                continue;
+            }
+        }
+
+        // ========================================
+        // Rule B: Sa-hen Noun + Suru Verb Merger (名詞(サ変) + する)
+        // ========================================
+        // Explicitly merge "Noun (Sa-hen)" + "Suru (Verb)" -> "Verb"
+        // e.g. 強調 + し + た -> 強調した (Verb)
+        if (curr.pos === '名詞' && curr.pos_detail_1 === 'サ変接続' && i + 1 < tokens.length) {
+            const next = tokens[i + 1];
+            // Check for 'Suru' verb (basic_form is usually 'する' or 'ず')
+            if (next.pos === '動詞' && (next.basic_form === 'する' || next.basic_form === 'ず' || next.basic_form === 'ずる')) {
+                // Initial Merge
+                let mergedSurface = curr.surface_form + next.surface_form;
+                let mergedReading = (curr.reading || curr.surface_form) + (next.reading || next.surface_form);
+                const baseForm = curr.basic_form + next.basic_form; // e.g. 強調する
+                let j = i + 2;
+
+                // Greedy Consume Auxiliaries / Suffixes (Shared Logic)
+                while (j < tokens.length) {
+                    const following = tokens[j];
+                    const canMerge = (
+                        following.pos === '助動詞' ||
+                        following.pos === '接尾辞' ||
+                        (following.pos === '動詞' && following.pos_detail_1 === '接尾') || // Catch 'れる/られる' (Verb Suffix)
+                        (following.pos === '動詞' && following.pos_detail_1 === '非自立') || // Catch 'いる/ある' (Subsidiary Verb)
+                        (following.pos === '助詞' && following.pos_detail_1 === '接続助詞' &&
+                            ['て', 'で', 'ば', 'たら', 'ても', 'ながら'].includes(following.surface_form)) ||
+                        (following.pos === '助詞' && following.pos_detail_1 === '終助詞')
+                    );
+
+                    if (canMerge) {
+                        mergedSurface += following.surface_form;
+                        mergedReading += following.reading || following.surface_form;
+                        j++;
+                    } else {
+                        break;
+                    }
+                }
+
+                merged.push({
+                    surface_form: mergedSurface,
+                    reading: mergedReading,
+                    pos: '動詞', // Transform to Verb
+                    pos_detail_1: 'サ変結合',
+                    basic_form: baseForm, // Reconstruct dictionary form "Noun + Suru"
+                    conjugated_type: next.conjugated_type,
+                });
+                i = j;
+                continue;
+            }
+        }
+
+        // ========================================
+        // Rule C: Standard Verb/Adjective Chain Merger
         // ========================================
         if (curr.pos === '動詞' || curr.pos === '形容詞') {
             let mergedSurface = curr.surface_form;
@@ -308,11 +435,17 @@ function mergeKuromojiTokens(tokens: KuromojiToken[]): KuromojiToken[] {
                     // 2. 接尾辞: さ (形容词名词化), み 等
                     next.pos === '接尾辞' ||
 
-                    // 3. 接続助詞中的 て, で, ば (保持 食べて, 行けば 完整性)
+                    // 3. 动词接尾: れる/られる (e.g. 明記さ-れ-て)
+                    (next.pos === '動詞' && next.pos_detail_1 === '接尾') ||
+
+                    // 4. 非自立动词: いる/ある (e.g. して-いる)
+                    (next.pos === '動詞' && next.pos_detail_1 === '非自立') ||
+
+                    // 5. 接続助詞中的 て, で, ば (保持 食べて, 行けば 完整性)
                     (next.pos === '助詞' && next.pos_detail_1 === '接続助詞' &&
                         ['て', 'で', 'ば', 'たら', 'ても', 'ながら'].includes(next.surface_form)) ||
 
-                    // 4. 終助詞: ね, よ, か, な, わ 等 (可选)
+                    // 6. 終助詞: ね, よ, か, な, わ 等 (可选)
                     (next.pos === '助詞' && next.pos_detail_1 === '終助詞')
                 );
 

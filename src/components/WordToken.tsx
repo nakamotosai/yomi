@@ -56,47 +56,59 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
     const currentTheme = COLOR_THEMES[settings.colorTheme || 'standard'] || COLOR_THEMES.standard;
     const themeColors = currentTheme.colors[token.pos] || currentTheme.colors[PartOfSpeech.OTHER];
     // 检查该词性是否启用了颜色高亮
+    // 检查该词性是否启用了颜色高亮
     // Helper to map POS to safe CSS variable key (aligned with HistoryPanel/InfoPanel)
     const getWafuPosKey = (pos: string) => {
         const lower = pos.toLowerCase();
 
-        // Specific checks MUST go before generic checks (e.g. 'pronoun' contains 'noun' in Japanese: 代名詞 vs 名詞)
+        // --------------------------------------------------------------------------
+        // Layer 1: EXCLUSION ("The Others") - Blue Series
+        // These MUST be checked first because they often contain keywords like "Noun" or "Verb"
+        // but user explicitly wants them in the "Other" category.
+        // --------------------------------------------------------------------------
 
-        // 1. Interjections / Fillers / Greetings (Pre-empt Verb '動詞' check)
+        // Pronouns / Proper Nouns (Contain 'noun' but are OTHER)
+        if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'other';
+        if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'other';
+
+        // Auxiliary Verbs (Contain 'verb' but are OTHER)
+        if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'other';
+
+        // Prefixes / Suffixes / Interjections / Symbols
+        if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'other';
+        if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'other';
         if (
-            lower.includes('interjection') ||
-            lower.includes('感動詞') ||
-            lower.includes('感叹词') ||
-            lower.includes('感动词') ||
-            lower.includes('filler') ||
-            lower.includes('フィラー') ||
-            lower.includes('greeting') ||
-            lower.includes('挨拶')
-        ) return 'interjection';
+            lower.includes('interjection') || lower.includes('感動詞') || lower.includes('感叹词') ||
+            lower.includes('filler') || lower.includes('フィラー') ||
+            lower.includes('greeting') || lower.includes('挨拶')
+        ) return 'other';
+        if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'other';
 
-        // 2. Pronouns / Proper Nouns (Pre-empt Noun '名詞' check)
-        if (lower.includes('pronoun') || lower.includes('代名詞') || lower.includes('代词')) return 'pronoun';
-        if (lower.includes('proper') || lower.includes('固有名詞') || lower.includes('专名')) return 'proper_noun';
 
-        // 3. Auxiliaries (Pre-empt Verb '動詞' check if '助動詞' could be confused, though '動詞' matches both)
-        if (lower.includes('auxiliary') || lower.includes('助動詞') || lower.includes('助动词')) return 'auxiliary';
+        // --------------------------------------------------------------------------
+        // Layer 2: TARGET MAPPING (The 4 Colored Groups)
+        // --------------------------------------------------------------------------
 
-        // 4. Prefixes / Suffixes (Specific)
-        if (lower.includes('prefix') || lower.includes('接頭辞') || lower.includes('前缀')) return 'prefix';
-        if (lower.includes('suffix') || lower.includes('接尾辞') || lower.includes('后缀')) return 'suffix';
-
-        // 5. Standard Major Categories (Order: Adjective > Verb > Noun > Particle)
-        // Adjective must come before Verb to catch '形容動詞' (Adjective Verb) as Adjective, not Verb
+        // Group 1: Adjective / Adverb (Red)
+        // Must come before Verb to catch 'Adjective Verb' (形容動詞) correctly if handled here
         if (lower.includes('adjective') || lower.includes('形容詞') || lower.includes('形容词') || lower.includes('形容')) return 'adjective';
+        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adjective'; // Map to Adjective group
+
+        // Group 2: Verb (Orange) - Note: Auxiliaries already filtered out
         if (lower.includes('verb') || lower.includes('動詞') || lower.includes('动词')) return 'verb';
+
+        // Group 3: Noun (Green) - Note: Pronouns/Proper already filtered out
         if (lower.includes('noun') || lower.includes('名詞') || lower.includes('名词')) return 'noun';
+
+        // Group 4: Particle / Conjunction (Purple)
         if (lower.includes('particle') || lower.includes('助詞') || lower.includes('助词')) return 'particle';
+        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'particle'; // Map to Particle group
 
-        // 6. Minor Categories
-        if (lower.includes('adverb') || lower.includes('副詞') || lower.includes('副词')) return 'adverb';
-        if (lower.includes('conjunction') || lower.includes('接続詞') || lower.includes('连词')) return 'conjunction';
-        if (lower.includes('symbol') || lower.includes('記号') || lower.includes('符号')) return 'symbol';
 
+        // --------------------------------------------------------------------------
+        // Layer 3: CATCH-ALL (Global Fallback)
+        // --------------------------------------------------------------------------
+        // Any undefined, messy, or unknown tags will fall here.
         return 'other';
     };
 

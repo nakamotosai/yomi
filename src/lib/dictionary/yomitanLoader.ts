@@ -16,7 +16,7 @@ interface YomitanEntry {
 export interface DictionaryResult {
     term: string;
     reading: string;
-    partOfSpeech: string;
+    partOfSpeech: string[]; // Changed to array
     definitions: string[];
     source: string;
 }
@@ -80,23 +80,47 @@ class YomitanLoader {
         };
     }
 
-    private inferPartOfSpeech(rules: string, def: string): string {
-        if (rules.includes('v5')) return '五段动词';
-        if (rules.includes('v1')) return '一段动词';
-        if (rules.includes('vs')) return 'サ变动词';
-        if (rules.includes('vk')) return 'カ变动词';
-        if (rules.includes('adj-i')) return 'い形容词';
-        if (rules.includes('adj-na')) return 'な形容词';
+    private inferPartOfSpeech(rules: string, def: string): string[] {
+        const posSet = new Set<string>();
+
+        // Check Rules (yomitan/jmdict codes)
+        if (rules.includes('v5')) posSet.add('五段动词');
+        if (rules.includes('v1')) posSet.add('一段动词');
+        if (rules.includes('vs')) posSet.add('サ变动词');
+        if (rules.includes('vk')) posSet.add('カ变动词');
+        if (rules.includes('adj-i')) posSet.add('い形容词');
+        if (rules.includes('adj-na')) posSet.add('な形容词');
+        if (rules.includes('n')) posSet.add('名词'); // 'n' code in JMdict
+
+        // Check Definitions (Explicit tags like 【名】)
         const posMatch = def.match(/【([^】]+)】/);
         if (posMatch) {
-            const pos = posMatch[1];
-            if (pos.includes('名')) return '名词';
-            if (pos.includes('動') || pos.includes('动')) return '动词';
-            if (pos.includes('形')) return '形容词';
-            if (pos.includes('副')) return '副词';
-            return pos;
+            const posRaw = posMatch[1];
+            if (posRaw.includes('名')) posSet.add('名词');
+            if (posRaw.includes('動') || posRaw.includes('动')) posSet.add('动词');
+            if (posRaw.includes('形')) posSet.add('形容词');
+            if (posRaw.includes('副')) posSet.add('副词');
+            if (posRaw.includes('助')) posSet.add('助词'); // Includes 助動詞, 助詞
+            if (!posSet.size) posSet.add(posRaw); // Fallback if no specific keyword found
         }
-        return '';
+
+        // Logic Refinement: If rules indicated verb but def didn't, or vice-versa
+        // We accumulate ALL distinct POS.
+
+        const posList = Array.from(posSet);
+
+        // SORTING: Prioritize Verb > Adjective > Noun > Others
+        posList.sort((a, b) => {
+            const score = (p: string) => {
+                if (p.includes('动词')) return 4;
+                if (p.includes('形容词')) return 3;
+                if (p.includes('名词')) return 2;
+                return 1;
+            };
+            return score(b) - score(a); // Descending
+        });
+
+        return posList.length > 0 ? posList : [];
     }
 
     private convertToResult(entry: YomitanEntry): DictionaryResult {

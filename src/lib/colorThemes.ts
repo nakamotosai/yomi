@@ -65,9 +65,9 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#B7282E]/18 dark:border-[#B7282E]/20'
         },
         [PartOfSpeech.ADVERB]: {
-            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
-            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
-            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
+            bg: 'bg-[#B7282E]/12 dark:bg-[#B7282E]/12',
+            text: 'text-[#B7282E] dark:text-[#E05A60]',
+            border: 'border-[#B7282E]/18 dark:border-[#B7282E]/20'
         },
 
         // --- Group 4: 虚词组 (Particle/Conj Group) - Purple Series ---
@@ -78,9 +78,9 @@ const STANDARD_THEME: ColorScheme = {
             border: 'border-[#89729E]/20 dark:border-[#89729E]/20'
         },
         [PartOfSpeech.CONJUNCTION]: {
-            bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
-            text: 'text-[#2D6D8B] dark:text-[#58B2DC]',
-            border: 'border-[#2D6D8B]/30 dark:border-[#2D6D8B]/30'
+            bg: 'bg-[#89729E]/15 dark:bg-[#89729E]/12',
+            text: 'text-[#89729E] dark:text-[#B7A6C6]',
+            border: 'border-[#89729E]/20 dark:border-[#89729E]/20'
         },
         [PartOfSpeech.INTERJECTION]: {
             bg: 'bg-[#2D6D8B]/5 dark:bg-[#2D6D8B]/10',
@@ -139,14 +139,16 @@ export const POS_GLOW_COLORS: Record<PartOfSpeech, string> = {
     [PartOfSpeech.ADJECTIVE]: '#B7282E',
     [PartOfSpeech.PARTICLE]: '#89729E',
 
-    // All others map to Grammar Blue
+    // Joined Major Groups
+    [PartOfSpeech.ADVERB]: '#B7282E', // Joined Adjective (Red)
+    [PartOfSpeech.CONJUNCTION]: '#89729E', // Joined Particle (Purple)
+
+    // All others map to Grammar Blue (Catch-all)
     [PartOfSpeech.PRONOUN]: '#2D6D8B',
     [PartOfSpeech.PROPER_NOUN]: '#2D6D8B',
     [PartOfSpeech.PREFIX]: '#2D6D8B',
     [PartOfSpeech.SUFFIX]: '#2D6D8B',
     [PartOfSpeech.AUXILIARY]: '#2D6D8B',
-    [PartOfSpeech.ADVERB]: '#2D6D8B',
-    [PartOfSpeech.CONJUNCTION]: '#2D6D8B',
     [PartOfSpeech.INTERJECTION]: '#2D6D8B',
     [PartOfSpeech.SYMBOL]: '#2D6D8B',
     [PartOfSpeech.OTHER]: '#2D6D8B',
