@@ -6,17 +6,19 @@ interface EdgeTtsResponse {
     alignment: {
         charIndex: number;
         charLength: number;
-        time: number; // ms
-        duration?: number; // ms
+        time: number;
+        duration?: number;
     }[];
 }
 
 export class EdgeTtsProvider implements TtsProvider {
     private audio: HTMLAudioElement | null = null;
-    private timer: number | null = null; // requestAnimationFrame ID
-    private isFetching: boolean = false; // Lock to prevent duplicate requests
+    private timer: number | null = null;
+    private isFetching: boolean = false;
     private abortController: AbortController | null = null;
     private prefetchCache: Map<string, EdgeTtsResponse> = new Map();
+    // Track which API works
+    private static preferLocalApi: boolean | null = null;
 
     private getCacheKey(text: string, voice: string, rate: number): string {
         return `${voice}_${rate}_${text}`;
@@ -30,28 +32,51 @@ export class EdgeTtsProvider implements TtsProvider {
         if (this.prefetchCache.has(key)) return;
 
         try {
-            const res = await fetch('/api/tts/edge', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice, rate }),
-            });
-
-            if (res.ok) {
-                const data: EdgeTtsResponse = await res.json();
-                if (data.audioBase64) {
-                    // Cache the result
-                    this.prefetchCache.set(key, data);
-                    // Keep cache small
-                    if (this.prefetchCache.size > 1) {
-                        const firstKey = this.prefetchCache.keys().next().value;
-                        if (firstKey !== undefined) this.prefetchCache.delete(firstKey);
-                    }
-                    console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
+            const data = await this.fetchTTS(text, voice, rate);
+            if (data?.audioBase64) {
+                this.prefetchCache.set(key, data);
+                if (this.prefetchCache.size > 1) {
+                    const firstKey = this.prefetchCache.keys().next().value;
+                    if (firstKey !== undefined) this.prefetchCache.delete(firstKey);
                 }
+                console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
             }
         } catch (e) {
             console.warn('[EdgeTTS] Preload failed', e);
         }
+    }
+
+    private async fetchTTS(text: string, voice: string, rate: number, signal?: AbortSignal): Promise<EdgeTtsResponse | null> {
+        const endpoints = EdgeTtsProvider.preferLocalApi === true
+            ? ['/api/tts/local', '/api/tts/edge']  // Prefer local if known to work
+            : ['/api/tts/edge', '/api/tts/local']; // Default: try edge first
+
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`[EdgeTTS] Trying ${endpoint}...`);
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice, rate }),
+                    signal
+                });
+
+                if (res.ok) {
+                    const data: EdgeTtsResponse = await res.json();
+                    if (data.audioBase64) {
+                        // Remember which API worked
+                        EdgeTtsProvider.preferLocalApi = endpoint === '/api/tts/local';
+                        console.log(`[EdgeTTS] Success with ${endpoint}`);
+                        return data;
+                    }
+                }
+                console.log(`[EdgeTTS] ${endpoint} failed with status ${res.status}`);
+            } catch (e) {
+                if ((e as Error).name === 'AbortError') throw e;
+                console.log(`[EdgeTTS] ${endpoint} error:`, (e as Error).message);
+            }
+        }
+        return null;
     }
 
     async speak(text: string, options: {
@@ -62,10 +87,8 @@ export class EdgeTtsProvider implements TtsProvider {
         onError?: (error: Error) => void;
         onBoundary?: (charIndex: number, charLength?: number) => void;
     }) {
-        // Stop any existing playback first
         this.stop();
 
-        // Skip if already fetching (prevents double-trigger from StrictMode)
         if (this.isFetching) {
             console.log('[EdgeTTS] Skipping duplicate request');
             return;
@@ -77,11 +100,11 @@ export class EdgeTtsProvider implements TtsProvider {
 
         let data: EdgeTtsResponse | null = null;
 
-        // Check Cache
+        // Check cache
         if (this.prefetchCache.has(key)) {
-            console.log(`[EdgeTTS] Using cached audio for: ${text.substring(0, 10)}...`);
+            console.log(`[EdgeTTS] Using cached audio`);
             data = this.prefetchCache.get(key)!;
-            this.prefetchCache.delete(key); // Remove after use to free memory (or keep if desired, but sentences are usually unique)
+            this.prefetchCache.delete(key);
         }
 
         if (!data) {
@@ -89,25 +112,12 @@ export class EdgeTtsProvider implements TtsProvider {
             this.abortController = new AbortController();
 
             try {
-                const res = await fetch('/api/tts/edge', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, voice, rate }),
-                    signal: this.abortController.signal
-                });
+                data = await this.fetchTTS(text, voice, rate, this.abortController.signal);
 
-                // Check if we were stopped during fetch
                 if (!this.isFetching) {
                     console.log('[EdgeTTS] Request was cancelled');
                     return;
                 }
-
-                if (!res.ok) {
-                    const errorMsg = await res.text();
-                    throw new Error(`Edge TTS API failed with status ${res.status}: ${errorMsg}`);
-                }
-
-                data = await res.json();
             } catch (e) {
                 this.isFetching = false;
                 if ((e as Error).name === 'AbortError') {
@@ -122,7 +132,7 @@ export class EdgeTtsProvider implements TtsProvider {
 
         if (!data || !data.audioBase64) {
             this.isFetching = false;
-            if (options.onError) options.onError(new Error('No audio received'));
+            if (options.onError) options.onError(new Error('No audio received from any TTS endpoint'));
             return;
         }
 
@@ -131,7 +141,7 @@ export class EdgeTtsProvider implements TtsProvider {
         this.audio.playbackRate = 1.0;
 
         this.audio.onplay = () => {
-            console.log('[EdgeTTS] Audio started. Alignment data length:', data?.alignment?.length);
+            console.log('[EdgeTTS] Audio started. Alignment:', data?.alignment?.length || 0);
             options.onStart && options.onStart();
 
             if (options.onBoundary && data?.alignment && data.alignment.length > 0) {
@@ -162,15 +172,12 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number, boundaryIndex?: number) => void) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        let lastEmittedIndex = -2;
         let lastBoundaryArrayIndex = -1;
 
         const track = () => {
             if (!this.audio || this.audio.paused) return;
 
             const currentTimeMs = this.audio.currentTime * 1000;
-
             let currentBoundaryIndex = -1;
             let currentBoundaryLength = 0;
             let boundaryArrayIndex = -1;
@@ -179,11 +186,7 @@ export class EdgeTtsProvider implements TtsProvider {
                 const start = alignment[i].time;
                 let duration = alignment[i].duration;
                 if (!duration) {
-                    if (i < alignment.length - 1) {
-                        duration = alignment[i + 1].time - start;
-                    } else {
-                        duration = 1000;
-                    }
+                    duration = i < alignment.length - 1 ? alignment[i + 1].time - start : 1000;
                 }
 
                 if (currentTimeMs >= start && currentTimeMs < start + duration) {
@@ -194,9 +197,7 @@ export class EdgeTtsProvider implements TtsProvider {
                 }
             }
 
-            // Emit when boundary changes (either charIndex or array index)
             if (boundaryArrayIndex !== lastBoundaryArrayIndex) {
-                lastEmittedIndex = currentBoundaryIndex;
                 lastBoundaryArrayIndex = boundaryArrayIndex;
                 callback(currentBoundaryIndex, currentBoundaryLength, boundaryArrayIndex);
             }
@@ -215,7 +216,6 @@ export class EdgeTtsProvider implements TtsProvider {
     }
 
     stop() {
-        // Abort any pending fetch
         if (this.abortController) {
             this.abortController.abort();
             this.abortController = null;
@@ -225,27 +225,21 @@ export class EdgeTtsProvider implements TtsProvider {
         this.stopBoundaryTracking();
 
         if (this.audio) {
-            // CRITICAL: Nullify callbacks FIRST to prevent any events during pause/cleanup
             this.audio.onended = null;
             this.audio.onerror = null;
             this.audio.onplay = null;
-
             this.audio.pause();
-            this.audio.src = ''; // Release the audio resource
+            this.audio.src = '';
             this.audio = null;
         }
     }
 
     pause() {
-        if (this.audio) {
-            this.audio.pause();
-        }
+        if (this.audio) this.audio.pause();
     }
 
     resume() {
-        if (this.audio) {
-            this.audio.play();
-        }
+        if (this.audio) this.audio.play();
     }
 
     async getVoices(): Promise<{ id: string; name: string }[]> {

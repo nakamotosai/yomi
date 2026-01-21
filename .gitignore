@@ -55,3 +55,6 @@ eslint-result.json
 
 # agent
 .agent/
+
+# windows internal
+nul
