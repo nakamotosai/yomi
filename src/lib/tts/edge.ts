@@ -18,11 +18,19 @@ export class EdgeTtsProvider implements TtsProvider {
     private abortController: AbortController | null = null;
     private prefetchCache: Map<string, EdgeTtsResponse> = new Map();
 
+    // Track if Edge TTS API is available
+    private static edgeTtsAvailable: boolean | null = null;
+    // Web Speech API utterance for fallback
+    private utterance: SpeechSynthesisUtterance | null = null;
+
     private getCacheKey(text: string, voice: string, rate: number): string {
         return `${voice}_${rate}_${text}`;
     }
 
     async preload(text: string, options: { voiceURI?: string; speed?: number }) {
+        // Only preload if Edge TTS is known to work
+        if (EdgeTtsProvider.edgeTtsAvailable === false) return;
+
         const voice = options.voiceURI || 'ja-JP-NanamiNeural';
         const rate = (options.speed || 1.0) - 1.0;
         const key = this.getCacheKey(text, voice, rate);
@@ -39,6 +47,7 @@ export class EdgeTtsProvider implements TtsProvider {
             if (res.ok) {
                 const data: EdgeTtsResponse = await res.json();
                 if (data.audioBase64) {
+                    EdgeTtsProvider.edgeTtsAvailable = true;
                     this.prefetchCache.set(key, data);
                     if (this.prefetchCache.size > 1) {
                         const firstKey = this.prefetchCache.keys().next().value;
@@ -46,9 +55,12 @@ export class EdgeTtsProvider implements TtsProvider {
                     }
                     console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
                 }
+            } else {
+                EdgeTtsProvider.edgeTtsAvailable = false;
             }
         } catch (e) {
-            console.warn('[EdgeTTS] Preload failed', e);
+            console.warn('[EdgeTTS] Preload failed, will use Web Speech API fallback', e);
+            EdgeTtsProvider.edgeTtsAvailable = false;
         }
     }
 
@@ -80,7 +92,8 @@ export class EdgeTtsProvider implements TtsProvider {
             this.prefetchCache.delete(key);
         }
 
-        if (!data) {
+        // Try Edge TTS API if not known to be unavailable
+        if (!data && EdgeTtsProvider.edgeTtsAvailable !== false) {
             this.isFetching = true;
             this.abortController = new AbortController();
 
@@ -97,40 +110,53 @@ export class EdgeTtsProvider implements TtsProvider {
                     return;
                 }
 
-                if (!res.ok) {
-                    const errorMsg = await res.text();
-                    throw new Error(`Edge TTS API failed with status ${res.status}: ${errorMsg}`);
+                if (res.ok) {
+                    data = await res.json();
+                    if (data?.audioBase64) {
+                        EdgeTtsProvider.edgeTtsAvailable = true;
+                    }
+                } else {
+                    console.log('[EdgeTTS] API failed, falling back to Web Speech API');
+                    EdgeTtsProvider.edgeTtsAvailable = false;
                 }
-
-                data = await res.json();
             } catch (e) {
                 this.isFetching = false;
                 const error = e as Error;
                 if (error.name === 'AbortError') {
                     console.log('[EdgeTTS] Request aborted');
-                } else {
-                    console.error('Edge TTS Error:', e);
-                    if (options.onError) options.onError(error);
+                    return;
                 }
-                return;
+                console.warn('[EdgeTTS] Error, falling back to Web Speech API:', e);
+                EdgeTtsProvider.edgeTtsAvailable = false;
             }
         }
 
-        if (!data || !data.audioBase64) {
-            this.isFetching = false;
-            if (options.onError) options.onError(new Error('No audio received'));
+        // Use Edge TTS audio if available
+        if (data?.audioBase64) {
+            this.playEdgeTtsAudio(data, options);
             return;
         }
 
+        // Fallback to Web Speech API
+        this.isFetching = false;
+        this.playWithWebSpeechAPI(text, options);
+    }
+
+    private playEdgeTtsAudio(data: EdgeTtsResponse, options: {
+        onStart?: () => void;
+        onEnd?: () => void;
+        onError?: (error: Error) => void;
+        onBoundary?: (charIndex: number, charLength?: number) => void;
+    }) {
         const audioUrl = `data:audio/mp3;base64,${data.audioBase64}`;
         this.audio = new Audio(audioUrl);
         this.audio.playbackRate = 1.0;
 
         this.audio.onplay = () => {
-            console.log('[EdgeTTS] Audio started. Alignment:', data?.alignment?.length || 0);
+            console.log('[EdgeTTS] Audio started');
             options.onStart && options.onStart();
 
-            if (options.onBoundary && data?.alignment && data.alignment.length > 0) {
+            if (options.onBoundary && data.alignment && data.alignment.length > 0) {
                 this.startBoundaryTracking(data.alignment, options.onBoundary);
             }
         };
@@ -148,13 +174,61 @@ export class EdgeTtsProvider implements TtsProvider {
             options.onError ? options.onError(err) : (options.onEnd && options.onEnd());
         };
 
-        try {
-            await this.audio.play();
-        } catch (e) {
+        this.audio.play().catch(e => {
             console.error('[EdgeTTS] Play error:', e);
             this.isFetching = false;
             if (options.onError) options.onError(e as Error);
+        });
+    }
+
+    private playWithWebSpeechAPI(text: string, options: {
+        speed?: number;
+        onStart?: () => void;
+        onEnd?: () => void;
+        onError?: (error: Error) => void;
+        onBoundary?: (charIndex: number, charLength?: number) => void;
+    }) {
+        if (!('speechSynthesis' in window)) {
+            console.error('[WebSpeech] Not supported in this browser');
+            if (options.onError) options.onError(new Error('Web Speech API not supported'));
+            return;
         }
+
+        console.log('[WebSpeech] Using browser TTS fallback');
+
+        this.utterance = new SpeechSynthesisUtterance(text);
+        this.utterance.lang = 'ja-JP';
+        this.utterance.rate = options.speed || 1.0;
+
+        // Try to find a Japanese voice
+        const voices = speechSynthesis.getVoices();
+        const japaneseVoice = voices.find(v => v.lang.startsWith('ja'));
+        if (japaneseVoice) {
+            this.utterance.voice = japaneseVoice;
+        }
+
+        this.utterance.onstart = () => {
+            console.log('[WebSpeech] Started');
+            options.onStart && options.onStart();
+        };
+
+        this.utterance.onend = () => {
+            console.log('[WebSpeech] Ended');
+            options.onEnd && options.onEnd();
+        };
+
+        this.utterance.onerror = (e) => {
+            console.error('[WebSpeech] Error:', e);
+            if (options.onError) options.onError(new Error(e.error || 'Speech synthesis error'));
+        };
+
+        this.utterance.onboundary = (e) => {
+            if (e.name === 'word' && options.onBoundary) {
+                options.onBoundary(e.charIndex, e.charLength);
+            }
+        };
+
+        speechSynthesis.speak(this.utterance);
     }
 
     private startBoundaryTracking(alignment: EdgeTtsResponse['alignment'], callback: (idx: number, len?: number, boundaryIndex?: number) => void) {
@@ -218,14 +292,28 @@ export class EdgeTtsProvider implements TtsProvider {
             this.audio.src = '';
             this.audio = null;
         }
+
+        // Stop Web Speech API
+        if (this.utterance) {
+            speechSynthesis.cancel();
+            this.utterance = null;
+        }
     }
 
     pause() {
-        if (this.audio) this.audio.pause();
+        if (this.audio) {
+            this.audio.pause();
+        } else if (this.utterance) {
+            speechSynthesis.pause();
+        }
     }
 
     resume() {
-        if (this.audio) this.audio.play();
+        if (this.audio) {
+            this.audio.play();
+        } else if (this.utterance) {
+            speechSynthesis.resume();
+        }
     }
 
     async getVoices(): Promise<{ id: string; name: string }[]> {
