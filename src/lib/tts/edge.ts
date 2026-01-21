@@ -17,8 +17,6 @@ export class EdgeTtsProvider implements TtsProvider {
     private isFetching: boolean = false;
     private abortController: AbortController | null = null;
     private prefetchCache: Map<string, EdgeTtsResponse> = new Map();
-    // Track which API works
-    private static preferLocalApi: boolean | null = null;
 
     private getCacheKey(text: string, voice: string, rate: number): string {
         return `${voice}_${rate}_${text}`;
@@ -32,51 +30,26 @@ export class EdgeTtsProvider implements TtsProvider {
         if (this.prefetchCache.has(key)) return;
 
         try {
-            const data = await this.fetchTTS(text, voice, rate);
-            if (data?.audioBase64) {
-                this.prefetchCache.set(key, data);
-                if (this.prefetchCache.size > 1) {
-                    const firstKey = this.prefetchCache.keys().next().value;
-                    if (firstKey !== undefined) this.prefetchCache.delete(firstKey);
+            const res = await fetch('/api/tts/edge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice, rate }),
+            });
+
+            if (res.ok) {
+                const data: EdgeTtsResponse = await res.json();
+                if (data.audioBase64) {
+                    this.prefetchCache.set(key, data);
+                    if (this.prefetchCache.size > 1) {
+                        const firstKey = this.prefetchCache.keys().next().value;
+                        if (firstKey !== undefined) this.prefetchCache.delete(firstKey);
+                    }
+                    console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
                 }
-                console.log(`[EdgeTTS] Preloaded: ${text.substring(0, 10)}...`);
             }
         } catch (e) {
             console.warn('[EdgeTTS] Preload failed', e);
         }
-    }
-
-    private async fetchTTS(text: string, voice: string, rate: number, signal?: AbortSignal): Promise<EdgeTtsResponse | null> {
-        const endpoints = EdgeTtsProvider.preferLocalApi === true
-            ? ['/api/tts/local', '/api/tts/edge']  // Prefer local if known to work
-            : ['/api/tts/edge', '/api/tts/local']; // Default: try edge first
-
-        for (const endpoint of endpoints) {
-            try {
-                console.log(`[EdgeTTS] Trying ${endpoint}...`);
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, voice, rate }),
-                    signal
-                });
-
-                if (res.ok) {
-                    const data: EdgeTtsResponse = await res.json();
-                    if (data.audioBase64) {
-                        // Remember which API worked
-                        EdgeTtsProvider.preferLocalApi = endpoint === '/api/tts/local';
-                        console.log(`[EdgeTTS] Success with ${endpoint}`);
-                        return data;
-                    }
-                }
-                console.log(`[EdgeTTS] ${endpoint} failed with status ${res.status}`);
-            } catch (e) {
-                if ((e as Error).name === 'AbortError') throw e;
-                console.log(`[EdgeTTS] ${endpoint} error:`, (e as Error).message);
-            }
-        }
-        return null;
     }
 
     async speak(text: string, options: {
@@ -112,19 +85,32 @@ export class EdgeTtsProvider implements TtsProvider {
             this.abortController = new AbortController();
 
             try {
-                data = await this.fetchTTS(text, voice, rate, this.abortController.signal);
+                const res = await fetch('/api/tts/edge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice, rate }),
+                    signal: this.abortController.signal
+                });
 
                 if (!this.isFetching) {
                     console.log('[EdgeTTS] Request was cancelled');
                     return;
                 }
+
+                if (!res.ok) {
+                    const errorMsg = await res.text();
+                    throw new Error(`Edge TTS API failed with status ${res.status}: ${errorMsg}`);
+                }
+
+                data = await res.json();
             } catch (e) {
                 this.isFetching = false;
-                if ((e as Error).name === 'AbortError') {
+                const error = e as Error;
+                if (error.name === 'AbortError') {
                     console.log('[EdgeTTS] Request aborted');
                 } else {
                     console.error('Edge TTS Error:', e);
-                    if (options.onError) options.onError(e as Error);
+                    if (options.onError) options.onError(error);
                 }
                 return;
             }
@@ -132,7 +118,7 @@ export class EdgeTtsProvider implements TtsProvider {
 
         if (!data || !data.audioBase64) {
             this.isFetching = false;
-            if (options.onError) options.onError(new Error('No audio received from any TTS endpoint'));
+            if (options.onError) options.onError(new Error('No audio received'));
             return;
         }
 
