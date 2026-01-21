@@ -146,15 +146,14 @@ function WordTokenBase({ token, onSelect, isSelected, isSpeaking, skyDropReveal 
         isColorEnabled = (settings.activeColorPOS || []).includes(normalizedPos);
     } else {
         // Permissive check for Minor POS (Blue Group)
-        // Also allow INTERJECTION and AUXILIARY to piggyback on PARTICLE settings because users often consider them "Grammar/Function words"
-        const isInterjection = posKey === 'interjection';
-        const isAuxiliary = posKey === 'auxiliary';
+        // Minor POS all map to 'other' via getWafuPosKey, so check if OTHER is enabled
+        // or if PARTICLE is enabled (for grammar/function word fallback)
         const isParticleEnabled = (settings.activeColorPOS || []).includes(PartOfSpeech.PARTICLE);
 
         isColorEnabled =
             (settings.activeColorPOS || []).includes(PartOfSpeech.OTHER) ||
             (settings.activeColorPOS || []).includes(normalizedPos) ||
-            ((isInterjection || isAuxiliary) && isParticleEnabled); // Fallback: Show interjections/auxiliaries if Particles are on
+            isParticleEnabled; // Fallback: Show minor POS if Particles are on
     }
 
     const isWafu = settings.colorScheme === 'wafu';
