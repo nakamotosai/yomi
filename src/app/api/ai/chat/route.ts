@@ -623,12 +623,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                     }
                 };
 
-                const task = processStream();
-                const context = ctx as { waitUntil?: (promise: Promise<unknown>) => void };
-                if (context && typeof context.waitUntil === 'function') {
-                    context.waitUntil(task);
-                }
-            },
+	                const task = processStream();
+	                const context = ctx as { waitUntil?: (promise: Promise<unknown>) => void };
+	                if (context && typeof context.waitUntil === 'function') {
+	                    context.waitUntil(task);
+	                }
+	                return task;
+	            },
             cancel() {
                 clientCancelled = true;
                 isStreamClosed = true;
