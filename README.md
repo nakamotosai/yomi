@@ -177,7 +177,7 @@ MIT License
 
 Last updated: 2026-05-10 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前 AI app 运行时代码修复在 GitHub `main` 的 `01014a7 Fix AI teacher heading formatting`。后续 README-only closeout commit 只更新交接文档，不改变运行时代码；因此 Cloudflare Pages Production/main 的 Active source 可能是后续文档提交，但 AI 聊天渲染代码仍对应 `01014a7`。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+当前 AI app 运行时代码修复在 GitHub `main` 的 `67251bd Fix AI chat partial heading emphasis`。后续 README-only closeout commit 只更新交接文档，不改变运行时代码；因此 Cloudflare Pages Production/main 的 Active source 可能是后续文档提交，但 AI 聊天渲染代码仍包含 `67251bd`。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
 AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
 
@@ -191,6 +191,7 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 - 本轮完成：主 AI 老师聊天格式规则已固定：一级标题独立成行、只显示粗体标题文本、不显示 `1.`/小圆点；用户提问目标词在正文中自动加粗；模型自己生成的其他 `**重点**` 一律降级为下划线，不再变粗体。
 - 本轮完成：`StreamingMarkdown` 通过内部 heading marker 区分“真正一级标题”和普通 Markdown strong；`接续 / 正确 / 错误 / ます形 / 正しい形 / 日常伴随动作` 等内容标签不得被渲染为粗体。
 - 本轮追加修复：AI 聊天一级标题识别不再粗暴排除假名，改为“短行、无句末/冒号、命中标题语义词”的正向门禁；`ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别` 这类生产样例会渲染为真正粗体标题，`接续：` 等普通强调仍渲染为下划线。
+- 本轮追加修复：一级标题内部如果被模型局部加粗，例如 `**ながら**的核心用法`、`使用时的**关键限制**`、`**ながら** 的核心用法`，现在会先剥离内部 Markdown emphasis，再把整条识别为一级标题；不会只把标题碎片当作普通下划线强调。
 - 本轮追加门禁：新增 `npm run test:ai-chat-formatting` 并接入 `npm run verify`，固定验证真实截图同款样例，防止再漏测“目标词 + 中文标题词”的标题组合。
 - 本轮完成：主 AI 老师上下文注入最近 6 条消息；用户清空对话后持久历史和 transient stream state 都归零，下一轮从零开始。
 - 本轮完成：主 AI 老师、单词 AI 解读、语法 AI 解读提示词均要求尽量控制在 800 字以内。
@@ -205,15 +206,15 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with 87 existing warnings and 0 errors.
-- `npm run test:ai-chat-formatting`: passed. `strongTexts` included `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、目标词 `ながら`; `underlineTexts` included `接续：`; 二级子项未进入 `strong`。
+- `npm run test:ai-chat-formatting`: passed. 覆盖 `1. **ながら的核心用法**`、`1. **ながら**的核心用法`、`2. 使用时的**关键限制**`、`1. **ながら** 的核心用法` 四类标题形态；`strongTexts` included `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、目标词 `ながら`; `underlineTexts` included `接续：`; 二级子项未进入 `strong`。
 - `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
 - `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
 - `git diff --check`: passed.
 - AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
 - Production DOM probe on `https://yomi.saaaai.com/`: passed. Injected the screenshot-style AI chat sample into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; content subitems were not bold.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
-- GitHub app code: `01014a7` pushed to `origin/main`.
-- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows Production/main source `01014a7` as Active before README-only closeout commit.
+- GitHub app code: `67251bd` pushed to `origin/main`.
+- Cloudflare Pages: after push, `wrangler pages deployment list --project-name yomi` must show a Production/main Active source containing `67251bd` before final closeout.
 - Public homepage: `https://yomi.saaaai.com/` returned HTTP 200.
 - Production AI API: POST `https://yomi.saaaai.com/api/ai/chat` with a minimal `请只回复 OK。` payload returned `OK` and HTTP 200.
 - Production R2 cache probe: unique key `codex-closeout-r2-1778339221` first returned `CACHEOK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
