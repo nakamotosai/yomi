@@ -177,7 +177,7 @@ MIT License
 
 Last updated: 2026-05-10 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前 AI app 代码已推送到 GitHub `main` 的 `01014a7 Fix AI teacher heading formatting`。本 README 后续 closeout commit 只更新交接文档，不改变运行时代码。Cloudflare Pages Production/main 已自动部署 `01014a7`，部署 ID `c10ff6c9-42e3-4082-828b-612c8319fff9`，自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+当前 AI app 运行时代码修复在 GitHub `main` 的 `01014a7 Fix AI teacher heading formatting`。后续 README-only closeout commit 只更新交接文档，不改变运行时代码；因此 Cloudflare Pages Production/main 的 Active source 可能是后续文档提交，但 AI 聊天渲染代码仍对应 `01014a7`。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
 AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
 
