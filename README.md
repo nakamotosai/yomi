@@ -212,10 +212,10 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 - `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
 - `git diff --check`: passed.
 - AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
-- Production DOM probe on `https://yomi.saaaai.com/`: passed after deployment. Injected the screenshot-style AI chat sample with partial heading emphasis (`**ながら**的核心用法` / `使用时的**关键限制**`) into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; headings were not underlined and content subitems were not bold.
+- Production DOM probe on `https://yomi.saaaai.com/`: passed after deployment. Injected the screenshot-style AI chat sample with Markdown hash headings and nested emphasis (`## **ながら的核心用法**` / `## **使用时的关键限制**` / `## 与相似语法的区别`) into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; headings were not underlined and content subitems were not bold.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
-- GitHub app code: `4e2638a` is the current runtime fix commit before README closeout.
-- Cloudflare Pages: pending re-verification after pushing this follow-up fix; the production deployment must contain runtime fix `4e2638a` before final handoff.
+- GitHub app code: runtime fix `4e2638a` is pushed to `origin/main`; README closeout commits after it do not change runtime code.
+- Cloudflare Pages: Production/main was verified on the custom domain after the follow-up fix; deployed code contains runtime fix `4e2638a`.
 - Public homepage: `https://yomi.saaaai.com/` returned HTTP 200.
 - Production AI API: POST `https://yomi.saaaai.com/api/ai/chat` with a minimal `请只回复 OK。` payload returned `OK` and HTTP 200.
 - Production R2 cache probe: unique key `codex-closeout-r2-1778339221` first returned `CACHEOK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
