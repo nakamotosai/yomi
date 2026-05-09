@@ -177,7 +177,7 @@ MIT License
 
 Last updated: 2026-05-10 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前 AI app 代码已推送到 GitHub `main` 的 `f0f2fd9 Refine AI teacher chat experience`。本 README 后续 closeout commit 只更新交接文档，不改变运行时代码。Cloudflare Pages Production/main 已自动部署 `f0f2fd9`，部署 ID `4f50c3cc-8bd7-4d7f-93c3-2f398a4fb33c`，自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+当前 AI app 代码已推送到 GitHub `main` 的 `01014a7 Fix AI teacher heading formatting`。本 README 后续 closeout commit 只更新交接文档，不改变运行时代码。Cloudflare Pages Production/main 已自动部署 `01014a7`，部署 ID `c10ff6c9-42e3-4082-828b-612c8319fff9`，自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
 AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
 
@@ -190,6 +190,8 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 - 本轮完成：Markdown 流式渲染已支持常见 LaTeX 箭头显示，例如 `$\rightarrow$` / `\Rightarrow` 会显示为可读箭头；CJK 相邻 `**bold**` 会在流式中及时渲染。
 - 本轮完成：主 AI 老师聊天格式规则已固定：一级标题独立成行、只显示粗体标题文本、不显示 `1.`/小圆点；用户提问目标词在正文中自动加粗；模型自己生成的其他 `**重点**` 一律降级为下划线，不再变粗体。
 - 本轮完成：`StreamingMarkdown` 通过内部 heading marker 区分“真正一级标题”和普通 Markdown strong；`接续 / 正确 / 错误 / ます形 / 正しい形 / 日常伴随动作` 等内容标签不得被渲染为粗体。
+- 本轮追加修复：AI 聊天一级标题识别不再粗暴排除假名，改为“短行、无句末/冒号、命中标题语义词”的正向门禁；`ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别` 这类生产样例会渲染为真正粗体标题，`接续：` 等普通强调仍渲染为下划线。
+- 本轮追加门禁：新增 `npm run test:ai-chat-formatting` 并接入 `npm run verify`，固定验证真实截图同款样例，防止再漏测“目标词 + 中文标题词”的标题组合。
 - 本轮完成：主 AI 老师上下文注入最近 6 条消息；用户清空对话后持久历史和 transient stream state 都归零，下一轮从零开始。
 - 本轮完成：主 AI 老师、单词 AI 解读、语法 AI 解读提示词均要求尽量控制在 800 字以内。
 - 本轮完成：单词/语法 `AI老师在线解读` 已恢复专用结构 renderer，保留 accent 标题、同色 inline labels、日文/中文例句卡、喇叭按钮、`UnifiedHighlighter` 高亮和流式显示。
@@ -203,16 +205,19 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with 87 existing warnings and 0 errors.
+- `npm run test:ai-chat-formatting`: passed. `strongTexts` included `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、目标词 `ながら`; `underlineTexts` included `接续：`; 二级子项未进入 `strong`。
 - `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
+- `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
 - `git diff --check`: passed.
-- AI 老师 Markdown server-render smoke test: passed. `strong` only included the true heading and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
+- AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
+- Production DOM probe on `https://yomi.saaaai.com/`: passed. Injected the screenshot-style AI chat sample into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; content subitems were not bold.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
-- GitHub app code: `f0f2fd9` pushed to `origin/main`.
-- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows Production/main source `f0f2fd9` as Active before README-only closeout commit.
+- GitHub app code: `01014a7` pushed to `origin/main`.
+- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows Production/main source `01014a7` as Active before README-only closeout commit.
 - Public homepage: `https://yomi.saaaai.com/` returned HTTP 200.
 - Production AI API: POST `https://yomi.saaaai.com/api/ai/chat` with a minimal `请只回复 OK。` payload returned `OK` and HTTP 200.
 - Production R2 cache probe: unique key `codex-closeout-r2-1778339221` first returned `CACHEOK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
-- Learning writeback: `~/.codex/mistakebook/cards/global/root-cause-and-acceptance.md` records the AI teacher Markdown bold/heading regression; manifest rule `anti_generic_markdown_renderer_breaks_existing_ui_tokens` evidence count is now 2.
+- Learning writeback: `~/.codex/mistakebook/cards/global/root-cause-and-acceptance.md` records both the original AI teacher Markdown bold/heading regression and this follow-up miss where the test matrix did not include `目标词 + 中文标题词` production examples.
 
 ## 当前边界
 
