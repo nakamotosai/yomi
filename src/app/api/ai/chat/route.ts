@@ -1,14 +1,177 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getAIUsageStats, incrementAIUsage, D1Database } from '@/lib/db';
+import { RemoteD1Client } from '@/lib/remoteD1';
 
 export const runtime = 'edge';
 
-const MODEL_ID = "gemma-3-27b-it";
-const RPM_LIMIT = 25; // 安全阈值，官方 30
-const TPM_LIMIT = 12000; // 安全阈值，官方 15000
+const DEFAULT_MODEL_ID = 'qwen/qwen3.5-122b-a10b';
+const DEFAULT_CLIPROXY_BASE_URL = 'http://127.0.0.1:8317/v1';
+const RPM_LIMIT = 25;
+const TPM_LIMIT = 12000;
+const MAX_OUTPUT_TOKENS = 2000;
+const UPSTREAM_FETCH_TIMEOUT_MS = 45000;
+const UPSTREAM_STREAM_IDLE_TIMEOUT_MS = 60000;
 
-import { RemoteD1Client } from '@/lib/remoteD1';
+type ChatRole = 'system' | 'user';
+
+interface ChatMessage {
+    role: ChatRole;
+    content: string;
+}
+
+interface AIRequestBody {
+    prompt?: string;
+    systemPrompt?: string;
+    temperature?: number;
+    topP?: number;
+    cacheKey?: string;
+    forceRefresh?: boolean;
+}
+
+interface OpenAIStreamChoice {
+    delta?: {
+        content?: string;
+        reasoning_content?: string;
+    };
+}
+
+interface OpenAIStreamChunk {
+    choices?: OpenAIStreamChoice[];
+    usage?: {
+        total_tokens?: number;
+    };
+}
+
+class UpstreamTimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'UpstreamTimeoutError';
+    }
+}
+
+function isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AbortError';
+}
+
+function getEnvValue(...names: string[]): string {
+    if (typeof process === 'undefined' || !process.env) return '';
+
+    for (const [key, value] of Object.entries(process.env)) {
+        const trimmedKey = key.trim();
+        if (names.includes(trimmedKey)) {
+            return value?.trim() || '';
+        }
+    }
+
+    return '';
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+    return baseUrl.replace(/\/+$/, '');
+}
+
+function buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
+    if (!systemPrompt) {
+        return [{ role: 'user', content: prompt }];
+    }
+
+    return [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+    ];
+}
+
+function extractStreamText(chunk: OpenAIStreamChunk): string {
+    return (chunk.choices || [])
+        .map((choice) => choice.delta?.content || choice.delta?.reasoning_content || '')
+        .join('');
+}
+
+function parseSSELine(line: string): { text: string; totalTokens?: number; done: boolean } | null {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return null;
+
+    const payload = trimmed.slice(5).trim();
+    if (!payload) return null;
+    if (payload === '[DONE]') return { text: '', done: true };
+
+    try {
+        const chunk = JSON.parse(payload) as OpenAIStreamChunk;
+        const totalTokens = typeof chunk.usage?.total_tokens === 'number' ? chunk.usage.total_tokens : undefined;
+        return { text: extractStreamText(chunk), totalTokens, done: false };
+    } catch (error) {
+        console.warn('[AI API] Failed to parse upstream SSE chunk:', error);
+        return null;
+    }
+}
+
+async function finalizeUsageAndCache(
+    db: D1Database,
+    modelId: string,
+    minuteKey: string,
+    estInputTokens: number,
+    actualTotalTokens: number | undefined,
+    cacheKey: string | undefined,
+    fullText: string
+): Promise<void> {
+    try {
+        if (typeof actualTotalTokens === 'number') {
+            const correction = actualTotalTokens - estInputTokens;
+            if (correction !== 0) {
+                await incrementAIUsage(db, modelId, minuteKey, 0, correction);
+            }
+            console.log(`[AI Usage] Minute: ${minuteKey}, Actual total: ${actualTotalTokens} (est was ${estInputTokens})`);
+        }
+
+        if (cacheKey && fullText) {
+            await db.prepare(`
+                INSERT OR REPLACE INTO ai_cache (key, value, created_at)
+                VALUES (?, ?, ?)
+            `).bind(cacheKey, fullText, new Date().toISOString()).run();
+            console.log(`[AI API] Background Cache Saved: ${cacheKey}`);
+        }
+    } catch (statsError) {
+        console.error('[AI API] Stats/Cache Error:', statsError);
+    }
+}
+
+async function fetchUpstreamWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+    try {
+        return await fetch(url, {
+            ...init,
+            signal: timeoutController.signal,
+        });
+    } catch (error) {
+        if (isAbortError(error)) {
+            throw new UpstreamTimeoutError(`AI upstream did not respond within ${timeoutMs}ms`);
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function readUpstreamChunkWithTimeout(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    timeoutMs: number
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new UpstreamTimeoutError(`AI upstream stream was idle for ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+
+    try {
+        return await Promise.race([reader.read(), timeoutPromise]);
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+    }
+}
 
 // 获取 D1 数据库绑定
 function getDB(request: NextRequest): D1Database | null {
@@ -26,14 +189,13 @@ function getDB(request: NextRequest): D1Database | null {
     if (env?.DB) return env.DB;
 
     // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
-    // 处理可能存在的空格问题 (通过遍历 process.env 键值对)
-    let apiToken = "";
-    let accountId = "";
-    let dbId = "";
+    let apiToken = '';
+    let accountId = '';
+    let dbId = '';
 
     for (const [key, value] of Object.entries(process.env)) {
         const trimmedKey = key.trim();
-        const trimmedValue = value?.trim() || "";
+        const trimmedValue = value?.trim() || '';
         if (trimmedKey === 'CLOUDFLARE_API_TOKEN') apiToken = trimmedValue;
         if (trimmedKey === 'CLOUDFLARE_ACCOUNT_ID') accountId = trimmedValue;
         if (trimmedKey === 'CLOUDFLARE_D1_ID') dbId = trimmedValue;
@@ -55,7 +217,14 @@ function getDB(request: NextRequest): D1Database | null {
 
 export async function POST(req: NextRequest, ctx: unknown) {
     try {
-        const { prompt, systemPrompt, temperature = 0.85, topP = 0.95, cacheKey, forceRefresh } = await req.json();
+        const {
+            prompt,
+            systemPrompt,
+            temperature = 0.85,
+            topP = 0.95,
+            cacheKey,
+            forceRefresh
+        } = await req.json() as AIRequestBody;
 
         if (!prompt) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -67,18 +236,15 @@ export async function POST(req: NextRequest, ctx: unknown) {
             return NextResponse.json({ error: 'Database not available' }, { status: 500 });
         }
 
-        // 0. 缓存策略
         if (cacheKey) {
             if (forceRefresh) {
-                // 强制刷新：明确删除旧数据，确保"清空"
                 console.log(`[AI API] Force Refresh: Deleting old cache for ${cacheKey}`);
                 try {
                     await db.prepare('DELETE FROM ai_cache WHERE key = ?').bind(cacheKey).run();
-                } catch (e) {
-                    console.warn('[AI API] Failed to delete old cache:', e);
+                } catch (error) {
+                    console.warn('[AI API] Failed to delete old cache:', error);
                 }
             } else {
-                // 正常模式：尝试读取缓存
                 const cached = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(cacheKey).first<{ value: string }>();
                 if (cached) {
                     console.log(`[AI API] Backend Cache Hit: ${cacheKey}`);
@@ -87,16 +253,19 @@ export async function POST(req: NextRequest, ctx: unknown) {
             }
         }
 
-        // 1. 预估 Token 消耗 (保守估计)
-        // 中日文约 1.5 - 2 token/char，英文约 0.3 - 0.5
+        const modelId = getEnvValue('CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
+        const apiKey = getEnvValue('CLIPROXY_API_KEY', 'CODEX_CLIPROXYAPI_8317_API_KEY');
+        const apiBaseUrl = normalizeBaseUrl(getEnvValue('CLIPROXY_API_BASE_URL') || DEFAULT_CLIPROXY_BASE_URL);
+
+        if (!apiKey) {
+            return NextResponse.json({ error: 'CLIPROXY_API_KEY is missing' }, { status: 500 });
+        }
+
         const estInputTokens = Math.ceil((prompt.length + (systemPrompt?.length || 0)) * 1.5);
-
-        // 2. 检查配额
-        // 获取当前分钟 Key (UTC 时间)
         const now = new Date();
-        const minuteKey = `${now.toISOString().slice(0, 16).replace('T', ' ')}`; // YYYY-MM-DD HH:mm
+        const minuteKey = `${now.toISOString().slice(0, 16).replace('T', ' ')}`;
 
-        const stats = await getAIUsageStats(db, MODEL_ID, minuteKey);
+        const stats = await getAIUsageStats(db, modelId, minuteKey);
         const currentRPM = stats?.request_count || 0;
         const currentTPM = stats?.token_count || 0;
 
@@ -109,59 +278,96 @@ export async function POST(req: NextRequest, ctx: unknown) {
             }, { status: 429 });
         }
 
-        // 3. 预先占位增加计数 (防止瞬时并发绕过检查)
         try {
-            await incrementAIUsage(db, MODEL_ID, minuteKey, 1, estInputTokens);
-        } catch (_e) {
-            console.error('[AI Usage] Failed to increment initial usage', _e);
-            // 继续执行，防止数据库错误阻断 AI 服务，但记录日志
+            await incrementAIUsage(db, modelId, minuteKey, 1, estInputTokens);
+        } catch (error) {
+            console.error('[AI Usage] Failed to increment initial usage', error);
         }
 
-        // 4. 调用 Gemini
-        // 优先使用后端独有的 GEMINI_API_KEY，如果没有则尝试 NEXT_PUBLIC_GEMINI_API_KEY
-        const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-        if (!apiKey) {
-            return NextResponse.json({ error: 'AI API Key is missing' }, { status: 500 });
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: MODEL_ID,
-            generationConfig: {
+        const upstreamResponse = await fetchUpstreamWithTimeout(`${apiBaseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: modelId,
+                messages: buildMessages(prompt, systemPrompt),
                 temperature,
-                topP,
-                maxOutputTokens: 2000,
-            }
-        });
+                top_p: topP,
+                max_tokens: MAX_OUTPUT_TOKENS,
+                stream: true,
+                stream_options: { include_usage: true },
+            }),
+        }, UPSTREAM_FETCH_TIMEOUT_MS);
 
-        // 合并 Prompt (Gemma 3 推荐将 System Instructions 放入 Prompt 开头)
-        const fullPrompt = systemPrompt ? `${systemPrompt}\n\nUser Question:\n${prompt}` : prompt;
+        if (!upstreamResponse.ok) {
+            const upstreamError = await upstreamResponse.text();
+            console.error('[AI API] Upstream cliproxyapi error:', upstreamResponse.status, upstreamError.slice(0, 500));
+            return NextResponse.json(
+                { error: 'AI upstream unavailable', status: upstreamResponse.status },
+                { status: 502 }
+            );
+        }
 
-        // 流式调用
-        const result = await model.generateContentStream(fullPrompt);
+        if (!upstreamResponse.body) {
+            return NextResponse.json({ error: 'AI upstream returned empty body' }, { status: 502 });
+        }
 
-        // 5. 准备流式响应
         const encoder = new TextEncoder();
-        let fullText = "";
-
-        // 用于控制流的状态
+        const decoder = new TextDecoder();
+        const reader = upstreamResponse.body.getReader();
+        let pendingChunk: Uint8Array | undefined;
+        let fullText = '';
+        let sseBuffer = '';
+        let actualTotalTokens: number | undefined;
         let isStreamClosed = false;
 
+        try {
+            const firstRead = await readUpstreamChunkWithTimeout(reader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
+            if (firstRead.done) {
+                return NextResponse.json({ error: 'AI upstream ended before returning content' }, { status: 502 });
+            }
+            pendingChunk = firstRead.value;
+        } catch (error) {
+            if (error instanceof UpstreamTimeoutError) {
+                void reader.cancel();
+                return NextResponse.json({ error: 'AI upstream timeout' }, { status: 504 });
+            }
+            throw error;
+        }
+
         const responseStream = new ReadableStream({
-            async start(controller) {
-                // 定义后台处理逻辑 (唯一的一次流消费)
+            start(controller) {
                 const processStream = async () => {
                     try {
-                        for await (const chunk of result.stream) {
-                            const text = chunk.text();
-                            if (text) {
-                                fullText += text;
-                                // 如果客户端未断开，发送数据
+                        while (true) {
+                            const nextChunk = pendingChunk
+                                ? { done: false as const, value: pendingChunk }
+                                : await readUpstreamChunkWithTimeout(reader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
+                            pendingChunk = undefined;
+
+                            const { done, value } = nextChunk;
+                            if (done) break;
+
+                            sseBuffer += decoder.decode(value, { stream: true });
+                            const lines = sseBuffer.split(/\r?\n/);
+                            sseBuffer = lines.pop() || '';
+
+                            for (const line of lines) {
+                                const parsed = parseSSELine(line);
+                                if (!parsed) continue;
+                                if (typeof parsed.totalTokens === 'number') {
+                                    actualTotalTokens = parsed.totalTokens;
+                                }
+                                if (parsed.done) continue;
+                                if (!parsed.text) continue;
+
+                                fullText += parsed.text;
                                 if (!isStreamClosed) {
                                     try {
-                                        controller.enqueue(encoder.encode(text));
-                                    } catch (e) {
-                                        // 可能是客户端已断开
+                                        controller.enqueue(encoder.encode(parsed.text));
+                                    } catch {
                                         console.warn('[AI API] Client disconnected, marking stream closed.');
                                         isStreamClosed = true;
                                     }
@@ -169,62 +375,44 @@ export async function POST(req: NextRequest, ctx: unknown) {
                             }
                         }
 
-                        // 流结束，关闭控制器
+                        const tail = parseSSELine(sseBuffer);
+                        if (tail?.totalTokens) {
+                            actualTotalTokens = tail.totalTokens;
+                        }
+                        if (tail?.text) {
+                            fullText += tail.text;
+                            if (!isStreamClosed) {
+                                controller.enqueue(encoder.encode(tail.text));
+                            }
+                        }
+
                         if (!isStreamClosed) {
                             controller.close();
                             isStreamClosed = true;
                         }
 
-                        // 6. 后台统计与缓存 (在流结束后执行)
-                        try {
-                            const response = await result.response;
-                            const usage = response.usageMetadata;
-
-                            // 更新 Token 统计
-                            if (usage) {
-                                const actualTotal = usage.totalTokenCount;
-                                const correction = actualTotal - estInputTokens;
-                                if (correction !== 0) {
-                                    await incrementAIUsage(db, MODEL_ID, minuteKey, 0, correction);
-                                }
-                                console.log(`[AI Usage] Minute: ${minuteKey}, Actual total: ${actualTotal} (est was ${estInputTokens})`);
-                            }
-
-                            // 写入缓存
-                            if (cacheKey && fullText) {
-                                await db.prepare(`
-                                    INSERT OR REPLACE INTO ai_cache (key, value, created_at)
-                                    VALUES (?, ?, ?)
-                                `).bind(cacheKey, fullText, new Date().toISOString()).run();
-                                console.log(`[AI API] Background Cache Saved: ${cacheKey}`);
-                            }
-                        } catch (statsError) {
-                            console.error('[AI API] Stats/Cache Error:', statsError);
+                        await finalizeUsageAndCache(db, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
+                    } catch (error: unknown) {
+                        console.error('[AI API] Stream Processing Error:', error);
+                        if (error instanceof UpstreamTimeoutError) {
+                            void reader.cancel();
                         }
-
-                    } catch (err: unknown) {
-                        console.error('[AI API] Stream Processing Error:', err);
                         if (!isStreamClosed) {
-                            controller.error(err);
+                            controller.error(error);
                             isStreamClosed = true;
                         }
                     }
                 };
 
-                // 启动处理任务
                 const task = processStream();
-
-                // 使用 waitUntil 保持后台运行
-                const context = ctx as { waitUntil: (promise: Promise<unknown>) => void };
+                const context = ctx as { waitUntil?: (promise: Promise<unknown>) => void };
                 if (context && typeof context.waitUntil === 'function') {
                     context.waitUntil(task);
-                } else {
-                    // 非 Cloudflare 环境下等待任务完成 (防止过早终止)
-                    await task;
                 }
             },
             cancel() {
                 isStreamClosed = true;
+                void reader.cancel();
                 console.log('[AI API] Stream cancelled by client.');
             }
         });
@@ -232,11 +420,19 @@ export async function POST(req: NextRequest, ctx: unknown) {
         return new Response(responseStream, {
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Transfer-Encoding': 'chunked',
+                'Cache-Control': 'no-store',
             },
         });
 
     } catch (error: unknown) {
+        if (error instanceof UpstreamTimeoutError) {
+            console.error('[AI API] Upstream timeout:', error.message);
+            return NextResponse.json(
+                { error: 'AI upstream timeout' },
+                { status: 504 }
+            );
+        }
+
         console.error('[AI API] Fatal Error:', error);
         return NextResponse.json(
             { error: 'Internal Server Error', details: error instanceof Error ? error.message : String(error) },
