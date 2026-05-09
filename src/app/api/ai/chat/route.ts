@@ -13,6 +13,7 @@ const MAX_OUTPUT_TOKENS = 2000;
 const UPSTREAM_FETCH_TIMEOUT_MS = 45000;
 const UPSTREAM_STREAM_IDLE_TIMEOUT_MS = 60000;
 
+type CloudflareEnv = Record<string, unknown>;
 type ChatRole = 'system' | 'user';
 
 interface ChatMessage {
@@ -27,6 +28,11 @@ interface AIRequestBody {
     topP?: number;
     cacheKey?: string;
     forceRefresh?: boolean;
+}
+
+interface RouteContext {
+    params: Promise<Record<string, never>>;
+    env?: CloudflareEnv;
 }
 
 interface FallbackAttempt {
@@ -75,13 +81,20 @@ function isClientDisconnectError(error: unknown): boolean {
     return code === 'ECONNRESET' || /aborted|client disconnected/i.test(error.message);
 }
 
-function getEnvValue(...names: string[]): string {
-    if (typeof process === 'undefined' || !process.env) return '';
+function getEnvValue(env: CloudflareEnv | undefined, ...names: string[]): string {
+    const sources: Array<Record<string, unknown> | undefined> = [
+        env,
+        typeof process !== 'undefined' ? process.env : undefined,
+    ];
 
-    for (const [key, value] of Object.entries(process.env)) {
-        const trimmedKey = key.trim();
-        if (names.includes(trimmedKey)) {
-            return value?.trim() || '';
+    for (const source of sources) {
+        if (!source) continue;
+
+        for (const [key, value] of Object.entries(source)) {
+            const trimmedKey = key.trim();
+            if (names.includes(trimmedKey) && typeof value === 'string') {
+                return value.trim();
+            }
         }
     }
 
@@ -112,9 +125,9 @@ function uniqueModelChain(primaryModel: string, fallbackModels: string[]): strin
     return chain;
 }
 
-function getModelFallbackChain(): string[] {
-    const primaryModel = getEnvValue('CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
-    const fallbackOverride = getEnvValue('CLIPROXY_FALLBACK_MODELS');
+function getModelFallbackChain(env?: CloudflareEnv): string[] {
+    const primaryModel = getEnvValue(env, 'CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
+    const fallbackOverride = getEnvValue(env, 'CLIPROXY_FALLBACK_MODELS');
     const fallbackModels = fallbackOverride ? parseModelList(fallbackOverride) : DEFAULT_FALLBACK_MODEL_IDS;
     return uniqueModelChain(primaryModel, fallbackModels);
 }
@@ -231,6 +244,7 @@ async function readUpstreamChunkWithTimeout(
 
 async function openUpstreamWithFallback({
     db,
+    env,
     apiBaseUrl,
     apiKey,
     prompt,
@@ -239,6 +253,7 @@ async function openUpstreamWithFallback({
     topP,
 }: {
     db: D1Database;
+    env?: CloudflareEnv;
     apiBaseUrl: string;
     apiKey: string;
     prompt: string;
@@ -246,7 +261,7 @@ async function openUpstreamWithFallback({
     temperature: number;
     topP: number;
 }): Promise<UpstreamSelection | NextResponse> {
-    const modelChain = getModelFallbackChain();
+    const modelChain = getModelFallbackChain(env);
     const estInputTokens = Math.ceil((prompt.length + (systemPrompt?.length || 0)) * 1.5);
     const now = new Date();
     const minuteKey = `${now.toISOString().slice(0, 16).replace('T', ' ')}`;
@@ -346,7 +361,11 @@ async function openUpstreamWithFallback({
 }
 
 // 获取 D1 数据库绑定
-function getDB(request: NextRequest): D1Database | null {
+function getDB(request: NextRequest, env?: CloudflareEnv): D1Database | null {
+    if (env?.DB) {
+        return env.DB as D1Database;
+    }
+
     // 1. 尝试从 process.env 获取 (Cloudflare Pages nodejs_compat 标准方式)
     if (typeof process !== 'undefined' && process.env?.DB) {
         return process.env.DB as unknown as D1Database;
@@ -357,21 +376,13 @@ function getDB(request: NextRequest): D1Database | null {
     if (globalDB) return globalDB;
 
     // 3. 尝试从 request.env 获取 (部分环境支持)
-    const env = (request as unknown as { env: { DB: D1Database } }).env;
-    if (env?.DB) return env.DB;
+    const requestEnv = (request as unknown as { env: { DB: D1Database } }).env;
+    if (requestEnv?.DB) return requestEnv.DB;
 
     // 4. 本地开发环境：尝试连接远程 D1 (增强容错处理)
-    let apiToken = '';
-    let accountId = '';
-    let dbId = '';
-
-    for (const [key, value] of Object.entries(process.env)) {
-        const trimmedKey = key.trim();
-        const trimmedValue = value?.trim() || '';
-        if (trimmedKey === 'CLOUDFLARE_API_TOKEN') apiToken = trimmedValue;
-        if (trimmedKey === 'CLOUDFLARE_ACCOUNT_ID') accountId = trimmedValue;
-        if (trimmedKey === 'CLOUDFLARE_D1_ID') dbId = trimmedValue;
-    }
+    const apiToken = getEnvValue(env, 'CLOUDFLARE_API_TOKEN');
+    const accountId = getEnvValue(env, 'CLOUDFLARE_ACCOUNT_ID');
+    const dbId = getEnvValue(env, 'CLOUDFLARE_D1_ID');
 
     if (apiToken && accountId && dbId) {
         console.log('[AI API] Local Dev: Initializing Remote D1 Client');
@@ -387,8 +398,9 @@ function getDB(request: NextRequest): D1Database | null {
     return null;
 }
 
-export async function POST(req: NextRequest, ctx: unknown) {
+export async function POST(req: NextRequest, ctx: { params: Promise<Record<string, never>> }) {
     try {
+        const env = (ctx as unknown as RouteContext)?.env;
         const {
             prompt,
             systemPrompt,
@@ -402,7 +414,7 @@ export async function POST(req: NextRequest, ctx: unknown) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
         }
 
-        const db = getDB(req);
+        const db = getDB(req, env);
         if (!db) {
             console.error('[AI API] D1 Database binding "DB" is missing');
             return NextResponse.json({ error: 'Database not available' }, { status: 500 });
@@ -425,8 +437,8 @@ export async function POST(req: NextRequest, ctx: unknown) {
             }
         }
 
-        const apiKey = getEnvValue('CLIPROXY_API_KEY', 'CODEX_CLIPROXYAPI_8317_API_KEY');
-        const apiBaseUrl = normalizeBaseUrl(getEnvValue('CLIPROXY_API_BASE_URL') || DEFAULT_CLIPROXY_BASE_URL);
+        const apiKey = getEnvValue(env, 'CLIPROXY_API_KEY', 'CODEX_CLIPROXYAPI_8317_API_KEY');
+        const apiBaseUrl = normalizeBaseUrl(getEnvValue(env, 'CLIPROXY_API_BASE_URL') || DEFAULT_CLIPROXY_BASE_URL);
 
         if (!apiKey) {
             return NextResponse.json({ error: 'CLIPROXY_API_KEY is missing' }, { status: 500 });
@@ -434,6 +446,7 @@ export async function POST(req: NextRequest, ctx: unknown) {
 
         const upstreamSelection = await openUpstreamWithFallback({
             db,
+            env,
             apiBaseUrl,
             apiKey,
             prompt,
