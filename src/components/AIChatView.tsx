@@ -3,7 +3,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useChatTypewriterStore, useGeminiStore, type ChatMessage } from '@/store/useGeminiStore';
 import { useAppStore } from '@/store/useAppStore';
-import { ChevronLeft, User, Bot, Send, Trash2, Square, Bookmark, BookMarked, MessageSquare } from 'lucide-react';
+import { ChevronLeft, User, Bot, Send, Trash2, Square, Bookmark, BookMarked, MessageSquare, CheckSquare, Check, X, RotateCw } from 'lucide-react';
 import clsx from 'clsx';
 import { useI18n } from '@/lib/i18n';
 import { StreamingMarkdown } from './StreamingMarkdown';
@@ -16,6 +16,43 @@ function StreamingDots() {
             <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
     );
+}
+
+const PROMPT_TERM_STOP_WORDS = new Set([
+    '怎么', '怎麼', '什么', '什麼', '意思', '用法', '区别', '差异', '請問', '请问', '解释', '講解', '讲解', '一下', '如何', '為什麼', '为什么'
+]);
+
+function cleanPromptTerm(term: string) {
+    return term
+        .replace(/^[\s"'“”‘’「『【（(]+|[\s"'“”‘’」』】）),，。！？?：:；;]+$/g, '')
+        .trim();
+}
+
+function extractAIChatHighlightTerms(prompt?: string) {
+    if (!prompt) return [];
+    const terms: string[] = [];
+    const quotedMatches = prompt.matchAll(/[「『“"']([^」』”"']{1,30})[」』”"']/g);
+    for (const match of quotedMatches) {
+        terms.push(cleanPromptTerm(match[1]));
+    }
+
+    const markerMatch = prompt.match(/^\s*(?:请问|請問|解释一下|解釋一下|解释|解釋|讲一下|講一下|帮我看看|幫我看看)?\s*(.+?)(?:怎么用|怎麼用|是什么意思|是什麼意思|什么意思|什麼意思|是什么|是什麼|用法|区别|差异|差別|如何用|咋用)/);
+    if (markerMatch) {
+        terms.push(cleanPromptTerm(markerMatch[1].replace(/[和与與、,，/].*$/g, '')));
+    }
+
+    const japaneseRuns = prompt.match(/[ぁ-ゖァ-ヺー々〆〤一-龯]+/g) || [];
+    for (const run of japaneseRuns) {
+        const term = cleanPromptTerm(run);
+        if (/[ぁ-ゖァ-ヺー]/.test(term) || prompt.length <= 12) {
+            terms.push(term);
+        }
+    }
+
+    return [...new Set(terms)]
+        .filter((term) => term && !PROMPT_TERM_STOP_WORDS.has(term) && term.length <= 30)
+        .sort((a, b) => b.length - a.length)
+        .slice(0, 3);
 }
 
 function ModelMessageContent({
@@ -42,15 +79,23 @@ function ModelMessageContent({
         return <StreamingDots />;
     }
 
-    return <StreamingMarkdown content={visibleContent} isStreaming={isStreamingModel} />;
+    return (
+        <StreamingMarkdown
+            content={visibleContent}
+            isStreaming={isStreamingModel}
+            highlightTerms={extractAIChatHighlightTerms(msg.sourcePrompt)}
+        />
+    );
 }
 
 export default function AIChatView({ hideHeader = false }: { hideHeader?: boolean }) {
-    const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration, bookmarks, toggleBookmark } = useGeminiStore();
+    const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration, bookmarks, toggleBookmark, deleteMessage, deleteMessages, retryMessage } = useGeminiStore();
     const activeChatMessageTimestamp = useChatTypewriterStore((state) => state.activeMessageTimestamp);
     const { settings, setCenterViewMode } = useAppStore();
     const { t } = useI18n();
     const [showBookmarks, setShowBookmarks] = React.useState(false);
+    const [isSelectionMode, setIsSelectionMode] = React.useState(false);
+    const [selectedTimestamps, setSelectedTimestamps] = React.useState<Set<number>>(() => new Set());
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom on new messages
@@ -63,6 +108,55 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
     const [input, setInput] = React.useState('');
     const [isFocused, setIsFocused] = React.useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const selectedCount = selectedTimestamps.size;
+
+    const exitSelectionMode = () => {
+        setIsSelectionMode(false);
+        setSelectedTimestamps(new Set());
+    };
+
+    const toggleSelectionMode = () => {
+        if (isSelectionMode) {
+            exitSelectionMode();
+            return;
+        }
+        setShowBookmarks(false);
+        setIsSelectionMode(true);
+    };
+
+    const toggleSelected = (timestamp: number) => {
+        setSelectedTimestamps((current) => {
+            const next = new Set(current);
+            if (next.has(timestamp)) {
+                next.delete(timestamp);
+            } else {
+                next.add(timestamp);
+            }
+            return next;
+        });
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedCount === 0) return;
+        deleteMessages(Array.from(selectedTimestamps).filter((timestamp) => timestamp !== activeChatMessageTimestamp));
+        exitSelectionMode();
+    };
+
+    const handleDeleteOne = (timestamp: number) => {
+        deleteMessage(timestamp);
+        setSelectedTimestamps((current) => {
+            const next = new Set(current);
+            next.delete(timestamp);
+            return next;
+        });
+    };
+
+    const handleRetry = async (timestamp: number) => {
+        if (isChatGenerating) return;
+        exitSelectionMode();
+        setShowBookmarks(false);
+        await retryMessage(timestamp);
+    };
 
     const handleSend = async () => {
         if (!input.trim() || isChatGenerating) return;
@@ -94,6 +188,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
 
     const handleClear = () => {
         if (window.confirm(t('ai.clear_confirm'))) {
+            exitSelectionMode();
             resetChat();
         }
     };
@@ -126,7 +221,10 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
 
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setShowBookmarks(!showBookmarks)}
+                            onClick={() => {
+                                exitSelectionMode();
+                                setShowBookmarks(!showBookmarks);
+                            }}
                             className={clsx(
                                 "p-2 rounded-xl transition-all hover:shadow-sm active:scale-95 cursor-pointer flex items-center gap-2",
                                 showBookmarks
@@ -140,14 +238,69 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                         </button>
 
                         {!showBookmarks && (
-                            <button
-                                onClick={handleClear}
-                                className="p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
-                                title={t('ai.clear_chat')}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
+                            <>
+                                <button
+                                    onClick={toggleSelectionMode}
+                                    disabled={history.length === 0}
+                                    className={clsx(
+                                        "p-2 rounded-xl transition-all hover:shadow-sm active:scale-95 flex items-center gap-2",
+                                        isSelectionMode
+                                            ? "rainbow-highlight text-[var(--accent-primary)] font-bold px-3"
+                                            : "bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]",
+                                        history.length === 0 && "opacity-40 cursor-default"
+                                    )}
+                                    title={isSelectionMode ? "退出多选" : "多选删除"}
+                                >
+                                    {isSelectionMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                                    {isSelectionMode && <span className="text-xs">退出</span>}
+                                </button>
+                                <button
+                                    onClick={handleClear}
+                                    className="p-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 cursor-pointer"
+                                    title={t('ai.clear_chat')}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {hideHeader && !showBookmarks && (
+                <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-muted)] bg-transparent backdrop-blur-md z-10">
+                    <button
+                        onClick={() => {
+                            exitSelectionMode();
+                            setShowBookmarks(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] active:scale-95 transition-all text-xs font-medium"
+                    >
+                        <BookMarked className="w-4 h-4" />
+                        收藏
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleSelectionMode}
+                            disabled={history.length === 0}
+                            className={clsx(
+                                "flex items-center gap-1.5 px-3 py-2 rounded-xl active:scale-95 transition-all text-xs font-medium",
+                                isSelectionMode
+                                    ? "rainbow-highlight text-[var(--accent-primary)]"
+                                    : "bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]",
+                                history.length === 0 && "opacity-40 cursor-default"
+                            )}
+                        >
+                            {isSelectionMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                            {isSelectionMode ? "退出" : "多选"}
+                        </button>
+                        <button
+                            onClick={handleClear}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] active:scale-95 transition-all text-xs font-medium"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            全删
+                        </button>
                     </div>
                 </div>
             )}
@@ -167,12 +320,42 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                 ) : (
                     history.map((msg, idx) => {
                         const isStreamingModel = msg.role === 'model' && activeChatMessageTimestamp === msg.timestamp;
+                        const isSelected = selectedTimestamps.has(msg.timestamp);
+                        const isActionDisabled = isChatGenerating || isStreamingModel;
+                        const isSelectable = !isStreamingModel;
 
                         return (
                         <div
                             key={idx}
-                            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                            onClick={() => {
+                                if (isSelectionMode && isSelectable) toggleSelected(msg.timestamp);
+                            }}
+                            className={clsx(
+                                "flex gap-3",
+                                msg.role === 'user' ? 'flex-row-reverse' : 'flex-row',
+                                isSelectionMode && "cursor-pointer"
+                            )}
                         >
+                            {isSelectionMode && (
+                                <button
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (isSelectable) toggleSelected(msg.timestamp);
+                                    }}
+                                    disabled={!isSelectable}
+                                    className={clsx(
+                                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 border transition-all",
+                                        isSelected
+                                            ? "rainbow-highlight text-[var(--accent-primary)] border-transparent shadow-sm"
+                                            : "bg-[var(--bg-muted)] text-[var(--text-faint)] border-[var(--border-default)]",
+                                        !isSelectable && "opacity-40 cursor-default"
+                                    )}
+                                    aria-label={isSelected ? "取消选择这条消息" : "选择这条消息"}
+                                >
+                                    {isSelected && <Check className="w-4 h-4" />}
+                                </button>
+                            )}
+
                             {/* Avatar */}
                             <div
                                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 transition-colors border border-[var(--border-default)] shadow-sm backdrop-blur-sm ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'bg-white/40 dark:bg-black/20'}`}
@@ -187,7 +370,8 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                 "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed transition-all relative",
                                 msg.role === 'user'
                                     ? "rounded-tr-none bg-[var(--bg-muted)] border border-[var(--border-default)] text-[var(--text-secondary)] shadow-sm"
-                                    : "rounded-tl-none rainbow-highlight text-[var(--text-primary)] shadow-md"
+                                    : "rounded-tl-none rainbow-highlight text-[var(--text-primary)] shadow-md",
+                                isSelected && "ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-base)]"
                             )}
                             >
                                 {msg.role === 'user' ? (
@@ -195,22 +379,57 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                 ) : (
                                     <ModelMessageContent msg={msg} isStreamingModel={isStreamingModel} scrollRef={scrollRef} />
                                 )}
-                                {msg.role === 'model' && msg.content && !isStreamingModel && (
+                                {!isSelectionMode && !isStreamingModel && msg.content && (
                                     <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex items-center justify-between">
-                                        <button
-                                            onClick={() => toggleBookmark(msg)}
-                                            className={clsx(
-                                                "p-1.5 rounded-lg transition-all flex items-center gap-1 group/btn",
-                                                bookmarks.some(b => b.timestamp === msg.timestamp)
-                                                    ? "text-yellow-500 bg-yellow-500/10"
-                                                    : "text-[var(--text-faint)] hover:text-yellow-500 hover:bg-yellow-500/5"
+                                        <div className="flex items-center gap-1.5">
+                                            {msg.role === 'model' && (
+                                                <button
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        toggleBookmark(msg);
+                                                    }}
+                                                    className={clsx(
+                                                        "p-1.5 rounded-lg transition-all flex items-center gap-1 group/btn",
+                                                        bookmarks.some(b => b.timestamp === msg.timestamp)
+                                                            ? "text-yellow-500 bg-yellow-500/10"
+                                                            : "text-[var(--text-faint)] hover:text-yellow-500 hover:bg-yellow-500/5"
+                                                    )}
+                                                >
+                                                    <Bookmark className={clsx("w-3.5 h-3.5", bookmarks.some(b => b.timestamp === msg.timestamp) ? "fill-current" : "group-hover/btn:fill-yellow-500/30")} />
+                                                    <span className="text-[10px] font-medium">{bookmarks.some(b => b.timestamp === msg.timestamp) ? "已收藏" : "收藏"}</span>
+                                                </button>
                                             )}
-                                        >
-                                            <Bookmark className={clsx("w-3.5 h-3.5", bookmarks.some(b => b.timestamp === msg.timestamp) ? "fill-current" : "group-hover/btn:fill-yellow-500/30")} />
-                                            <span className="text-[10px] font-medium">{bookmarks.some(b => b.timestamp === msg.timestamp) ? "已收藏" : "收藏"}</span>
-                                        </button>
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleRetry(msg.timestamp);
+                                                }}
+                                                disabled={isActionDisabled}
+                                                className={clsx(
+                                                    "p-1.5 rounded-lg transition-all flex items-center gap-1 text-[var(--text-faint)] hover:text-[var(--accent-primary)] hover:bg-[var(--scheme-accent-surface)]",
+                                                    isActionDisabled && "opacity-40 cursor-default hover:bg-transparent"
+                                                )}
+                                            >
+                                                <RotateCw className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium">重试</span>
+                                            </button>
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleDeleteOne(msg.timestamp);
+                                                }}
+                                                disabled={isActionDisabled}
+                                                className={clsx(
+                                                    "p-1.5 rounded-lg transition-all flex items-center gap-1 text-[var(--text-faint)] hover:text-red-500 hover:bg-red-500/5",
+                                                    isActionDisabled && "opacity-40 cursor-default hover:bg-transparent"
+                                                )}
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium">删除</span>
+                                            </button>
+                                        </div>
                                         <span className="text-[10px] text-[var(--text-faint)] select-none">
-                                            {t('ai.char_count')}: {msg.content.length}
+                                            {msg.role === 'model' ? `${t('ai.char_count')}: ${msg.content.length}` : new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>
                                 )}
@@ -294,7 +513,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                             <Bookmark className="w-4 h-4 fill-current" />
                                         </button>
                                     </div>
-                                        <StreamingMarkdown content={msg.content} />
+                                        <StreamingMarkdown content={msg.content} highlightTerms={extractAIChatHighlightTerms(msg.sourcePrompt)} />
                                 </div>
                             ))
                         )}
@@ -305,47 +524,75 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
             {/* Input Area */}
             {!showBookmarks && (
                 < div className="p-4 border-t border-[var(--border-muted)] bg-transparent" >
-                    <div className={clsx(
-                        "flex items-center gap-2 rounded-xl px-4 py-2 transition-all min-h-[56px] relative overflow-visible z-20",
-                        isFocused ? "rainbow-highlight" : "bg-[var(--bg-muted)] border border-[var(--border-default)]"
-                    )}
-                        style={{
-                            boxShadow: isFocused ? 'var(--rainbow-glow)' : 'none'
-                        }}
-                    >
-                        <textarea
-                            ref={textareaRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            onFocus={() => setIsFocused(true)}
-                            onBlur={() => setIsFocused(false)}
-                            placeholder={t('ai.input_placeholder')}
-                            className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
-                            rows={1}
+                    {isSelectionMode ? (
+                        <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 bg-[var(--bg-muted)] border border-[var(--border-default)]">
+                            <button
+                                onClick={exitSelectionMode}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] active:scale-95 transition-all text-sm font-medium"
+                            >
+                                <X className="w-4 h-4" />
+                                取消
+                            </button>
+                            <span className="text-xs text-[var(--text-muted)]">
+                                已选择 {selectedCount} 条
+                            </span>
+                            <button
+                                onClick={handleDeleteSelected}
+                                disabled={selectedCount === 0}
+                                className={clsx(
+                                    "flex items-center gap-2 px-4 py-2 rounded-xl active:scale-95 transition-all text-sm font-bold",
+                                    selectedCount > 0
+                                        ? "bg-red-500/10 text-red-500 hover:bg-red-500/15"
+                                        : "text-[var(--text-muted)] opacity-40 cursor-default"
+                                )}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                删除
+                            </button>
+                        </div>
+                    ) : (
+                        <div className={clsx(
+                            "flex items-center gap-2 rounded-xl px-4 py-2 transition-all min-h-[56px] relative overflow-visible z-20",
+                            isFocused ? "rainbow-highlight" : "bg-[var(--bg-muted)] border border-[var(--border-default)]"
+                        )}
                             style={{
-                                color: 'var(--accent-primary) !important',
-                                lineHeight: '1.5'
-                            } as any}
-                        />
-                        <button
-                            onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
-                            disabled={!input.trim() && !isChatGenerating}
-                            className={clsx(
-                                "p-2.5 rounded-xl transition-all shrink-0 active:scale-95 group",
-                                (input.trim() || isChatGenerating)
-                                    ? "rainbow-highlight text-[var(--accent-primary)] shadow-sm cursor-pointer"
-                                    : "text-[var(--text-muted)] opacity-30 cursor-default"
-                            )}
-                            title={isChatGenerating ? t('ai.stop_analysis') : t('ai.send')}
+                                boxShadow: isFocused ? 'var(--rainbow-glow)' : 'none'
+                            }}
                         >
-                            {isChatGenerating ? (
-                                <Square className="w-4 h-4 fill-current animate-pulse" />
-                            ) : (
-                                <Send className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                            )}
-                        </button>
-                    </div>
+                            <textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                onFocus={() => setIsFocused(true)}
+                                onBlur={() => setIsFocused(false)}
+                                placeholder={t('ai.input_placeholder')}
+                                className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
+                                rows={1}
+                                style={{
+                                    color: 'var(--accent-primary) !important',
+                                    lineHeight: '1.5'
+                                } as any}
+                            />
+                            <button
+                                onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
+                                disabled={!input.trim() && !isChatGenerating}
+                                className={clsx(
+                                    "p-2.5 rounded-xl transition-all shrink-0 active:scale-95 group",
+                                    (input.trim() || isChatGenerating)
+                                        ? "rainbow-highlight text-[var(--accent-primary)] shadow-sm cursor-pointer"
+                                        : "text-[var(--text-muted)] opacity-30 cursor-default"
+                                )}
+                                title={isChatGenerating ? t('ai.stop_analysis') : t('ai.send')}
+                            >
+                                {isChatGenerating ? (
+                                    <Square className="w-4 h-4 fill-current animate-pulse" />
+                                ) : (
+                                    <Send className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div >
             )}
         </div >

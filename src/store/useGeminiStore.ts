@@ -5,6 +5,8 @@ export interface ChatMessage {
     role: 'user' | 'model';
     content: string;
     timestamp: number;
+    sourcePrompt?: string;
+    retryOfTimestamp?: number;
 }
 
 // Interface Update
@@ -22,8 +24,11 @@ interface GeminiState {
     abortController: AbortController | null;
 
     // Actions
-    sendMessage: (text: string) => Promise<void>;
+    sendMessage: (text: string, options?: { retryOfTimestamp?: number }) => Promise<void>;
     resetChat: () => void;
+    deleteMessage: (timestamp: number) => void;
+    deleteMessages: (timestamps: number[]) => void;
+    retryMessage: (timestamp: number) => Promise<void>;
     setChatOpen: (isOpen: boolean) => void;
 
     // Stateless generation for "AI 详解"
@@ -179,18 +184,58 @@ export const useGeminiStore = create<GeminiState>()(
                 set({ history: [], isChatGenerating: false, abortController: null } as any);
             },
 
-            sendMessage: async (text) => {
+            deleteMessage: (timestamp) => {
+                useChatTypewriterStore.getState().clearChatStream(timestamp);
+                set((state) => ({
+                    history: state.history.filter((msg) => msg.timestamp !== timestamp),
+                    bookmarks: state.bookmarks.filter((msg) => msg.timestamp !== timestamp),
+                }));
+            },
+
+            deleteMessages: (timestamps) => {
+                const selected = new Set(timestamps);
+                timestamps.forEach((timestamp) => {
+                    useChatTypewriterStore.getState().clearChatStream(timestamp);
+                });
+                set((state) => ({
+                    history: state.history.filter((msg) => !selected.has(msg.timestamp)),
+                    bookmarks: state.bookmarks.filter((msg) => !selected.has(msg.timestamp)),
+                }));
+            },
+
+            retryMessage: async (timestamp) => {
+                if (get().isChatGenerating) return;
+                const history = get().history;
+                const messageIndex = history.findIndex((msg) => msg.timestamp === timestamp);
+                if (messageIndex === -1) return;
+
+                const message = history[messageIndex];
+                const prompt = message.sourcePrompt || (
+                    message.role === 'user'
+                        ? message.content
+                        : [...history.slice(0, messageIndex)].reverse().find((msg) => msg.role === 'user')?.content
+                );
+
+                if (!prompt?.trim()) return;
+                await get().sendMessage(prompt, { retryOfTimestamp: timestamp });
+            },
+
+            sendMessage: async (text, options) => {
                 const previousHistory = get().history;
                 const newMessage: ChatMessage = {
                     role: 'user',
                     content: text,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    sourcePrompt: text,
+                    retryOfTimestamp: options?.retryOfTimestamp,
                 };
                 const aiTimestamp = newMessage.timestamp + 1;
                 const aiPlaceholder: ChatMessage = {
                     role: 'model',
                     content: '',
-                    timestamp: aiTimestamp
+                    timestamp: aiTimestamp,
+                    sourcePrompt: text,
+                    retryOfTimestamp: options?.retryOfTimestamp,
                 };
 
                 const commitAIMessage = (content: string) => {
@@ -287,6 +332,13 @@ export const useGeminiStore = create<GeminiState>()(
 
 # Output Format
 请严格遵守 Markdown 格式结构进行回答。
+当回答“词语怎么用 / 语法怎么用 / 用法区别 / 有几种用法”这类问题时，必须使用下面的层级结构：
+- 一级标题不要使用编号或小圆点，只输出 Markdown 粗体标题：**标题**。
+- 一级标题前必须空一行，标题文字要简短；一级标题必须单独占一行，标题后换行再写正文，不要把标题和正文放在同一行。
+- 二级结构只能使用半角小写字母：a. 内容、b. 内容、c. 内容。
+- 二级条目前也要空一行；不要用“一、”“①”“1.”替代二级结构。
+- 除一级标题和学生询问的目标词本身以外，其他你认为需要强调的重点内容使用 Markdown 粗体语法标记；页面会自动显示为下划线。重点必须克制，每个自然段最多 1 处，不要给普通语法术语或整句频繁加重点。
+- 如果不需要分层，可以不用编号；一旦编号，就必须遵守上面的格式。
 可以使用常见 Markdown 和 LaTeX 行内符号，但箭头等简单符号优先输出为可读符号（如 →），不要让学生看到原始控制命令。
 所有回答必须简洁明了，字数尽量控制在 800 字以内（除非是长难句翻译等特殊情况）。`;
 
@@ -521,6 +573,7 @@ export const useGeminiStore = create<GeminiState>()(
         {
             name: 'yomi-gemini-storage', // Key for localStorage
             partialize: (state) => ({
+                isChatOpen: state.isChatOpen,
                 history: state.history,
                 bookmarks: state.bookmarks, // Persist bookmarks
                 // Do NOT persist activeGenerations across page reloads

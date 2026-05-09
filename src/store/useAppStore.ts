@@ -286,6 +286,8 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
 
                 settings: state.settings,
+                appMode: state.appMode,
+                centerViewMode: state.centerViewMode,
                 inputText: state.inputText,
                 analyzedText: state.analyzedText,
                 history: state.history,

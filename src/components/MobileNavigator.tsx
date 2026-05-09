@@ -96,6 +96,8 @@ export default function MobileNavigator({
             nextView = 'vocab';
         } else if (centerViewMode === 'grammar') {
             nextView = 'grammar';
+        } else if (centerViewMode === 'ai') {
+            nextView = 'ai';
         } else if (centerViewMode === 'reader' && (currentView === 'vocab' || currentView === 'grammar')) {
             nextView = 'main';
         }
