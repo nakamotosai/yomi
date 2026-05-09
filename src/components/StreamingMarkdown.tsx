@@ -113,10 +113,11 @@ const AI_CHAT_HEADING_KEYWORDS = [
 ];
 
 function stripStrong(value: string) {
-    return stripAIChatHeadingMarker(value)
+    const unwrapped = stripAIChatHeadingMarker(value)
         .trim()
         .replace(/^(\*{2,3}|_{2,3})([\s\S]+)\1$/, '$2')
         .trim();
+    return stripInlineMarkdownEmphasisSyntax(unwrapped);
 }
 
 function getAIChatHeadingPrefix(value: string) {
@@ -186,13 +187,27 @@ function splitAIChatHeading(value: string, allowInferredHeading = false) {
 }
 
 function markAIChatHeading(heading: string) {
-    return `**${AI_CHAT_HEADING_MARKER_START}${heading}${AI_CHAT_HEADING_MARKER_END}**`;
+    const normalizedHeading = normalizeAIChatHeadingText(heading);
+    return `**${AI_CHAT_HEADING_MARKER_START}${normalizedHeading}${AI_CHAT_HEADING_MARKER_END}**`;
 }
 
 function stripAIChatHeadingMarker(value: string) {
     return value
         .replaceAll(AI_CHAT_HEADING_MARKER_START, '')
         .replaceAll(AI_CHAT_HEADING_MARKER_END, '');
+}
+
+function stripInlineMarkdownEmphasisSyntax(value: string) {
+    return value
+        .replace(/(\*{1,3}|_{1,3})(?=\S)([\s\S]*?\S)\1/g, '$2')
+        .replace(/[*_]{1,3}/g, '')
+        .trim();
+}
+
+function normalizeAIChatHeadingText(value: string) {
+    return stripInlineMarkdownEmphasisSyntax(stripAIChatHeadingMarker(value))
+        .replace(/([\u3040-\u30ff\u3400-\u9fff])\s+(?=[\u3040-\u30ff\u3400-\u9fff])/g, '$1')
+        .trim();
 }
 
 function getMarkedAIChatHeading(value: string) {
@@ -222,9 +237,9 @@ function normalizeAIChatNumberedStructure(text: string) {
         secondLevelIndex = 0;
         pushBlankBeforeHeading();
         output.push(`${indent}${markAIChatHeading(heading)}`);
+        output.push('');
         const cleanedRest = rest.trim().replace(/^[:：]\s*/, '');
         if (cleanedRest) {
-            output.push('');
             output.push(`${indent}${cleanedRest}`);
         }
     };
@@ -252,7 +267,7 @@ function normalizeAIChatNumberedStructure(text: string) {
             }
             const strongHeading = splitAIChatHeading(strongText, true);
             const heading = strongHeading || splitAIChatHeading(combined, true);
-            if (heading && heading.heading === stripStrong(strongText)) {
+            if (heading) {
                 pushAIChatHeading(indent, heading.heading, strongHeading ? rest : heading.rest);
                 continue;
             }
