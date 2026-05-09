@@ -175,19 +175,26 @@ MIT License
 
 ## 当前状态
 
-Last updated: 2026-05-09. README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，GitHub `main` 已推送到 `03a11b1 Document AI teacher production cache closeout`，Cloudflare Pages Production/main 最新部署 source 也是 `03a11b1`。
+Last updated: 2026-05-10 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前轮已完成 AI 老师体验和缓存修复：主 AI 老师聊天、单词 AI 解读、语法 AI 解读统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。
+当前 AI app 代码已推送到 GitHub `main` 的 `f0f2fd9 Refine AI teacher chat experience`。本 README 后续 closeout commit 只更新交接文档，不改变运行时代码。Cloudflare Pages Production/main 已自动部署 `f0f2fd9`，部署 ID `4f50c3cc-8bd7-4d7f-93c3-2f398a4fb33c`，自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+
+AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
 
 ## 接手提示
 
 - 当前进度：AI 老师聊天已使用 AI 夏目漱石式逐字 typewriter 流式体验，活跃文本写入非持久 transient state，完成后才提交到聊天历史。
+- 本轮完成：AI 老师聊天卡片新增多选删除、单条删除、单条重试；模型消息保留收藏按钮，用户消息和模型消息底部操作适配手机端。
+- 本轮完成：单条重试通过 `sourcePrompt` 重新走现有 `sendMessage` 流式路径，并用 `retryOfTimestamp` 标记来源；删除和重试均写入 Zustand 持久历史。
+- 本轮完成：`appMode`、`centerViewMode`、`isChatOpen` 已持久化；本地预览/页面刷新后不会再无故跳回首页阅读器，移动端切到 AI 时同步 `centerViewMode === "ai"`。
 - 本轮完成：Markdown 流式渲染已支持常见 LaTeX 箭头显示，例如 `$\rightarrow$` / `\Rightarrow` 会显示为可读箭头；CJK 相邻 `**bold**` 会在流式中及时渲染。
+- 本轮完成：主 AI 老师聊天格式规则已固定：一级标题独立成行、只显示粗体标题文本、不显示 `1.`/小圆点；用户提问目标词在正文中自动加粗；模型自己生成的其他 `**重点**` 一律降级为下划线，不再变粗体。
+- 本轮完成：`StreamingMarkdown` 通过内部 heading marker 区分“真正一级标题”和普通 Markdown strong；`接续 / 正确 / 错误 / ます形 / 正しい形 / 日常伴随动作` 等内容标签不得被渲染为粗体。
 - 本轮完成：主 AI 老师上下文注入最近 6 条消息；用户清空对话后持久历史和 transient stream state 都归零，下一轮从零开始。
 - 本轮完成：主 AI 老师、单词 AI 解读、语法 AI 解读提示词均要求尽量控制在 800 字以内。
 - 本轮完成：单词/语法 `AI老师在线解读` 已恢复专用结构 renderer，保留 accent 标题、同色 inline labels、日文/中文例句卡、喇叭按钮、`UnifiedHighlighter` 高亮和流式显示。
 - 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
-- 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`wrangler.toml`。
+- 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/AIChatView.tsx`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`src/store/useAppStore.ts`、`wrangler.toml`。
 - 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
 - 风险：生产 AI 依赖 Cloudflare Pages secrets `CLIPROXY_API_KEY` / `CLIPROXY_API_BASE_URL`、`AI_CACHE` R2 binding、`DB` D1 binding，以及 `https://vps.saaaai.com/yomi-cliproxy/v1` 到 live cliproxyapi 的反代。
 - 下一步：无主动开发任务；仅在用户发现新回归或要求继续迭代时恢复。
@@ -198,11 +205,14 @@ Last updated: 2026-05-09. README.md 是 YOMI 当前进度的唯一当前进度�
 - `npm run lint`: passed with 87 existing warnings and 0 errors.
 - `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
 - `git diff --check`: passed.
+- AI 老师 Markdown server-render smoke test: passed. `strong` only included the true heading and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
-- GitHub: local HEAD and `origin/main` both point to `03a11b1`.
-- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows latest Production/main source `03a11b1`.
+- GitHub app code: `f0f2fd9` pushed to `origin/main`.
+- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows Production/main source `f0f2fd9` as Active before README-only closeout commit.
 - Public homepage: `https://yomi.saaaai.com/` returned HTTP 200.
-- Production R2 cache probe: unique key `codex-final-r2-1778332453` first returned `FINALR2OK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
+- Production AI API: POST `https://yomi.saaaai.com/api/ai/chat` with a minimal `请只回复 OK。` payload returned `OK` and HTTP 200.
+- Production R2 cache probe: unique key `codex-closeout-r2-1778339221` first returned `CACHEOK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
+- Learning writeback: `~/.codex/mistakebook/cards/global/root-cause-and-acceptance.md` records the AI teacher Markdown bold/heading regression; manifest rule `anti_generic_markdown_renderer_breaks_existing_ui_tokens` evidence count is now 2.
 
 ## 当前边界
 
