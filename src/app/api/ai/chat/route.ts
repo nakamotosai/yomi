@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getAIUsageStats, incrementAIUsage, D1Database } from '@/lib/db';
 import { RemoteD1Client } from '@/lib/remoteD1';
 
@@ -94,6 +95,7 @@ function isClientDisconnectError(error: unknown): boolean {
 function getEnvValue(env: CloudflareEnv | undefined, ...names: string[]): string {
     const sources: Array<Record<string, unknown> | undefined> = [
         env,
+        getCloudflareRuntimeEnv(),
         typeof process !== 'undefined' ? process.env : undefined,
     ];
 
@@ -111,9 +113,22 @@ function getEnvValue(env: CloudflareEnv | undefined, ...names: string[]): string
     return '';
 }
 
+function getCloudflareRuntimeEnv(): CloudflareEnv | undefined {
+    try {
+        return getOptionalRequestContext()?.env as CloudflareEnv | undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 function getR2Bucket(request: NextRequest, env?: CloudflareEnv): R2Bucket | null {
     if (env?.AI_CACHE) {
         return env.AI_CACHE as R2Bucket;
+    }
+
+    const cloudflareEnv = getCloudflareRuntimeEnv();
+    if (cloudflareEnv?.AI_CACHE) {
+        return cloudflareEnv.AI_CACHE as R2Bucket;
     }
 
     const globalBucket = (globalThis as unknown as { AI_CACHE?: R2Bucket }).AI_CACHE;
@@ -434,6 +449,11 @@ async function openUpstreamWithFallback({
 function getDB(request: NextRequest, env?: CloudflareEnv): D1Database | null {
     if (env?.DB) {
         return env.DB as D1Database;
+    }
+
+    const cloudflareEnv = getCloudflareRuntimeEnv();
+    if (cloudflareEnv?.DB) {
+        return cloudflareEnv.DB as D1Database;
     }
 
     // 1. 尝试从 process.env 获取 (Cloudflare Pages nodejs_compat 标准方式)
