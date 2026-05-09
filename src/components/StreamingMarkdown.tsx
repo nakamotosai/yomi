@@ -77,6 +77,40 @@ const AI_CHAT_HEADING_PREFIXES = [
     '练习建议',
     '总结',
 ];
+const AI_CHAT_HEADING_KEYWORDS = [
+    '核心',
+    '含义',
+    '意味',
+    '用法',
+    '使い方',
+    '区别',
+    '差异',
+    '差別',
+    '相似语法',
+    '相似表現',
+    '特殊',
+    '易错',
+    '常见',
+    '注意',
+    '场景',
+    '語感',
+    '语感',
+    '搭配',
+    '接续',
+    '接続',
+    '结构',
+    '構造',
+    '限制',
+    '关键限制',
+    '重点',
+    '规则',
+    'まとめ',
+    '总结',
+    '總結',
+    '建议',
+    '練習',
+    '练习',
+];
 
 function stripStrong(value: string) {
     return stripAIChatHeadingMarker(value)
@@ -100,14 +134,13 @@ function isLikelyAIChatHeadingLabel(value: string) {
     if (!plain || isAIChatContentLabel(plain)) return false;
     if (/[。！？!?；;]/.test(plain)) return false;
     if (/[:：]/.test(plain)) return false;
-    if (/[ぁ-ゖァ-ヺー]/.test(plain)) return false;
 
     const compact = plain.replace(/\s/g, '');
     if (compact.length < 2 || compact.length > 24) return false;
     if (/[「」『』"'“”]/.test(compact)) return false;
 
     return /^(?:第[一二三四五六七八九十\d]+(?:种|类)?|[一二三四五六七八九十\d]+\.?)/.test(compact)
-        || /(核心|含义|意味|用法|区别|差异|差別|特殊|易错|常见|注意|场景|語感|语感|搭配|接续|接続|结构|構造|总结|總結|建议|練習|练习)/.test(compact);
+        || AI_CHAT_HEADING_KEYWORDS.some((keyword) => compact.includes(keyword));
 }
 
 function splitAIChatHeading(value: string, allowInferredHeading = false) {
