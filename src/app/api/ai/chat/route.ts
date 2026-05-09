@@ -35,6 +35,16 @@ interface RouteContext {
     env?: CloudflareEnv;
 }
 
+interface R2ObjectBody {
+    text(): Promise<string>;
+}
+
+interface R2Bucket {
+    get(key: string): Promise<R2ObjectBody | null>;
+    put(key: string, value: string, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+    delete(key: string): Promise<unknown>;
+}
+
 interface FallbackAttempt {
     model: string;
     status?: number;
@@ -101,6 +111,18 @@ function getEnvValue(env: CloudflareEnv | undefined, ...names: string[]): string
     return '';
 }
 
+function getR2Bucket(request: NextRequest, env?: CloudflareEnv): R2Bucket | null {
+    if (env?.AI_CACHE) {
+        return env.AI_CACHE as R2Bucket;
+    }
+
+    const globalBucket = (globalThis as unknown as { AI_CACHE?: R2Bucket }).AI_CACHE;
+    if (globalBucket) return globalBucket;
+
+    const requestEnv = (request as unknown as { env?: { AI_CACHE?: R2Bucket } }).env;
+    return requestEnv?.AI_CACHE || null;
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
     return baseUrl.replace(/\/+$/, '');
 }
@@ -156,6 +178,52 @@ function extractStreamText(chunk: OpenAIStreamChunk): string {
         .join('');
 }
 
+async function getAICacheObjectKey(cacheKey: string): Promise<string> {
+    const bytes = new TextEncoder().encode(cacheKey);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `ai-cache/${hex}.txt`;
+}
+
+async function getR2AICache(r2: R2Bucket | null, cacheKey: string): Promise<string | null> {
+    if (!r2) return null;
+
+    try {
+        const objectKey = await getAICacheObjectKey(cacheKey);
+        const object = await r2.get(objectKey);
+        if (!object) return null;
+        const text = await object.text();
+        return text || null;
+    } catch (error) {
+        console.warn('[AI API] R2 cache read failed:', error);
+        return null;
+    }
+}
+
+async function setR2AICache(r2: R2Bucket | null, cacheKey: string, text: string): Promise<boolean> {
+    if (!r2 || !text) return false;
+
+    try {
+        const objectKey = await getAICacheObjectKey(cacheKey);
+        await r2.put(objectKey, text, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
+        return true;
+    } catch (error) {
+        console.warn('[AI API] R2 cache write failed:', error);
+        return false;
+    }
+}
+
+async function deleteR2AICache(r2: R2Bucket | null, cacheKey: string): Promise<void> {
+    if (!r2) return;
+
+    try {
+        const objectKey = await getAICacheObjectKey(cacheKey);
+        await r2.delete(objectKey);
+    } catch (error) {
+        console.warn('[AI API] R2 cache delete failed:', error);
+    }
+}
+
 function parseSSELine(line: string): { text: string; totalTokens?: number; done: boolean } | null {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return null;
@@ -176,6 +244,7 @@ function parseSSELine(line: string): { text: string; totalTokens?: number; done:
 
 async function finalizeUsageAndCache(
     db: D1Database,
+    r2: R2Bucket | null,
     modelId: string,
     minuteKey: string,
     estInputTokens: number,
@@ -193,11 +262,12 @@ async function finalizeUsageAndCache(
         }
 
         if (cacheKey && fullText) {
+            const savedToR2 = await setR2AICache(r2, cacheKey, fullText);
             await db.prepare(`
                 INSERT OR REPLACE INTO ai_cache (key, value, created_at)
                 VALUES (?, ?, ?)
             `).bind(cacheKey, fullText, new Date().toISOString()).run();
-            console.log(`[AI API] Background Cache Saved: ${cacheKey}`);
+            console.log(`[AI API] Background Cache Saved: ${cacheKey} (r2=${savedToR2 ? 'yes' : 'no'}, d1=yes)`);
         }
     } catch (statsError) {
         console.error('[AI API] Stats/Cache Error:', statsError);
@@ -414,6 +484,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
         }
 
+        const r2 = getR2Bucket(req, env);
+        if (cacheKey && !forceRefresh) {
+            const cachedR2 = await getR2AICache(r2, cacheKey);
+            if (cachedR2) {
+                console.log(`[AI API] R2 Cache Hit: ${cacheKey}`);
+                return NextResponse.json({ success: true, text: cachedR2, fromCache: true, cacheLayer: 'r2' });
+            }
+        }
+
         const db = getDB(req, env);
         if (!db) {
             console.error('[AI API] D1 Database binding "DB" is missing');
@@ -424,6 +503,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             if (forceRefresh) {
                 console.log(`[AI API] Force Refresh: Deleting old cache for ${cacheKey}`);
                 try {
+                    await deleteR2AICache(r2, cacheKey);
                     await db.prepare('DELETE FROM ai_cache WHERE key = ?').bind(cacheKey).run();
                 } catch (error) {
                     console.warn('[AI API] Failed to delete old cache:', error);
@@ -432,7 +512,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                 const cached = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(cacheKey).first<{ value: string }>();
                 if (cached) {
                     console.log(`[AI API] Backend Cache Hit: ${cacheKey}`);
-                    return NextResponse.json({ success: true, text: cached.value, fromCache: true });
+                    return NextResponse.json({ success: true, text: cached.value, fromCache: true, cacheLayer: 'd1' });
                 }
             }
         }
@@ -524,7 +604,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                             return;
                         }
 
-                        await finalizeUsageAndCache(db, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
+                        await finalizeUsageAndCache(db, r2, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
                     } catch (error: unknown) {
                         if (isStreamClosed || isClientDisconnectError(error)) {
                             console.warn('[AI API] Stream stopped after client disconnect.');

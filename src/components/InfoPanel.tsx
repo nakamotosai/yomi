@@ -21,7 +21,7 @@ import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import { yomitanLoader, DictionaryResult as YomitanResult } from '@/lib/dictionary/yomitanLoader';
 import { useI18n } from '@/lib/i18n';
-import { AIExplanationMarkdown } from './StreamingMarkdown';
+import { normalizeMarkdownDisplay, prepareStreamingMarkdown } from './StreamingMarkdown';
 
 
 interface JishoJapanese {
@@ -201,6 +201,157 @@ function UnifiedExampleItem({
         </div>
     );
 }
+
+const AI_EXPLANATION_SECTION_TITLES = ['核心含义', '老师划重点', '场景例句', '接续与含义', '总结'];
+const AI_EXPLANATION_INLINE_LABELS = ['语感差异', '使用场景', '避坑指南', '易混淆点', '使用限制', '区别于', '搭配对象', '语法结构', '情绪潜台词'];
+
+function cleanAIExplanationLine(line: string) {
+    return normalizeMarkdownDisplay(line)
+        .trim()
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/^[-*]\s*/, '')
+        .replace(/^\d+[.)、]\s*/, '')
+        .replace(/\*\*/g, '')
+        .trim();
+}
+
+function isAISectionTitle(line: string) {
+    const cleaned = cleanAIExplanationLine(line).replace(/[：:]\s*$/, '');
+    return AI_EXPLANATION_SECTION_TITLES.some((title) => cleaned === title);
+}
+
+function normalizeStructuredAIExplanationText(content: string, isStreaming: boolean) {
+    const displayText = isStreaming ? prepareStreamingMarkdown(content) : normalizeMarkdownDisplay(content);
+    const sectionPattern = new RegExp(
+        `(^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?(${AI_EXPLANATION_SECTION_TITLES.join('|')})(?:\\*\\*)?[：:]?\\s+([^\\n]+)`,
+        'g'
+    );
+
+    return displayText
+        .replace(/\r\n/g, '\n')
+        .replace(sectionPattern, (_match, prefix: string, title: string, rest: string) => `${prefix}${title}\n${rest.trim()}`);
+}
+
+function renderExplanationLineText(text: string, target: string, accentColor: string) {
+    const labelPattern = new RegExp(`^(?:\\*\\*)?(${AI_EXPLANATION_INLINE_LABELS.join('|')})(?:\\*\\*)?[：:]\\s*(.*)$`);
+    const labelMatch = text.match(labelPattern);
+
+    if (labelMatch) {
+        const [, label, rest] = labelMatch;
+        return (
+            <>
+                <span className="font-bold" style={{ color: accentColor }}>{label}：</span>
+                {rest ? <UnifiedHighlighter text={rest} target={target} color={accentColor} /> : null}
+            </>
+        );
+    }
+
+    return <UnifiedHighlighter text={text} target={target} color={accentColor} />;
+}
+
+function isJapaneseExampleText(text: string) {
+    return /[\u3040-\u30ff]/.test(text) && /[。！？!?」）]/.test(text);
+}
+
+function isChineseTranslationText(text: string) {
+    return /^[\u4e00-\u9fff\uff00-\uffef\u3000-\u303f（）()a-zA-Z0-9\s"'“”‘’、，。！？；：：,.!?;:-]+$/.test(text)
+        && !/[\u3040-\u30ff]/.test(text);
+}
+
+function splitInlineExamplePair(line: string) {
+    const cleaned = cleanAIExplanationLine(line);
+    const match = cleaned.match(/^(.+?[。！？!?」）])\s+([\u4e00-\u9fff].+)$/);
+    if (!match) return null;
+
+    const japanese = match[1].trim();
+    const chinese = match[2].trim();
+    if (!isJapaneseExampleText(japanese) || !isChineseTranslationText(chinese)) return null;
+    return { japanese, chinese };
+}
+
+function StructuredAIExplanation({
+    content,
+    isStreaming,
+    accentColor,
+    target,
+    onSpeak,
+}: {
+    content: string;
+    isStreaming: boolean;
+    accentColor: string;
+    target: string;
+    onSpeak: (text: string) => void;
+}) {
+    const displayText = normalizeStructuredAIExplanationText(content, isStreaming);
+    const lines = displayText.split('\n');
+
+    return (
+        <div className="space-y-1">
+            {lines.map((line, lineIdx) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    return <div key={lineIdx} className="h-2" />;
+                }
+
+                if (isAISectionTitle(trimmed)) {
+                    return (
+                        <div key={lineIdx} className="font-bold mt-4 first:mt-0 mb-2 tracking-wide" style={{ color: accentColor }}>
+                            {cleanAIExplanationLine(trimmed)}
+                        </div>
+                    );
+                }
+
+                const inlinePair = splitInlineExamplePair(trimmed);
+                if (inlinePair) {
+                    return (
+                        <UnifiedExampleItem
+                            key={lineIdx}
+                            japanese={inlinePair.japanese}
+                            chinese={inlinePair.chinese}
+                            onSpeak={onSpeak}
+                            accentColor={accentColor}
+                            targetWord={target}
+                        />
+                    );
+                }
+
+                const nextLine = lines[lineIdx + 1] || '';
+                const cleanCurrent = cleanAIExplanationLine(trimmed);
+                const cleanNext = cleanAIExplanationLine(nextLine);
+                const currentLooksJapanese = isJapaneseExampleText(cleanCurrent);
+                const nextLooksChinese = isChineseTranslationText(cleanNext);
+
+                if (cleanCurrent && currentLooksJapanese && cleanNext && nextLooksChinese && !isAISectionTitle(cleanCurrent)) {
+                    return (
+                        <UnifiedExampleItem
+                            key={lineIdx}
+                            japanese={cleanCurrent}
+                            chinese={cleanNext}
+                            onSpeak={onSpeak}
+                            accentColor={accentColor}
+                            targetWord={target}
+                        />
+                    );
+                }
+
+                const previousLine = lines[lineIdx - 1] || '';
+                const cleanPrevious = cleanAIExplanationLine(previousLine);
+                if (isChineseTranslationText(cleanCurrent) && isJapaneseExampleText(cleanPrevious)) {
+                    return null;
+                }
+
+                return (
+                    <div key={lineIdx} className="mb-2 text-[15px] leading-relaxed text-[var(--text-muted)]">
+                        {renderExplanationLineText(cleanCurrent, target, accentColor)}
+                    </div>
+                );
+            })}
+            {isStreaming && (
+                <span className="inline-block w-1.5 h-4 ml-0.5 align-text-bottom rounded-sm bg-[var(--accent-primary)] animate-pulse" />
+            )}
+        </div>
+    );
+}
 // 渲染富文本语法解释（Distilled Data）
 function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }: { grammar: GrammarEntry, grammarColor: string, onSpeak: (text: string) => void, isGlobalSpeaking: boolean }) {
     const { t } = useI18n();
@@ -369,7 +520,8 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 - **严禁使用拼音**。
 - **严禁任何开场白（如“你好”、“作为...”），直接输出第一个对应板块。**
 - 所有日文汉字必须标注假名，格式为：漢字（かんじ）。
-- 保持Markdown格式，总字数控制在500字以内。
+- 保持Markdown格式，总字数控制在800字以内。
+- 箭头等简单符号可以使用 LaTeX 写法，但最终表达要清晰；优先使用 → 这类普通符号，不要输出难懂的原始控制命令。
 
 【输出格式】
 请严格按照以下三个板块输出（板块标题加粗，但不要使用Markdown星号）：
@@ -394,7 +546,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
             // Use simple user prompt like Word Interpretation
             const currentGrammarId = grammar.id; // Capture ID for validation
             const { fromCache, text } = await generateText(
-                `Target Grammar: ${grammar.title}`,
+                `Target Grammar: ${grammar.title}\nReference: ${refData}`,
                 systemPrompt,
                 (partialText) => {
                     if (currentGrammarId === grammar.id) {
@@ -570,10 +722,12 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                 </button>
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                                <AIExplanationMarkdown
+                                <StructuredAIExplanation
                                     content={(isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中..."}
                                     isStreaming={isGenerating}
                                     accentColor={grammarColor}
+                                    target={grammar.title}
+                                    onSpeak={handleSpeak}
                                 />
                             </div>
                         </div>
@@ -755,7 +909,8 @@ export default function InfoPanel() {
 - **严禁使用拼音**。
 - **严禁任何开场白（如“你好”、“作为...”），直接输出第一个对应板块。**
 - 所有日文汉字必须标注假名，格式为：漢字（かんじ）。
-- 保持Markdown格式，总字数控制在500字以内。
+- 保持Markdown格式，总字数控制在800字以内。
+- 箭头等简单符号可以使用 LaTeX 写法，但最终表达要清晰；优先使用 → 这类普通符号，不要输出难懂的原始控制命令。
 
 【输出格式】
 请严格按照以下三个板块输出（板块标题加粗，但不要使用Markdown星号）：
@@ -780,7 +935,7 @@ export default function InfoPanel() {
             // Start Generation
             const currentTokenSurface = token.surface; // Capture for validation
             const { fromCache, text } = await generateText(
-                `Target Word: ${token.surface}\nContext: ${currentSentence || "No context provided."}`,
+                `Target Word: ${token.surface}\nContext: ${currentSentence || "No context provided."}\nDictionary Reference: ${refDef || "No dictionary reference."}`,
                 systemPrompt,
                 (partialText) => {
                     if (token.surface === currentTokenSurface) {
@@ -1449,10 +1604,12 @@ export default function InfoPanel() {
                                 </button>
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                                <AIExplanationMarkdown
+                                <StructuredAIExplanation
                                     content={(isGenerating ? (streamedContent || aiResult) : aiResult) || t('common.loading')}
                                     isStreaming={isGenerating}
                                     accentColor={wordAccentColor}
+                                    target={token.surface}
+                                    onSpeak={handleSpeak}
                                 />
                             </div>
                         </div>

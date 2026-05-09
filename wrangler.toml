@@ -16,6 +16,10 @@ binding = "DB"
 database_name = "yomi-db"
 database_id = "39f241c9-1be7-4dad-89c2-457e1695947f" # 请替换为真实的 Cloudflare D1 Database ID
 
+[[r2_buckets]]
+binding = "AI_CACHE"
+bucket_name = "yomi-ai-cache"
+
 # Cloudflare Pages specific settings
 # Note: When using GitHub integration, most settings are auto-detected
 # This file is primarily for local wrangler development/testing

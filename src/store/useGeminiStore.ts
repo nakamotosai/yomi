@@ -287,10 +287,11 @@ export const useGeminiStore = create<GeminiState>()(
 
 # Output Format
 请严格遵守 Markdown 格式结构进行回答。
-所有回答必须简洁明了，字数尽量控制在 500 字以内（除非是长难句翻译等特殊情况）。`;
+可以使用常见 Markdown 和 LaTeX 行内符号，但箭头等简单符号优先输出为可读符号（如 →），不要让学生看到原始控制命令。
+所有回答必须简洁明了，字数尽量控制在 800 字以内（除非是长难句翻译等特殊情况）。`;
 
-                    // Construct context from history - Limit to last 4 messages (approx 2 rounds)
-                    const contextMessages = [...previousHistory, newMessage].slice(-4);
+                    // Construct context from history. resetChat() clears persisted history, so a cleared chat starts from zero.
+                    const contextMessages = [...previousHistory, newMessage].slice(-6);
                     let contextStr = `Current Conversation Context:\n`;
                     contextMessages.forEach(msg => {
                         contextStr += `${msg.role === 'user' ? 'Student' : 'Teacher'}: ${msg.content}\n`;

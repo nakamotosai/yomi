@@ -3,6 +3,46 @@
 import ReactMarkdown from 'react-markdown';
 
 const MARKDOWN_DELIMITERS = ['***', '___', '**', '__', '*', '_'];
+const LATEX_SYMBOLS: Array<[RegExp, string]> = [
+    [/\$\s*\\(?:long)?rightarrow\s*\$/g, '→'],
+    [/\$\s*(?:\\Rightarrow|\\Longrightarrow|\\implies)\s*\$/g, '⇒'],
+    [/\$\s*\\(?:long)?leftarrow\s*\$/g, '←'],
+    [/\$\s*(?:\\Leftarrow|\\Longleftarrow)\s*\$/g, '⇐'],
+    [/\$\s*\\(?:long)?leftrightarrow\s*\$/g, '↔'],
+    [/\$\s*(?:\\Leftrightarrow|\\Longleftrightarrow|\\iff)\s*\$/g, '⇔'],
+    [/\\\(\s*\\(?:long)?rightarrow\s*\\\)/g, '→'],
+    [/\\\(\s*(?:\\Rightarrow|\\Longrightarrow|\\implies)\s*\\\)/g, '⇒'],
+    [/\\\(\s*\\(?:long)?leftarrow\s*\\\)/g, '←'],
+    [/\\\(\s*(?:\\Leftarrow|\\Longleftarrow)\s*\\\)/g, '⇐'],
+    [/\\\(\s*\\(?:long)?leftrightarrow\s*\\\)/g, '↔'],
+    [/\\\(\s*(?:\\Leftrightarrow|\\Longleftrightarrow|\\iff)\s*\\\)/g, '⇔'],
+    [/\\(?:long)?rightarrow\b/g, '→'],
+    [/\\(?:Rightarrow|Longrightarrow)\b/g, '⇒'],
+    [/\\(?:long)?leftarrow\b/g, '←'],
+    [/\\(?:Leftarrow|Longleftarrow)\b/g, '⇐'],
+    [/\\(?:long)?leftrightarrow\b/g, '↔'],
+    [/\\(?:Leftrightarrow|Longleftrightarrow)\b/g, '⇔'],
+    [/\\implies\b/g, '⇒'],
+    [/\\iff\b/g, '⇔'],
+    [/\\to\b/g, '→'],
+];
+
+function normalizeInlineEmphasisBoundaries(text: string) {
+    const quoteWrapped = text.replace(/(\*{2,3})[「『“]([^*\n]+?)[」』”]\1/g, '$1$2$1');
+
+    return quoteWrapped
+        .replace(/([^\s*_`])(\*{2,3}[^*\n]+?\*{2,3})/g, '$1 $2');
+}
+
+function normalizeLatexSymbols(text: string) {
+    return LATEX_SYMBOLS.reduce((current, [pattern, replacement]) => (
+        current.replace(pattern, replacement)
+    ), text);
+}
+
+export function normalizeMarkdownDisplay(text: string) {
+    return normalizeInlineEmphasisBoundaries(normalizeLatexSymbols(text));
+}
 
 function isEscaped(text: string, index: number) {
     let slashCount = 0;
@@ -33,6 +73,7 @@ function readMarkdownDelimiter(text: string, index: number) {
 }
 
 export function prepareStreamingMarkdown(text: string) {
+    text = normalizeLatexSymbols(text);
     const openDelimiters: Array<{ delimiter: string; index: number }> = [];
     let inlineCodeOpen = false;
     let codeFenceOpen = false;
@@ -74,7 +115,7 @@ export function prepareStreamingMarkdown(text: string) {
     }
 
     if (inlineCodeOpen || codeFenceOpen || openDelimiters.length === 0) {
-        return text;
+        return normalizeInlineEmphasisBoundaries(text);
     }
 
     const trailingDelimiter = openDelimiters[openDelimiters.length - 1];
@@ -82,7 +123,7 @@ export function prepareStreamingMarkdown(text: string) {
         return prepareStreamingMarkdown(text.slice(0, trailingDelimiter.index));
     }
 
-    return text + [...openDelimiters].reverse().map((item) => item.delimiter).join('');
+    return normalizeInlineEmphasisBoundaries(text + [...openDelimiters].reverse().map((item) => item.delimiter).join(''));
 }
 
 export function StreamingMarkdown({
@@ -94,7 +135,7 @@ export function StreamingMarkdown({
     isStreaming?: boolean;
     className?: string;
 }) {
-    const markdownContent = isStreaming ? prepareStreamingMarkdown(content) : content;
+    const markdownContent = isStreaming ? prepareStreamingMarkdown(content) : normalizeMarkdownDisplay(content);
 
     return (
         <div className={`markdown-body prose dark:prose-invert prose-sm max-w-none break-words ${className}`}>
@@ -110,7 +151,7 @@ const AI_SECTION_TITLES = ['核心含义', '老师划重点', '场景例句', '�
 const AI_INLINE_LABELS = ['语感差异', '使用场景', '避坑指南', '易混淆点', '使用限制', '区别于', '搭配对象', '语法结构'];
 
 function normalizeAIExplanationMarkdown(text: string) {
-    let normalized = text
+    let normalized = normalizeMarkdownDisplay(text)
         .replace(/\r\n/g, '\n')
         .replace(/\*\*(核心含义|老师划重点|场景例句|接续与含义)\*\*/g, '$1')
         .replace(new RegExp(`(^|\\s)(${AI_SECTION_TITLES.join('|')})(?=\\s|[:：]|$)`, 'g'), '\n\n## $2\n')

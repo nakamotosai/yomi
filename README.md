@@ -182,8 +182,11 @@ Last updated: 2026-05-09
 - Main AI teacher chat, word explanation, and grammar explanation share `/api/ai/chat`.
 - Smooth typewriter streaming is implemented in `src/store/useGeminiStore.ts`.
 - Shared Markdown streaming lives in `src/components/StreamingMarkdown.tsx`.
-- Word/grammar `AI老师在线解读` uses `AIExplanationMarkdown`, preserving the original structured explanation layout while rendering Markdown during streaming.
+- Word/grammar `AI老师在线解读` uses the dedicated structured renderer in `src/components/InfoPanel.tsx`, preserving accent headings, same-color inline labels, Japanese/Chinese example cards, speaker buttons, and streaming text.
+- AI Markdown display normalizes common LaTeX arrows such as `$\rightarrow$` / `\Rightarrow` to readable arrows and fixes CJK-adjacent `**bold**` so bold renders during streaming and after completion.
+- Main AI teacher chat injects the last 6 total messages as context; clearing chat resets persisted history and transient stream state so the next request starts from zero context.
+- Successful `/api/ai/chat` generations with a `cacheKey` are written to Cloudflare R2 bucket `yomi-ai-cache` through binding `AI_CACHE`, with D1 `ai_cache` retained as fallback.
 - Production AI requires Cloudflare Pages variables `CLIPROXY_API_KEY` and `CLIPROXY_API_BASE_URL`; the current base URL is the protected `https://vps.saaaai.com/yomi-cliproxy/v1` reverse proxy to the live cliproxyapi runtime.
 - 2026-05-09 production fix: `fb7ea71` updates `/api/ai/chat` to read Cloudflare Pages runtime env from `ctx.env` before falling back to `process.env`, fixing the post-deploy `CLIPROXY_API_KEY is missing` 500.
 - Fast dictionary entry behavior is warmed/cached in the dictionary loaders and app stores; avoid reintroducing mandatory blocking index initialization on every entry.
-- Local verification used for this handoff: `npm run typecheck`, `npm run lint`, `npm run build`, real browser replay on `http://100.120.69.1:3101/`, and production POST probe against `https://yomi.saaaai.com/api/ai/chat`.
+- Current local verification used for this handoff: `npm run typecheck`, `npm run lint` (87 existing warnings, 0 errors), `npm run build` (existing `JWT_SECRET` warning), `git diff --check`, `design_truth_guard.py`, local `/api/ai/chat` D1 cache hit probe, and Playwright browser DOM checks for AI chat Markdown, word AI renderer, and grammar AI renderer on `http://127.0.0.1:3101/`.
