@@ -183,5 +183,7 @@ Last updated: 2026-05-09
 - Smooth typewriter streaming is implemented in `src/store/useGeminiStore.ts`.
 - Shared Markdown streaming lives in `src/components/StreamingMarkdown.tsx`.
 - Word/grammar `AI老师在线解读` uses `AIExplanationMarkdown`, preserving the original structured explanation layout while rendering Markdown during streaming.
+- Production AI requires Cloudflare Pages variables `CLIPROXY_API_KEY` and `CLIPROXY_API_BASE_URL`; the current base URL is the protected `https://vps.saaaai.com/yomi-cliproxy/v1` reverse proxy to the live cliproxyapi runtime.
+- 2026-05-09 production fix: `fb7ea71` updates `/api/ai/chat` to read Cloudflare Pages runtime env from `ctx.env` before falling back to `process.env`, fixing the post-deploy `CLIPROXY_API_KEY is missing` 500.
 - Fast dictionary entry behavior is warmed/cached in the dictionary loaders and app stores; avoid reintroducing mandatory blocking index initialization on every entry.
-- Local verification used for this handoff: `npm run typecheck`, `npm run lint`, `npm run build`, plus real browser replay on `http://100.120.69.1:3101/`.
+- Local verification used for this handoff: `npm run typecheck`, `npm run lint`, `npm run build`, real browser replay on `http://100.120.69.1:3101/`, and production POST probe against `https://yomi.saaaai.com/api/ai/chat`.
