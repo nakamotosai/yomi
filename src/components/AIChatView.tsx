@@ -127,7 +127,10 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                         <p>{t('ai.start_conv')}</p>
                     </div>
                 ) : (
-                    history.map((msg, idx) => (
+                    history.map((msg, idx) => {
+                        const isStreamingModel = isChatGenerating && idx === history.length - 1 && msg.role === 'model';
+
+                        return (
                         <div
                             key={idx}
                             className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
@@ -151,12 +154,27 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                             >
                                 {msg.role === 'user' ? (
                                     <p className="whitespace-pre-wrap">{msg.content}</p>
+                                ) : isStreamingModel ? (
+                                    <div className="whitespace-pre-wrap break-words">
+                                        {msg.content ? (
+                                            <>
+                                                {msg.content}
+                                                <span className="inline-block w-1.5 h-4 ml-0.5 align-text-bottom rounded-sm bg-[var(--accent-primary)] animate-pulse" />
+                                            </>
+                                        ) : (
+                                            <div className="flex items-center gap-1 py-1">
+                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                            </div>
+                                        )}
+                                    </div>
                                 ) : (
                                     <div className="markdown-body prose dark:prose-invert prose-sm max-w-none">
                                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                                     </div>
                                 )}
-                                {msg.role === 'model' && msg.content && (
+                                {msg.role === 'model' && msg.content && !isStreamingModel && (
                                     <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex items-center justify-between">
                                         <button
                                             onClick={() => toggleBookmark(msg)}
@@ -177,7 +195,8 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                                 )}
                             </div>
                         </div>
-                    ))
+                        );
+                    })
                 )
                 }
 

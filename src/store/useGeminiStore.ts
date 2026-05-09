@@ -54,15 +54,34 @@ export const useGeminiStore = create<GeminiState>()(
             resetChat: () => set({ history: [] }),
 
             sendMessage: async (text) => {
+                const previousHistory = get().history;
                 const newMessage: ChatMessage = {
                     role: 'user',
                     content: text,
                     timestamp: Date.now()
                 };
+                const aiTimestamp = newMessage.timestamp + 1;
+                const aiPlaceholder: ChatMessage = {
+                    role: 'model',
+                    content: '',
+                    timestamp: aiTimestamp
+                };
 
-                // Optimistically add user message
+                const updateAIMessage = (content: string) => {
+                    set((state) => ({
+                        history: state.history.map((msg) =>
+                            msg.role === 'model' && msg.timestamp === aiTimestamp
+                                ? { ...msg, content }
+                                : msg
+                        )
+                    }));
+                };
+
+                let fullResponse = "";
+
+                // Create the assistant bubble before the network round trip so token streaming is visible immediately.
                 set((state) => ({
-                    history: [...state.history, newMessage],
+                    history: [...state.history, newMessage, aiPlaceholder],
                     isChatOpen: true,
                     isChatGenerating: true,
                 }));
@@ -71,9 +90,6 @@ export const useGeminiStore = create<GeminiState>()(
                 set({ abortController: controller } as any);
 
                 try {
-                    const currentState = get();
-                    const history = currentState.history;
-
                     const systemPrompt = `# Role
 你是一位拥有20年教学经验的**专业日语导师**。你的学生是母语为中文的初学者。
 你的核心任务是：不仅仅回答学生的问题，更要**主动引导**他们学习相关的背景知识、使用场景和注意事项。
@@ -89,7 +105,7 @@ export const useGeminiStore = create<GeminiState>()(
 所有回答必须简洁明了，字数尽量控制在 500 字以内（除非是长难句翻译等特殊情况）。`;
 
                     // Construct context from history - Limit to last 4 messages (approx 2 rounds)
-                    const contextMessages = history.slice(-4);
+                    const contextMessages = [...previousHistory, newMessage].slice(-4);
                     let contextStr = `Current Conversation Context:\n`;
                     contextMessages.forEach(msg => {
                         contextStr += `${msg.role === 'user' ? 'Student' : 'Teacher'}: ${msg.content}\n`;
@@ -115,50 +131,41 @@ export const useGeminiStore = create<GeminiState>()(
                         throw new Error(`AI 服务暂时不可用 (${response.status})`);
                     }
 
-                    // Create a placeholder message for the AI response
-                    const aiPlaceholder: ChatMessage = {
-                        role: 'model',
-                        content: '',
-                        timestamp: Date.now()
-                    };
-
-                    set((state) => ({
-                        history: [...state.history, aiPlaceholder]
-                    }));
-
                     const reader = response.body?.getReader();
+                    if (!reader) {
+                        throw new Error('AI 服务没有返回可读取的流。');
+                    }
+
                     const decoder = new TextDecoder();
-                    let fullResponse = "";
 
-                    if (reader) {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-                            const chunk = decoder.decode(value, { stream: true });
-                            fullResponse += chunk;
+                        const chunk = decoder.decode(value, { stream: true });
+                        if (!chunk) continue;
+                        fullResponse += chunk;
 
-                            // Update the last message progressively
-                            set((state) => ({
-                                history: state.history.map((msg, index) =>
-                                    index === state.history.length - 1 ? { ...msg, content: fullResponse } : msg
-                                )
-                            }));
-                        }
+                        updateAIMessage(fullResponse);
+                    }
+
+                    const tail = decoder.decode();
+                    if (tail) {
+                        fullResponse += tail;
+                        updateAIMessage(fullResponse);
                     }
 
                 } catch (error: any) {
                     if (error.name === 'AbortError') {
                         console.log("Chat Generation aborted");
+                        if (!fullResponse) {
+                            set((state) => ({
+                                history: state.history.filter((msg) => msg.timestamp !== aiTimestamp)
+                            }));
+                        }
                     } else {
                         console.error("Gemini Chat Error:", error);
-                        set((state) => ({
-                            history: [...state.history, {
-                                role: 'model',
-                                content: `(error: ${error.message})`,
-                                timestamp: Date.now()
-                            }]
-                        }));
+                        updateAIMessage(`(error: ${error.message})`);
                     }
                 } finally {
                     set({ isChatGenerating: false, abortController: null } as any);

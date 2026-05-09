@@ -83,7 +83,7 @@ function buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
 
 function extractStreamText(chunk: OpenAIStreamChunk): string {
     return (chunk.choices || [])
-        .map((choice) => choice.delta?.content || choice.delta?.reasoning_content || '')
+        .map((choice) => `${choice.delta?.content || ''}${choice.delta?.reasoning_content || ''}`)
         .join('');
 }
 
@@ -317,36 +317,17 @@ export async function POST(req: NextRequest, ctx: unknown) {
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const reader = upstreamResponse.body.getReader();
-        let pendingChunk: Uint8Array | undefined;
         let fullText = '';
         let sseBuffer = '';
         let actualTotalTokens: number | undefined;
         let isStreamClosed = false;
-
-        try {
-            const firstRead = await readUpstreamChunkWithTimeout(reader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
-            if (firstRead.done) {
-                return NextResponse.json({ error: 'AI upstream ended before returning content' }, { status: 502 });
-            }
-            pendingChunk = firstRead.value;
-        } catch (error) {
-            if (error instanceof UpstreamTimeoutError) {
-                void reader.cancel();
-                return NextResponse.json({ error: 'AI upstream timeout' }, { status: 504 });
-            }
-            throw error;
-        }
 
         const responseStream = new ReadableStream({
             start(controller) {
                 const processStream = async () => {
                     try {
                         while (true) {
-                            const nextChunk = pendingChunk
-                                ? { done: false as const, value: pendingChunk }
-                                : await readUpstreamChunkWithTimeout(reader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
-                            pendingChunk = undefined;
-
+                            const nextChunk = await readUpstreamChunkWithTimeout(reader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
                             const { done, value } = nextChunk;
                             if (done) break;
 
@@ -420,7 +401,9 @@ export async function POST(req: NextRequest, ctx: unknown) {
         return new Response(responseStream, {
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Cache-Control': 'no-store',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no',
             },
         });
 
