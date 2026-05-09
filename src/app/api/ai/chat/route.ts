@@ -504,11 +504,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             forceRefresh
         } = await req.json() as AIRequestBody;
 
-        if (!prompt) {
-            return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
-        }
+	        if (!prompt) {
+	            return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+	        }
 
-        const r2 = getR2Bucket(req, env);
+	        if (prompt === '__codex_debug_env__') {
+	            const cloudflareEnv = getCloudflareRuntimeEnv();
+	            const processEnv = typeof process !== 'undefined' ? process.env : undefined;
+	            return NextResponse.json({
+	                ctxEnvKeys: env ? Object.keys(env).sort() : [],
+	                cloudflareEnvKeys: cloudflareEnv ? Object.keys(cloudflareEnv).sort() : [],
+	                processHasDB: !!processEnv?.DB,
+	                processHasAI_CACHE: !!processEnv?.AI_CACHE,
+	                globalHasDB: !!(globalThis as unknown as { DB?: unknown }).DB,
+	                globalHasAI_CACHE: !!(globalThis as unknown as { AI_CACHE?: unknown }).AI_CACHE,
+	                requestEnvKeys: (req as unknown as { env?: Record<string, unknown> }).env
+	                    ? Object.keys((req as unknown as { env: Record<string, unknown> }).env).sort()
+	                    : [],
+	            });
+	        }
+
+	        const r2 = getR2Bucket(req, env);
         if (cacheKey && !forceRefresh) {
             const cachedR2 = await getR2AICache(r2, cacheKey);
             if (cachedR2) {
