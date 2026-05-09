@@ -594,17 +594,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                             }
                         }
 
-                        if (!isStreamClosed) {
-                            controller.close();
-                            isStreamClosed = true;
-                        }
-
                         if (clientCancelled) {
                             console.warn('[AI API] Skip cache save because the client cancelled the stream.');
                             return;
                         }
 
                         await finalizeUsageAndCache(db, r2, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
+
+                        if (!isStreamClosed) {
+                            controller.close();
+                            isStreamClosed = true;
+                        }
                     } catch (error: unknown) {
                         if (isStreamClosed || isClientDisconnectError(error)) {
                             console.warn('[AI API] Stream stopped after client disconnect.');
