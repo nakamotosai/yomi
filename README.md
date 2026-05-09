@@ -173,21 +173,47 @@ MIT License
 
 ---
 
-## Codex Handoff
+## 当前状态
 
-Last updated: 2026-05-09
+Last updated: 2026-05-09. README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，GitHub `main` 已推送到 `03a11b1 Document AI teacher production cache closeout`，Cloudflare Pages Production/main 最新部署 source 也是 `03a11b1`。
 
-- AI backend route is centralized at `src/app/api/ai/chat/route.ts`.
-- Default model chain: `qwen/qwen3.5-122b-a10b`, then `openai/gpt-oss-120b`, then `google/gemma-4-31b-it` through cliproxyapi.
-- Main AI teacher chat, word explanation, and grammar explanation share `/api/ai/chat`.
-- Smooth typewriter streaming is implemented in `src/store/useGeminiStore.ts`.
-- Shared Markdown streaming lives in `src/components/StreamingMarkdown.tsx`.
-- Word/grammar `AI老师在线解读` uses the dedicated structured renderer in `src/components/InfoPanel.tsx`, preserving accent headings, same-color inline labels, Japanese/Chinese example cards, speaker buttons, and streaming text.
-- AI Markdown display normalizes common LaTeX arrows such as `$\rightarrow$` / `\Rightarrow` to readable arrows and fixes CJK-adjacent `**bold**` so bold renders during streaming and after completion.
-- Main AI teacher chat injects the last 6 total messages as context; clearing chat resets persisted history and transient stream state so the next request starts from zero context.
-- Successful `/api/ai/chat` generations with a `cacheKey` are written to Cloudflare R2 bucket `yomi-ai-cache` through binding `AI_CACHE`, with D1 `ai_cache` retained as fallback.
-- Production AI requires Cloudflare Pages variables `CLIPROXY_API_KEY` and `CLIPROXY_API_BASE_URL`; the current base URL is the protected `https://vps.saaaai.com/yomi-cliproxy/v1` reverse proxy to the live cliproxyapi runtime.
-- 2026-05-09 production fix: `fb7ea71` updates `/api/ai/chat` to read Cloudflare Pages runtime env from `ctx.env` before falling back to `process.env`, fixing the post-deploy `CLIPROXY_API_KEY is missing` 500.
-- 2026-05-09 production cache fix: `ec65878` reads Pages bindings through `@cloudflare/next-on-pages` request context and ties stream finalization to cache writes; production probe confirmed second request returns `cacheLayer: "r2"`.
-- Fast dictionary entry behavior is warmed/cached in the dictionary loaders and app stores; avoid reintroducing mandatory blocking index initialization on every entry.
-- Current verification used for this handoff: `npm run typecheck`, `npm run lint` (87 existing warnings, 0 errors), `npm run build` (existing `JWT_SECRET` warning), `git diff --check`, `design_truth_guard.py`, local `/api/ai/chat` D1 cache hit probe, Playwright browser DOM checks for AI chat Markdown / word AI renderer / grammar AI renderer on `http://127.0.0.1:3101/`, Cloudflare canonical deployment `ec65878`, public homepage `https://yomi.saaaai.com/` HTTP 200, and production `/api/ai/chat` R2 cache hit probe.
+当前轮已完成 AI 老师体验和缓存修复：主 AI 老师聊天、单词 AI 解读、语法 AI 解读统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。
+
+## 接手提示
+
+- 当前进度：AI 老师聊天已使用 AI 夏目漱石式逐字 typewriter 流式体验，活跃文本写入非持久 transient state，完成后才提交到聊天历史。
+- 本轮完成：Markdown 流式渲染已支持常见 LaTeX 箭头显示，例如 `$\rightarrow$` / `\Rightarrow` 会显示为可读箭头；CJK 相邻 `**bold**` 会在流式中及时渲染。
+- 本轮完成：主 AI 老师上下文注入最近 6 条消息；用户清空对话后持久历史和 transient stream state 都归零，下一轮从零开始。
+- 本轮完成：主 AI 老师、单词 AI 解读、语法 AI 解读提示词均要求尽量控制在 800 字以内。
+- 本轮完成：单词/语法 `AI老师在线解读` 已恢复专用结构 renderer，保留 accent 标题、同色 inline labels、日文/中文例句卡、喇叭按钮、`UnifiedHighlighter` 高亮和流式显示。
+- 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
+- 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`wrangler.toml`。
+- 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
+- 风险：生产 AI 依赖 Cloudflare Pages secrets `CLIPROXY_API_KEY` / `CLIPROXY_API_BASE_URL`、`AI_CACHE` R2 binding、`DB` D1 binding，以及 `https://vps.saaaai.com/yomi-cliproxy/v1` 到 live cliproxyapi 的反代。
+- 下一步：无主动开发任务；仅在用户发现新回归或要求继续迭代时恢复。
+
+## 本轮收口验证
+
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with 87 existing warnings and 0 errors.
+- `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
+- `git diff --check`: passed.
+- `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
+- GitHub: local HEAD and `origin/main` both point to `03a11b1`.
+- Cloudflare Pages: `wrangler pages deployment list --project-name yomi` shows latest Production/main source `03a11b1`.
+- Public homepage: `https://yomi.saaaai.com/` returned HTTP 200.
+- Production R2 cache probe: unique key `codex-final-r2-1778332453` first returned `FINALR2OK`; second returned `{"fromCache":true,"cacheLayer":"r2"}`.
+
+## 当前边界
+
+- Do not change the approved model chain unless the user explicitly approves a new provider/model list.
+- Do not expose AI keys through `NEXT_PUBLIC_*`.
+- Do not reintroduce mandatory blocking dictionary index initialization on every entry; fast entry should rely on warmed/cached dictionary loaders and app stores.
+- Do not replace the word/grammar AI explanation renderer with generic Markdown unless the old structure, colors, examples, speaker buttons, and highlights are preserved.
+- OCR, EPUB, TTS, kana training, and unrelated site design are outside this AI teacher closeout.
+
+## 仓库卫生要求
+
+- Keep `main` clean before handoff; do not leave runtime residue such as `.chrome-devtools/`, `.data/`, or `.omx/` in git status.
+- For future AI/provider changes, verify the production custom-domain API route with a real POST payload, not only Cloudflare deployment status or homepage 200.
+- For future `*.saaaai.com` production closeout, keep GitHub, Cloudflare Pages, custom domain, `saaaai.com` project card, planner truth source, Todoist, Notion, README, and learning writeback in sync.
