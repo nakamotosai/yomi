@@ -4,6 +4,8 @@ export class RichGrammarLoader {
     private static instance: RichGrammarLoader;
     private dictionary: Record<string, string> | null = null;
     private isOnDemandLoading = false;
+    private readonly url = '/grammar/grammar_dict_zh.json';
+    private readonly cacheName = 'yomi-rich-grammar-cache-v1';
 
     private constructor() { }
 
@@ -17,23 +19,20 @@ export class RichGrammarLoader {
     async loadDictionary() {
         if (this.dictionary || this.isOnDemandLoading) return;
 
-        const url = '/grammar/grammar_dict_zh.json';
-        const cacheName = 'yomi-rich-grammar-cache-v1';
-
         try {
             this.isOnDemandLoading = true;
             let response: Response | undefined;
             let cache: Cache | undefined;
 
             if (typeof window !== 'undefined' && 'caches' in window) {
-                cache = await caches.open(cacheName);
-                response = await cache.match(url);
+                cache = await caches.open(this.cacheName);
+                response = await cache.match(this.url);
             }
 
             let data: any;
             if (!response) {
                 console.log('[RichGrammar] Downloading dictionary...');
-                response = await fetch(url);
+                response = await fetch(this.url);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const blob = await response.blob();
@@ -41,7 +40,7 @@ export class RichGrammarLoader {
                 useDictionaryStore.getState().incrementDownloadedUnits();
 
                 if (cache) {
-                    await cache.put(url, new Response(blob, {
+                    await cache.put(this.url, new Response(blob, {
                         headers: { 'Content-Type': 'application/json' }
                     }));
                 }
@@ -69,6 +68,18 @@ export class RichGrammarLoader {
 
     async prefetch() {
         return this.loadDictionary();
+    }
+
+    async hasCachedDictionary(): Promise<boolean> {
+        if (typeof window === 'undefined' || !('caches' in window)) return false;
+
+        try {
+            const cache = await caches.open(this.cacheName);
+            return Boolean(await cache.match(this.url));
+        } catch (error) {
+            console.warn('[RichGrammar] Failed to probe rich grammar cache:', error);
+            return false;
+        }
     }
 
     getExplanation(term: string, reading?: string): string | null {

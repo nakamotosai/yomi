@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   description: "日本語泛読辅助工具 - 分词、注音、词性着色、音调可视化",
   keywords: ["日本語", "学習", "リーダー", "NLP", "分析"],
   manifest: "/manifest.json",
-  themeColor: "#3b82f6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -27,6 +26,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#3b82f6",
 };
 
 export default function RootLayout({

@@ -215,9 +215,11 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
                 const trans = translatedLines[idx] || '';
                 idMap.set(s.id, trans);
             });
-            setTranslations(idMap);
-            setFullTranslation(cachedParams);
-            return;
+            const timeout = window.setTimeout(() => {
+                setTranslations(idMap);
+                setFullTranslation(cachedParams);
+            }, 0);
+            return () => window.clearTimeout(timeout);
         }
 
         // Cache Miss: Fetch Immediately (User manually triggered analysis)
@@ -267,7 +269,10 @@ export default function TextAnalyzer({ text }: TextAnalyzerProps) {
     // Analyze text immediately (Input is manually committed)
     useEffect(() => {
         if (text.trim()) {
-            analyze();
+            const timeout = window.setTimeout(() => {
+                void analyze();
+            }, 0);
+            return () => window.clearTimeout(timeout);
         }
     }, [text, analyze]);
 

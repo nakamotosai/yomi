@@ -170,3 +170,18 @@ MIT License
 - [Jisho.org](https://jisho.org/) - 开源日英词典
 - [VOICEVOX](https://voicevox.hiroshiba.jp/) - 高质量日语 AI 语音合成
 - [kana-svg-data](https://github.com/MistOfv/kana-svg-data) - 高质量假名 SVG 数据
+
+---
+
+## Codex Handoff
+
+Last updated: 2026-05-09
+
+- AI backend route is centralized at `src/app/api/ai/chat/route.ts`.
+- Default model chain: `qwen/qwen3.5-122b-a10b`, then `openai/gpt-oss-120b`, then `google/gemma-4-31b-it` through cliproxyapi.
+- Main AI teacher chat, word explanation, and grammar explanation share `/api/ai/chat`.
+- Smooth typewriter streaming is implemented in `src/store/useGeminiStore.ts`.
+- Shared Markdown streaming lives in `src/components/StreamingMarkdown.tsx`.
+- Word/grammar `AI老师在线解读` uses `AIExplanationMarkdown`, preserving the original structured explanation layout while rendering Markdown during streaming.
+- Fast dictionary entry behavior is warmed/cached in the dictionary loaders and app stores; avoid reintroducing mandatory blocking index initialization on every entry.
+- Local verification used for this handoff: `npm run typecheck`, `npm run lint`, `npm run build`, plus real browser replay on `http://100.120.69.1:3101/`.

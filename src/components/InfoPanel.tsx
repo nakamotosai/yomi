@@ -21,6 +21,7 @@ import { translateText } from '@/lib/translate';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import { yomitanLoader, DictionaryResult as YomitanResult } from '@/lib/dictionary/yomitanLoader';
 import { useI18n } from '@/lib/i18n';
+import { AIExplanationMarkdown } from './StreamingMarkdown';
 
 
 interface JishoJapanese {
@@ -267,7 +268,7 @@ function RichGrammarContent({ grammar, grammarColor, onSpeak, isGlobalSpeaking }
 // 渲染语法详情 - 样式与单词卡片保持一致
 function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: GrammarEntry; settings: AppSettings; isGlobalSpeaking: boolean }) {
     const { addGrammar, removeGrammar, isGrammarSaved } = useGrammarStore();
-    const { generateText, streamedResults, cancelGeneration } = useGeminiStore();
+    const { generateText, streamedResults } = useGeminiStore();
     const { aiExplanationCache, cacheAIExplanation } = useAppStore(); // Use store
     const { t } = useI18n();
     const isSaved = isGrammarSaved(grammar.id);
@@ -395,7 +396,11 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
             const { fromCache, text } = await generateText(
                 `Target Grammar: ${grammar.title}`,
                 systemPrompt,
-                undefined, // Use Store for streaming
+                (partialText) => {
+                    if (currentGrammarId === grammar.id) {
+                        setAiResult(partialText);
+                    }
+                },
                 {
                     temperature: 0.85,
                     top_p: 0.95,
@@ -415,6 +420,7 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
 
         } catch (error: any) {
             console.error("AI Generation failed", error);
+            setAiResultTitle(t('ai.online_explanation'));
             setAiResult(error.message || "AI 老师好像在休息，请稍后再试...");
         } finally {
             // isGenerating handled by store
@@ -564,56 +570,11 @@ function GrammarPanel({ grammar, settings, isGlobalSpeaking }: { grammar: Gramma
                                 </button>
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                                {(() => {
-                                    // Prefer streaming content, fallback to aiResult (which is actively updated via onUpdate callback)
-                                    // This dual-source approach ensures responsiveness
-                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中...";
-                                    const lines = displayText.split('\n');
-
-                                    return lines.map((line, lineIdx) => {
-                                        const trimmed = line.trim();
-                                        if (trimmed.includes('场景例句') || trimmed.includes('接续与含义') || trimmed.includes('老师划重点')) {
-                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--accent-primary)]" style={{ color: grammarColor }}>{line.replace(/\*+/g, '')}</div>;
-                                        }
-
-                                        // 重新适配例句检测
-                                        const nextLine = (lines[lineIdx + 1] || '').trim();
-                                        // 简单识别：如果当前行是日文（含汉字/假名）且下一行是纯中文，且当前行不是标题
-                                        const cleanTrimmed = trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-                                        const cleanNext = nextLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-
-                                        const isJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanTrimmed);
-                                        // 宽松的中文判定：允许所有全角字符范围，确保问号 ？ (FF1F) 等能被匹配
-                                        const isChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(cleanNext);
-
-                                        if (trimmed && isJapanese && nextLine && isChinese && !trimmed.startsWith('**') && !trimmed.includes('：')) {
-                                            return (
-                                                <UnifiedExampleItem
-                                                    key={lineIdx}
-                                                    japanese={cleanTrimmed}
-                                                    chinese={cleanNext}
-                                                    onSpeak={handleSpeak}
-                                                    accentColor={grammarColor}
-                                                    targetWord={grammar.title}
-                                                />
-                                            );
-                                        }
-
-                                        // 跳过已被包含在 UnifiedExampleItem 的翻译行
-                                        const prevLine = (lines[lineIdx - 1] || '').trim();
-                                        const cleanPrev = prevLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-                                        const prevIsJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanPrev);
-                                        const currentIsChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, ''));
-
-                                        if (currentIsChinese && prevIsJapanese && !prevLine.startsWith('**') && !prevLine.includes('：')) return null;
-
-                                        return (
-                                            <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
-                                                <UnifiedHighlighter text={trimmed.replace(/\*+/g, '')} target={grammar.title} color={grammarColor} />
-                                            </div>
-                                        );
-                                    });
-                                })()}
+                                <AIExplanationMarkdown
+                                    content={(isGenerating ? (streamedContent || aiResult) : aiResult) || "正在思考中..."}
+                                    isStreaming={isGenerating}
+                                    accentColor={grammarColor}
+                                />
                             </div>
                         </div>
                     </Collapsible>
@@ -652,7 +613,7 @@ export default function InfoPanel() {
     // useEffect(() => { tokenRef.current = token; }, [token]);
 
     // AI State for Words
-    const { generateText, streamedResults, cancelGeneration } = useGeminiStore();
+    const { generateText, streamedResults } = useGeminiStore();
     const wordCacheKey = token ? `word:${token.surface}` : '';
     const streamedContent = streamedResults.get(wordCacheKey);
     const isGenerating = streamedContent !== undefined;
@@ -821,7 +782,11 @@ export default function InfoPanel() {
             const { fromCache, text } = await generateText(
                 `Target Word: ${token.surface}\nContext: ${currentSentence || "No context provided."}`,
                 systemPrompt,
-                undefined, // Use Store for streaming
+                (partialText) => {
+                    if (token.surface === currentTokenSurface) {
+                        setAiResult(partialText);
+                    }
+                },
                 {
                     temperature: 0.85,
                     top_p: 0.95,
@@ -840,6 +805,7 @@ export default function InfoPanel() {
 
         } catch (error: any) {
             console.error("AI Generation failed", error);
+            setAiResultTitle('AI老师在线解读');
             setAiResult(error.message || "AI 老师好像在休息，请稍后再试...");
         }
     };
@@ -1483,59 +1449,11 @@ export default function InfoPanel() {
                                 </button>
                             </div>
                             <div className="text-[15px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                                {(() => {
-                                    const displayText = (isGenerating ? (streamedContent || aiResult) : aiResult) || t('common.loading');
-                                    const lines = displayText.split('\n');
-                                    return lines.map((line, lineIdx) => {
-                                        const trimmed = line.trim();
-
-                                        if (trimmed.includes('场景例句') || trimmed.includes('核心含义') || trimmed.includes('老师划重点')) {
-                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--accent-primary)]" style={{ color: wordAccentColor }}>{line.replace(/\*+/g, '')}</div>;
-                                        }
-                                        if (trimmed.includes('例句：') || trimmed.includes('例句:')) {
-                                            return <div key={lineIdx} className="font-bold mt-4 mb-2 text-[var(--text-primary)]">{line}</div>;
-                                        }
-
-                                        // 重新适配例句检测 (支持 - 开头或普通文本对)
-                                        const nextLine = (lines[lineIdx + 1] || '').trim();
-                                        // 简单识别：如果当前行是日文（含汉字/假名）且下一行是纯中文，且当前行不是标题
-                                        const cleanTrimmed = trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-                                        const cleanNext = nextLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-
-                                        // 宽松的日语判定：包含日文字符即可
-                                        const isJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanTrimmed);
-                                        // 宽松的中文判定：允许所有全角字符范围，确保问号 ？ (FF1F) 等能被匹配
-                                        const isChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(cleanNext);
-
-                                        if (trimmed && isJapanese && nextLine && isChinese && !trimmed.startsWith('**') && !trimmed.includes('：')) {
-                                            return (
-                                                <UnifiedExampleItem
-                                                    key={lineIdx}
-                                                    japanese={cleanTrimmed}
-                                                    chinese={cleanNext}
-                                                    onSpeak={handleSpeak}
-                                                    accentColor={wordAccentColor}
-                                                    targetWord={token.surface}
-                                                />
-                                            );
-                                        }
-
-                                        // 跳过已被包含在 UnifiedExampleItem 的翻译行
-                                        const prevLine = (lines[lineIdx - 1] || '').trim();
-                                        const cleanPrev = prevLine.replace(/^[-*]\s*/, '').replace(/\*+/g, '');
-                                        const prevIsJapanese = /[\u3040-\u30ff\u4e00-\u9faf]/.test(cleanPrev);
-                                        // 重复使用同样的中文判定逻辑
-                                        const currentIsChinese = /^[\u4e00-\u9faf\uff00-\uffef\u3000-\u303f（）\(\)a-zA-Z0-9\s]+$/.test(trimmed.replace(/^[-*]\s*/, '').replace(/\*+/g, ''));
-
-                                        if (currentIsChinese && prevIsJapanese && !prevLine.startsWith('**') && !prevLine.includes('：')) return null;
-
-                                        return (
-                                            <div key={lineIdx} className={trimmed ? "mb-2" : "h-2"}>
-                                                <UnifiedHighlighter text={trimmed.replace(/\*+/g, '')} target={token.surface} color={wordAccentColor} />
-                                            </div>
-                                        );
-                                    });
-                                })()}
+                                <AIExplanationMarkdown
+                                    content={(isGenerating ? (streamedContent || aiResult) : aiResult) || t('common.loading')}
+                                    isStreaming={isGenerating}
+                                    accentColor={wordAccentColor}
+                                />
                             </div>
                         </div>
                     </Collapsible>

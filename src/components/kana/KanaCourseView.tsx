@@ -2,13 +2,27 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, Check, X, ArrowRight, Trophy, Play, Star, ChevronRight, GraduationCap, Lock, RotateCcw } from 'lucide-react';
+import { Volume2, X, ArrowRight, Trophy, Play, Lock } from 'lucide-react';
 import { useKanaProgressStore } from '@/store/useKanaProgressStore';
-import { useAppStore } from '@/store/useAppStore';
 import { KANA_DATA, getKanaByRow } from '@/data/kanaData';
 import { KANA_STROKES } from '@/data/kanaStrokes';
 import { KanaChar } from '@/types';
 import clsx from 'clsx';
+
+function shuffledKana(values: KanaChar[]): KanaChar[] {
+    return values
+        .map((kana) => ({ kana, sort: Math.random() }))
+        .sort((a, b) => a.sort - b.sort)
+        .map(({ kana }) => kana);
+}
+
+function createQuizOptions(currentKana: KanaChar): KanaChar[] {
+    const distractors = shuffledKana(
+        KANA_DATA.filter(k => k.id !== currentKana.id && k.type === 'seion')
+    ).slice(0, 3);
+
+    return shuffledKana([currentKana, ...distractors]);
+}
 
 // ============================================================================
 // 0. 课程选择菜单 (Course Menu) - The "Lobby"
@@ -71,7 +85,6 @@ function LessonSelector() {
                         // Hiragana: L1-L10, Katakana: L11-L20
                         const lessonId = activeTab === 'hiragana' ? `L${row.id}` : `L${parseInt(row.id) + 10}`;
                         
-                        const progress = lessonProgress[lessonId];
                         // Logic: For Katakana L11, check if L10 (Hiragana last) is done? Or separate track?
                         // Let's keep tracks separate for flexibility, but L11 unlocks after L1 maybe?
                         // Simple logic: Check previous lesson in SAME track.
@@ -132,7 +145,7 @@ function LessonSelector() {
 // ============================================================================
 // 1. 描红动画组件 (Stroke Animator) - Same as before
 // ============================================================================
-function StrokeAnimator({ char, autoPlay = true }: { char: string; autoPlay?: boolean }) {
+function StrokeAnimator({ char }: { char: string }) {
     const strokeData = KANA_STROKES[char];
     const [key, setKey] = useState(0); 
 
@@ -368,37 +381,42 @@ function SummaryView({ xpEarned, onFinish }: { xpEarned: number; onFinish: () =>
 // Main Container: KanaCourseView
 // ============================================================================
 export default function KanaCourseView() {
-    const { currentLessonId, lessonProgress, addXp, completeLesson, updateKanaProgress, setCurrentLesson } = useKanaProgressStore();
-    const { setAppMode } = useAppStore();
+    const { currentLessonId, addXp, completeLesson, updateKanaProgress, setCurrentLesson } = useKanaProgressStore();
     
     const [phase, setPhase] = useState<'intro' | 'learn' | 'quiz' | 'summary'>('intro');
     const [queue, setQueue] = useState<KanaChar[]>([]);
     const [scriptType, setScriptType] = useState<'hiragana' | 'katakana'>('hiragana');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [mistakes, setMistakes] = useState<number>(0);
+    const [quizOptions, setQuizOptions] = useState<KanaChar[]>([]);
 
     // Watch for Lesson Selection
     useEffect(() => {
         if (!currentLessonId) return;
 
-        // Start Lesson Logic
-        let lessonNum = parseInt(currentLessonId.replace('L', '')) || 1;
-        
-        // Determine Type: 1-10 Hiragana, 11-20 Katakana
-        const isKatakana = lessonNum > 10;
-        if (isKatakana) lessonNum -= 10;
+        const timer = window.setTimeout(() => {
+            // Start Lesson Logic
+            let lessonNum = parseInt(currentLessonId.replace('L', '')) || 1;
 
-        const rows = ['a', 'k', 's', 't', 'n', 'h', 'm', 'y', 'r', 'w'];
-        const targetRow = rows[lessonNum - 1] || 'a';
-        
-        // Fetch Kana for this row (Only Seion for now)
-        const targetKana = getKanaByRow(targetRow).filter(k => k.type === 'seion'); 
-        
-        setScriptType(isKatakana ? 'katakana' : 'hiragana');
-        setQueue(targetKana);
-        setPhase('learn'); 
-        setCurrentIndex(0);
-        setMistakes(0);
+            // Determine Type: 1-10 Hiragana, 11-20 Katakana
+            const isKatakana = lessonNum > 10;
+            if (isKatakana) lessonNum -= 10;
+
+            const rows = ['a', 'k', 's', 't', 'n', 'h', 'm', 'y', 'r', 'w'];
+            const targetRow = rows[lessonNum - 1] || 'a';
+
+            // Fetch Kana for this row (Only Seion for now)
+            const targetKana = getKanaByRow(targetRow).filter(k => k.type === 'seion');
+
+            setScriptType(isKatakana ? 'katakana' : 'hiragana');
+            setQueue(targetKana);
+            setPhase('learn');
+            setCurrentIndex(0);
+            setMistakes(0);
+            setQuizOptions([]);
+        }, 0);
+
+        return () => window.clearTimeout(timer);
     }, [currentLessonId]);
 
     // Handlers
@@ -406,6 +424,9 @@ export default function KanaCourseView() {
         if (currentIndex < queue.length - 1) {
             setCurrentIndex(i => i + 1);
         } else {
+            if (queue[0]) {
+                setQuizOptions(createQuizOptions(queue[0]));
+            }
             setPhase('quiz');
             setCurrentIndex(0);
             // Shuffle for quiz? For now keep order to reduce confusion
@@ -417,7 +438,11 @@ export default function KanaCourseView() {
             setMistakes(m => m + 1);
         }
         if (currentIndex < queue.length - 1) {
-            setCurrentIndex(i => i + 1);
+            const nextIndex = currentIndex + 1;
+            if (queue[nextIndex]) {
+                setQuizOptions(createQuizOptions(queue[nextIndex]));
+            }
+            setCurrentIndex(nextIndex);
         } else {
             finishLesson();
         }
@@ -490,12 +515,7 @@ export default function KanaCourseView() {
                             <QuizCard 
                                 question={queue[currentIndex]}
                                 scriptType={scriptType}
-                                options={[
-                                    queue[currentIndex],
-                                    ...KANA_DATA.filter(k => k.id !== queue[currentIndex].id && k.type === 'seion')
-                                        .sort(() => Math.random() - 0.5)
-                                        .slice(0, 3)
-                                ].sort(() => Math.random() - 0.5)}
+                                options={quizOptions.length > 0 ? quizOptions : [queue[currentIndex]]}
                                 onAnswer={handleQuizAnswer}
                             />
                         </motion.div>

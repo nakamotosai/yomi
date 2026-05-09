@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Disable strict mode to prevent double initialization of kuroshiro
   reactStrictMode: false,
 
+  // Tailnet preview host used for local Windows acceptance.
+  allowedDevOrigins: ['100.120.69.1'],
+
   // Pin the project root so Next does not infer C:\Users\sai from the parent lockfile.
   turbopack: {
     root: process.cwd(),

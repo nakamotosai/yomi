@@ -60,14 +60,16 @@ export default function MobileNavigator({
     // Lazy load main content when switching to it
     useEffect(() => {
         if (currentView === 'main' && !hasMainLoaded) {
-            setHasMainLoaded(true);
+            const timeout = window.setTimeout(() => setHasMainLoaded(true), 0);
+            return () => window.clearTimeout(timeout);
         }
     }, [currentView, hasMainLoaded]);
 
     // Sync: Selected Token/Grammar -> Info View
     useEffect(() => {
         if (selectedToken || selectedGrammar) { // Use deconstructed state
-            setCurrentView('info');
+            const timeout = window.setTimeout(() => setCurrentView('info'), 0);
+            return () => window.clearTimeout(timeout);
         }
     }, [selectedToken, selectedGrammar]); // Use proper dependency
 
@@ -80,7 +82,8 @@ export default function MobileNavigator({
         }
 
         if (isChatOpen) {
-            setCurrentView('ai');
+            const timeout = window.setTimeout(() => setCurrentView('ai'), 0);
+            return () => window.clearTimeout(timeout);
         }
         // We no longer auto-close AI view when isChatOpen becomes false,
         // because AI view is now the main view and accessible via tabs.
@@ -88,14 +91,19 @@ export default function MobileNavigator({
 
     // Sync: Center View Mode -> Mobile Views
     useEffect(() => {
+        let nextView: MobileView | null = null;
         if (centerViewMode === 'vocab') {
-            setCurrentView('vocab');
+            nextView = 'vocab';
         } else if (centerViewMode === 'grammar') {
-            setCurrentView('grammar');
+            nextView = 'grammar';
         } else if (centerViewMode === 'reader' && (currentView === 'vocab' || currentView === 'grammar')) {
-            setCurrentView('main');
+            nextView = 'main';
         }
-    }, [centerViewMode]);
+
+        if (!nextView) return;
+        const timeout = window.setTimeout(() => setCurrentView(nextView), 0);
+        return () => window.clearTimeout(timeout);
+    }, [centerViewMode, currentView]);
 
     // Handle Back Navigation
     const handleBack = () => {
@@ -226,8 +234,16 @@ export default function MobileNavigator({
                                 style={{ background: isDark ? 'var(--bg-elevated)' : 'white' }}
                             >
                                 {currentView === 'ai' ? (
-                                    /* AI Header: Logo & Title */
-                                    <div className="flex items-center gap-2">
+                                    /* AI Header: Back, Logo & Title */
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                            onClick={handleBack}
+                                            className="flex items-center justify-center p-2 -ml-2 rounded-xl bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95 transition-all"
+                                            title="返回阅读"
+                                            aria-label="返回阅读"
+                                        >
+                                            <ArrowLeft className="w-5 h-5" />
+                                        </button>
                                         <div className="relative w-8 h-8">
                                             {/* Assuming Image component is imported or we use img tag. 
                                                Since Next.js Image is better, we should check imports. 
@@ -238,7 +254,7 @@ export default function MobileNavigator({
                                              */}
                                             <img src="/logo.png" alt="Logo" className="object-contain w-full h-full" />
                                         </div>
-                                        <span className="font-bold text-[var(--text-primary)]">YOMI | AI智能老师</span>
+                                        <span className="font-bold text-[var(--text-primary)] truncate">YOMI | AI智能老师</span>
                                     </div>
                                 ) : (
                                     /* Normal Header: Spacer for centering */

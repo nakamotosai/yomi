@@ -5,6 +5,13 @@ import { useDictionaryStore } from '@/store/useDictionaryStore';
 const grammarIndex: Map<string, GrammarEntry[]> = new Map();
 let isLoaded = false;
 let loadingPromise: Promise<void> | null = null;
+const GRAMMAR_CACHE_NAME = 'yomi-grammar-cache-v3';
+const GRAMMAR_BANK_URLS = [
+    '/grammar/term_bank_1.json',
+    '/grammar/term_bank_2.json',
+    '/grammar/term_bank_3.json',
+    '/grammar/term_bank_4.json',
+];
 
 // 从JSON内容中提取【意味】
 function extractMeaning(content: unknown[]): string {
@@ -54,7 +61,7 @@ function extractPlainText(content: unknown[]): string {
 // 解析单个term_bank JSON文件
 async function parseTermBank(url: string): Promise<GrammarEntry[]> {
     const entries: GrammarEntry[] = [];
-    const cacheName = 'yomi-grammar-cache-v3'; // 更新版本号以强制清理旧缓存
+    const cacheName = GRAMMAR_CACHE_NAME; // 更新版本号以强制清理旧缓存
 
     try {
         let response: Response | undefined;
@@ -140,17 +147,10 @@ export async function loadGrammar(): Promise<void> {
     if (loadingPromise) return loadingPromise;
 
     loadingPromise = (async () => {
-        const bankUrls = [
-            '/grammar/term_bank_1.json',
-            '/grammar/term_bank_2.json',
-            '/grammar/term_bank_3.json',
-            '/grammar/term_bank_4.json',
-        ];
-
         const allEntries: GrammarEntry[] = [];
 
         console.log('[Grammar] Starting background loading...');
-        for (const url of bankUrls) {
+        for (const url of GRAMMAR_BANK_URLS) {
             const entries = await parseTermBank(url);
             allEntries.push(...entries);
             useDictionaryStore.getState().incrementLoadedUnits();
@@ -187,6 +187,19 @@ export async function loadGrammar(): Promise<void> {
 // 预热加载 (用于全局初始化)
 export async function prefetchGrammar(): Promise<void> {
     return loadGrammar();
+}
+
+export async function hasGrammarCache(): Promise<boolean> {
+    if (typeof window === 'undefined' || !('caches' in window)) return false;
+
+    try {
+        const cache = await caches.open(GRAMMAR_CACHE_NAME);
+        const matches = await Promise.all(GRAMMAR_BANK_URLS.map(url => cache.match(url)));
+        return matches.every(Boolean);
+    } catch (error) {
+        console.warn('[Grammar] Failed to probe grammar cache:', error);
+        return false;
+    }
 }
 
 // 获取语法索引

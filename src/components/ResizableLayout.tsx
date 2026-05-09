@@ -30,16 +30,22 @@ export default function ResizableLayout({ leftContent, centerContent, rightConte
 
     // Initialize and listen for window resize
     useEffect(() => {
-        updateAdaptiveLayout();
+        const timeout = window.setTimeout(updateAdaptiveLayout, 0);
         window.addEventListener('resize', updateAdaptiveLayout);
-        return () => window.removeEventListener('resize', updateAdaptiveLayout);
+        return () => {
+            window.clearTimeout(timeout);
+            window.removeEventListener('resize', updateAdaptiveLayout);
+        };
     }, [updateAdaptiveLayout]);
 
     // Sync from store when NOT dragging (keeps manual pixel values consistent)
     useEffect(() => {
         if (!isDraggingLeft && !isDraggingRight) {
-            setLeftWidth(layout.leftSidebarWidth);
-            setRightWidth(layout.rightSidebarWidth);
+            const timeout = window.setTimeout(() => {
+                setLeftWidth(layout.leftSidebarWidth);
+                setRightWidth(layout.rightSidebarWidth);
+            }, 0);
+            return () => window.clearTimeout(timeout);
         }
     }, [layout.leftSidebarWidth, layout.rightSidebarWidth, isDraggingLeft, isDraggingRight]);
 

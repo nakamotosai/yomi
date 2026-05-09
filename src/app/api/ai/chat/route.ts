@@ -5,6 +5,7 @@ import { RemoteD1Client } from '@/lib/remoteD1';
 export const runtime = 'edge';
 
 const DEFAULT_MODEL_ID = 'qwen/qwen3.5-122b-a10b';
+const DEFAULT_FALLBACK_MODEL_IDS = ['openai/gpt-oss-120b', 'google/gemma-4-31b-it'];
 const DEFAULT_CLIPROXY_BASE_URL = 'http://127.0.0.1:8317/v1';
 const RPM_LIMIT = 25;
 const TPM_LIMIT = 12000;
@@ -26,6 +27,21 @@ interface AIRequestBody {
     topP?: number;
     cacheKey?: string;
     forceRefresh?: boolean;
+}
+
+interface FallbackAttempt {
+    model: string;
+    status?: number;
+    reason: 'rate_limited' | 'timeout' | 'upstream_status' | 'empty_body' | 'fetch_error';
+    detail?: string;
+}
+
+interface UpstreamSelection {
+    modelId: string;
+    minuteKey: string;
+    estInputTokens: number;
+    response: Response;
+    attempts: FallbackAttempt[];
 }
 
 interface OpenAIStreamChoice {
@@ -53,6 +69,12 @@ function isAbortError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AbortError';
 }
 
+function isClientDisconnectError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const code = (error as Error & { code?: string }).code;
+    return code === 'ECONNRESET' || /aborted|client disconnected/i.test(error.message);
+}
+
 function getEnvValue(...names: string[]): string {
     if (typeof process === 'undefined' || !process.env) return '';
 
@@ -68,6 +90,40 @@ function getEnvValue(...names: string[]): string {
 
 function normalizeBaseUrl(baseUrl: string): string {
     return baseUrl.replace(/\/+$/, '');
+}
+
+function parseModelList(value: string): string[] {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function uniqueModelChain(primaryModel: string, fallbackModels: string[]): string[] {
+    const seen = new Set<string>();
+    const chain: string[] = [];
+
+    for (const model of [primaryModel, ...fallbackModels]) {
+        if (seen.has(model)) continue;
+        seen.add(model);
+        chain.push(model);
+    }
+
+    return chain;
+}
+
+function getModelFallbackChain(): string[] {
+    const primaryModel = getEnvValue('CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
+    const fallbackOverride = getEnvValue('CLIPROXY_FALLBACK_MODELS');
+    const fallbackModels = fallbackOverride ? parseModelList(fallbackOverride) : DEFAULT_FALLBACK_MODEL_IDS;
+    return uniqueModelChain(primaryModel, fallbackModels);
+}
+
+function safeErrorDetail(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message.slice(0, 200);
+    }
+    return String(error).slice(0, 200);
 }
 
 function buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
@@ -173,6 +229,122 @@ async function readUpstreamChunkWithTimeout(
     }
 }
 
+async function openUpstreamWithFallback({
+    db,
+    apiBaseUrl,
+    apiKey,
+    prompt,
+    systemPrompt,
+    temperature,
+    topP,
+}: {
+    db: D1Database;
+    apiBaseUrl: string;
+    apiKey: string;
+    prompt: string;
+    systemPrompt?: string;
+    temperature: number;
+    topP: number;
+}): Promise<UpstreamSelection | NextResponse> {
+    const modelChain = getModelFallbackChain();
+    const estInputTokens = Math.ceil((prompt.length + (systemPrompt?.length || 0)) * 1.5);
+    const now = new Date();
+    const minuteKey = `${now.toISOString().slice(0, 16).replace('T', ' ')}`;
+    const attempts: FallbackAttempt[] = [];
+
+    for (const modelId of modelChain) {
+        const stats = await getAIUsageStats(db, modelId, minuteKey);
+        const currentRPM = stats?.request_count || 0;
+        const currentTPM = stats?.token_count || 0;
+
+        if (currentRPM >= RPM_LIMIT || currentTPM + estInputTokens > TPM_LIMIT) {
+            console.warn(`[AI RateLimit] Skipping ${modelId}: RPM ${currentRPM}/${RPM_LIMIT}, TPM ${currentTPM}/${TPM_LIMIT} (est ${estInputTokens})`);
+            attempts.push({ model: modelId, status: 429, reason: 'rate_limited' });
+            continue;
+        }
+
+        try {
+            await incrementAIUsage(db, modelId, minuteKey, 1, estInputTokens);
+        } catch (error) {
+            console.error(`[AI Usage] Failed to increment initial usage for ${modelId}`, error);
+        }
+
+        let upstreamResponse: Response;
+        try {
+            upstreamResponse = await fetchUpstreamWithTimeout(`${apiBaseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: modelId,
+                    messages: buildMessages(prompt, systemPrompt),
+                    temperature,
+                    top_p: topP,
+                    max_tokens: MAX_OUTPUT_TOKENS,
+                    stream: true,
+                    stream_options: { include_usage: true },
+                }),
+            }, UPSTREAM_FETCH_TIMEOUT_MS);
+        } catch (error) {
+            const isTimeout = error instanceof UpstreamTimeoutError;
+            console.error(`[AI API] Upstream ${isTimeout ? 'timeout' : 'fetch error'} for ${modelId}:`, safeErrorDetail(error));
+            attempts.push({
+                model: modelId,
+                reason: isTimeout ? 'timeout' : 'fetch_error',
+                detail: safeErrorDetail(error),
+            });
+            continue;
+        }
+
+        if (!upstreamResponse.ok) {
+            const upstreamError = await upstreamResponse.text();
+            const detail = upstreamError.slice(0, 200);
+            console.error('[AI API] Upstream cliproxyapi error:', modelId, upstreamResponse.status, detail);
+            attempts.push({
+                model: modelId,
+                status: upstreamResponse.status,
+                reason: 'upstream_status',
+                detail,
+            });
+            continue;
+        }
+
+        if (!upstreamResponse.body) {
+            attempts.push({ model: modelId, status: upstreamResponse.status, reason: 'empty_body' });
+            continue;
+        }
+
+        if (attempts.length > 0) {
+            console.warn(`[AI API] Model fallback selected ${modelId} after failed/skipped attempts:`, attempts);
+        }
+
+        return {
+            modelId,
+            minuteKey,
+            estInputTokens,
+            response: upstreamResponse,
+            attempts,
+        };
+    }
+
+    if (attempts.length > 0 && attempts.every((attempt) => attempt.reason === 'rate_limited')) {
+        return NextResponse.json({
+            error: 'Too Many Requests',
+            message: '老师现在太忙了，请等一分钟后再试（所有候选模型的流量配额都已接近限制）。',
+            retryAfter: 60,
+            attempts,
+        }, { status: 429 });
+    }
+
+    return NextResponse.json({
+        error: 'AI upstream unavailable',
+        message: 'AI 老师暂时不可用，已尝试所有候选模型。',
+        attempts,
+    }, { status: 502 });
+}
+
 // 获取 D1 数据库绑定
 function getDB(request: NextRequest): D1Database | null {
     // 1. 尝试从 process.env 获取 (Cloudflare Pages nodejs_compat 标准方式)
@@ -253,7 +425,6 @@ export async function POST(req: NextRequest, ctx: unknown) {
             }
         }
 
-        const modelId = getEnvValue('CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
         const apiKey = getEnvValue('CLIPROXY_API_KEY', 'CODEX_CLIPROXYAPI_8317_API_KEY');
         const apiBaseUrl = normalizeBaseUrl(getEnvValue('CLIPROXY_API_BASE_URL') || DEFAULT_CLIPROXY_BASE_URL);
 
@@ -261,66 +432,29 @@ export async function POST(req: NextRequest, ctx: unknown) {
             return NextResponse.json({ error: 'CLIPROXY_API_KEY is missing' }, { status: 500 });
         }
 
-        const estInputTokens = Math.ceil((prompt.length + (systemPrompt?.length || 0)) * 1.5);
-        const now = new Date();
-        const minuteKey = `${now.toISOString().slice(0, 16).replace('T', ' ')}`;
+        const upstreamSelection = await openUpstreamWithFallback({
+            db,
+            apiBaseUrl,
+            apiKey,
+            prompt,
+            systemPrompt,
+            temperature,
+            topP,
+        });
 
-        const stats = await getAIUsageStats(db, modelId, minuteKey);
-        const currentRPM = stats?.request_count || 0;
-        const currentTPM = stats?.token_count || 0;
-
-        if (currentRPM >= RPM_LIMIT || currentTPM + estInputTokens > TPM_LIMIT) {
-            console.warn(`[AI RateLimit] Limit hit: RPM ${currentRPM}/${RPM_LIMIT}, TPM ${currentTPM}/${TPM_LIMIT} (est ${estInputTokens})`);
-            return NextResponse.json({
-                error: 'Too Many Requests',
-                message: '老师现在太忙了，请等一分钟后再试（流量配额已接近限制）。',
-                retryAfter: 60
-            }, { status: 429 });
-        }
-
-        try {
-            await incrementAIUsage(db, modelId, minuteKey, 1, estInputTokens);
-        } catch (error) {
-            console.error('[AI Usage] Failed to increment initial usage', error);
-        }
-
-        const upstreamResponse = await fetchUpstreamWithTimeout(`${apiBaseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: modelId,
-                messages: buildMessages(prompt, systemPrompt),
-                temperature,
-                top_p: topP,
-                max_tokens: MAX_OUTPUT_TOKENS,
-                stream: true,
-                stream_options: { include_usage: true },
-            }),
-        }, UPSTREAM_FETCH_TIMEOUT_MS);
-
-        if (!upstreamResponse.ok) {
-            const upstreamError = await upstreamResponse.text();
-            console.error('[AI API] Upstream cliproxyapi error:', upstreamResponse.status, upstreamError.slice(0, 500));
-            return NextResponse.json(
-                { error: 'AI upstream unavailable', status: upstreamResponse.status },
-                { status: 502 }
-            );
-        }
-
-        if (!upstreamResponse.body) {
-            return NextResponse.json({ error: 'AI upstream returned empty body' }, { status: 502 });
+        if (upstreamSelection instanceof Response) {
+            return upstreamSelection;
         }
 
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
-        const reader = upstreamResponse.body.getReader();
+        const { modelId, minuteKey, estInputTokens, response: upstreamResponse } = upstreamSelection;
+        const reader = upstreamResponse.body!.getReader();
         let fullText = '';
         let sseBuffer = '';
         let actualTotalTokens: number | undefined;
         let isStreamClosed = false;
+        let clientCancelled = false;
 
         const responseStream = new ReadableStream({
             start(controller) {
@@ -372,8 +506,19 @@ export async function POST(req: NextRequest, ctx: unknown) {
                             isStreamClosed = true;
                         }
 
+                        if (clientCancelled) {
+                            console.warn('[AI API] Skip cache save because the client cancelled the stream.');
+                            return;
+                        }
+
                         await finalizeUsageAndCache(db, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
                     } catch (error: unknown) {
+                        if (isStreamClosed || isClientDisconnectError(error)) {
+                            console.warn('[AI API] Stream stopped after client disconnect.');
+                            void reader.cancel();
+                            return;
+                        }
+
                         console.error('[AI API] Stream Processing Error:', error);
                         if (error instanceof UpstreamTimeoutError) {
                             void reader.cancel();
@@ -392,6 +537,7 @@ export async function POST(req: NextRequest, ctx: unknown) {
                 }
             },
             cancel() {
+                clientCancelled = true;
                 isStreamClosed = true;
                 void reader.cancel();
                 console.log('[AI API] Stream cancelled by client.');

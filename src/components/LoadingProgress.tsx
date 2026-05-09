@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { useAppStore } from '@/store/useAppStore';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 // Assuming framer-motion is used, if not we should use div. 
 // Given the error was just about variables, I'll attempt to use standard div to be safe and avoid "module not found".
@@ -13,21 +13,11 @@ import { clsx } from 'clsx';
 
 export default function LoadingProgress() {
     // Destructure all needed values
-    const { loadedUnits, totalUnits, totalDownloadedUnits, isAllLoaded, totalDownloadedBytes, totalBytesToDownload } = useDictionaryStore();
+    const { phase, loadedUnits, totalUnits, totalDownloadedUnits, isAllLoaded, totalDownloadedBytes, totalBytesToDownload } = useDictionaryStore();
     const settings = useAppStore(s => s.settings);
     const isDark = settings.theme === 'dark';
 
-    const [isVisible, setIsVisible] = useState(true);
-
-    // Auto-hide logic
-    useEffect(() => {
-        if (isAllLoaded) {
-            // Hide immediately when loaded as requested
-            setIsVisible(false);
-        }
-    }, [isAllLoaded]);
-
-    if (!isVisible) return null;
+    if (phase !== 'first-install' || isAllLoaded) return null;
 
     const progress = totalUnits > 0 ? Math.min(100, Math.round((loadedUnits / totalUnits) * 100)) : 0;
     const isDownloading = totalDownloadedUnits > 0 && !isAllLoaded;
@@ -59,24 +49,16 @@ export default function LoadingProgress() {
 
             <div className="flex items-center justify-between mb-3 text-[14px] font-semibold">
                 <div className="flex items-center gap-3">
-                    {isAllLoaded ? (
-                        <div className="p-1 rounded-full bg-emerald-500/10">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        </div>
-                    ) : (
-                        <div className="p-1 rounded-full bg-indigo-500/10">
-                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                        </div>
-                    )}
+                    <div className="p-1 rounded-full bg-indigo-500/10">
+                        <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                    </div>
                     <span className={clsx(
                         "tracking-tight",
                         isDark ? "text-slate-200" : "text-slate-700"
                     )}>
-                        {isAllLoaded
-                            ? "辞典准备就绪"
-                            : isDownloading
-                                ? `正在下载数据 (${downloadSizeMB} / ${totalSizeMB} MB)`
-                                : "正在初始化索引..."}
+                        {isDownloading
+                            ? `正在下载数据 (${downloadSizeMB} / ${totalSizeMB} MB)`
+                            : "正在初始化索引..."}
                     </span>
                 </div>
                 <span className={clsx(

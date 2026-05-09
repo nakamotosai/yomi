@@ -41,6 +41,7 @@ class YomitanLoader {
     private loadedBanks: Set<number> = new Set();
     private readonly DB_NAME = 'yomi-dictionary-db';
     private readonly DB_VERSION = 1;
+    private readonly USABLE_ENTRY_THRESHOLD = 50000;
 
     constructor() {
         // Initialize DB connection immediately if in browser
@@ -57,6 +58,29 @@ class YomitanLoader {
                 },
             });
         }
+    }
+
+    public async hasUsableCache(): Promise<boolean> {
+        if (!this.dbPromise) return false;
+
+        try {
+            const db = await this.dbPromise;
+            const metaTotal = await db.get('meta', 'total_entries');
+            if (typeof metaTotal === 'number' && metaTotal > this.USABLE_ENTRY_THRESHOLD) {
+                this.isLoaded = true;
+                return true;
+            }
+
+            const count = await db.count('entries');
+            if (count > this.USABLE_ENTRY_THRESHOLD) {
+                this.isLoaded = true;
+                return true;
+            }
+        } catch (error) {
+            console.warn('[Dictionary] Failed to probe local dictionary cache:', error);
+        }
+
+        return false;
     }
 
     // Format definition text
@@ -230,7 +254,7 @@ class YomitanLoader {
             // Let's say if we have > 50000 entries, we assume it's usable instantiation.
             // Or better: Check if we completed the last bank? 
             // For now, simple count check. 
-            if (count > 50000) {
+            if (count > this.USABLE_ENTRY_THRESHOLD) {
                 console.log('[Dictionary] DB already populated. Skipping download.');
                 this.isLoaded = true;
 
@@ -238,14 +262,8 @@ class YomitanLoader {
                 const store = useDictionaryStore.getState();
                 const totalBytesGuess = 42 * 1024 * 1024; // ~42MB (根据实际情况调整)
 
-                store.addDownloadedBytes(totalBytesGuess);
                 store.setTotalBytesToDownload(totalBytesGuess);
-
-                // Force visually complete state
                 store.setAllLoaded(true);
-                // Hack to ensure progress bar fills: manually set loadedUnits to total
-                // Since we don't have setLoadedUnits, we loop increment
-                for (let i = 0; i < 23; i++) store.incrementLoadedUnits();
 
                 return;
             }

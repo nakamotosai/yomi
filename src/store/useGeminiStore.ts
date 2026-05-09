@@ -36,6 +36,125 @@ interface GeminiState {
     clearBookmarks: () => void;
 }
 
+interface ChatTypewriterState {
+    activeMessageTimestamp: number | null;
+    streamingText: Record<string, string>;
+    startChatStream: (timestamp: number) => void;
+    setChatStreamText: (timestamp: number, text: string) => void;
+    clearChatStream: (timestamp: number) => void;
+    resetChatStream: () => void;
+}
+
+type SegmenterConstructor = new (
+    locales?: string | string[],
+    options?: { granularity: 'grapheme' }
+) => {
+    segment(input: string): Iterable<{ segment: string }>;
+};
+
+export const useChatTypewriterStore = create<ChatTypewriterState>((set) => ({
+    activeMessageTimestamp: null,
+    streamingText: {},
+    startChatStream: (timestamp) => set((state) => ({
+        activeMessageTimestamp: timestamp,
+        streamingText: {
+            ...state.streamingText,
+            [String(timestamp)]: '',
+        },
+    })),
+    setChatStreamText: (timestamp, text) => set((state) => ({
+        streamingText: {
+            ...state.streamingText,
+            [String(timestamp)]: text,
+        },
+    })),
+    clearChatStream: (timestamp) => set((state) => {
+        const nextStreamingText = { ...state.streamingText };
+        delete nextStreamingText[String(timestamp)];
+        return {
+            activeMessageTimestamp: state.activeMessageTimestamp === timestamp ? null : state.activeMessageTimestamp,
+            streamingText: nextStreamingText,
+        };
+    }),
+    resetChatStream: () => set({ activeMessageTimestamp: null, streamingText: {} }),
+}));
+
+function splitGraphemes(text: string): string[] {
+    const Segmenter = (globalThis.Intl as (typeof Intl & { Segmenter?: SegmenterConstructor }) | undefined)?.Segmenter;
+    if (Segmenter) {
+        const segmenter = new Segmenter(undefined, { granularity: 'grapheme' });
+        return Array.from(segmenter.segment(text), (item) => item.segment);
+    }
+    return Array.from(text);
+}
+
+function typeDelay(char: string, backlog: number): number {
+    if (backlog > 220) return 3;
+    if (backlog > 120) return 5;
+    if (backlog > 70) return 8;
+    if (char === "\n") return 36;
+    if (/[。！？!?]/.test(char)) return 42;
+    if (/[、，,；;：:]/.test(char)) return 22;
+    return 12;
+}
+
+const EXPLANATION_FETCH_TIMEOUT_MS = 70000;
+
+function createTypewriter(onUpdate: (text: string) => void) {
+    let visibleText = "";
+    let pendingChars: string[] = [];
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let idleResolvers: Array<() => void> = [];
+
+    const resolveIdle = () => {
+        if (timer || pendingChars.length > 0) return;
+        const resolvers = idleResolvers;
+        idleResolvers = [];
+        resolvers.forEach((resolve) => resolve());
+    };
+
+    const schedule = () => {
+        if (stopped || timer) return;
+        if (pendingChars.length === 0) {
+            resolveIdle();
+            return;
+        }
+
+        const nextChar = pendingChars.shift() || "";
+        visibleText += nextChar;
+        onUpdate(visibleText);
+
+        timer = setTimeout(() => {
+            timer = null;
+            schedule();
+        }, typeDelay(nextChar, pendingChars.length));
+    };
+
+    return {
+        enqueue(text: string) {
+            if (!text || stopped) return;
+            pendingChars.push(...splitGraphemes(text));
+            schedule();
+        },
+        stop() {
+            stopped = true;
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+            pendingChars = [];
+            resolveIdle();
+        },
+        waitForIdle() {
+            if (!timer && pendingChars.length === 0) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+                idleResolvers.push(resolve);
+            });
+        },
+    };
+}
+
 // In the new architecture, we call the backend API which handles the SDK.
 // The public API Key is no longer strictly needed in the frontend for these calls.
 
@@ -51,7 +170,14 @@ export const useGeminiStore = create<GeminiState>()(
 
             setChatOpen: (isOpen) => set({ isChatOpen: isOpen }),
 
-            resetChat: () => set({ history: [] }),
+            resetChat: () => {
+                const currentController = get().abortController;
+                if (currentController) {
+                    currentController.abort();
+                }
+                useChatTypewriterStore.getState().resetChatStream();
+                set({ history: [], isChatGenerating: false, abortController: null } as any);
+            },
 
             sendMessage: async (text) => {
                 const previousHistory = get().history;
@@ -67,7 +193,7 @@ export const useGeminiStore = create<GeminiState>()(
                     timestamp: aiTimestamp
                 };
 
-                const updateAIMessage = (content: string) => {
+                const commitAIMessage = (content: string) => {
                     set((state) => ({
                         history: state.history.map((msg) =>
                             msg.role === 'model' && msg.timestamp === aiTimestamp
@@ -78,8 +204,66 @@ export const useGeminiStore = create<GeminiState>()(
                 };
 
                 let fullResponse = "";
+                let visibleResponse = "";
+                const typewriterStore = useChatTypewriterStore.getState();
+                const streamKey = aiTimestamp;
+                let pendingChars: string[] = [];
+                let typewriterTimer: ReturnType<typeof setTimeout> | null = null;
+                let typewriterStopped = false;
+                let idleResolvers: Array<() => void> = [];
+
+                const updateVisibleResponse = () => {
+                    useChatTypewriterStore.getState().setChatStreamText(streamKey, visibleResponse);
+                };
+
+                const resolveTypewriterIdle = () => {
+                    if (typewriterTimer || pendingChars.length > 0) return;
+                    const resolvers = idleResolvers;
+                    idleResolvers = [];
+                    resolvers.forEach((resolve) => resolve());
+                };
+
+                const scheduleTypewriter = () => {
+                    if (typewriterStopped || typewriterTimer) return;
+                    if (pendingChars.length === 0) {
+                        resolveTypewriterIdle();
+                        return;
+                    }
+
+                    const nextChar = pendingChars.shift() || "";
+                    visibleResponse += nextChar;
+                    updateVisibleResponse();
+
+                    typewriterTimer = setTimeout(() => {
+                        typewriterTimer = null;
+                        scheduleTypewriter();
+                    }, typeDelay(nextChar, pendingChars.length));
+                };
+
+                const enqueueTypewriterText = (chunk: string) => {
+                    pendingChars.push(...splitGraphemes(chunk));
+                    scheduleTypewriter();
+                };
+
+                const waitForTypewriterIdle = async () => {
+                    if (!typewriterTimer && pendingChars.length === 0) return;
+                    await new Promise<void>((resolve) => {
+                        idleResolvers.push(resolve);
+                    });
+                };
+
+                const stopTypewriter = () => {
+                    typewriterStopped = true;
+                    if (typewriterTimer) {
+                        clearTimeout(typewriterTimer);
+                        typewriterTimer = null;
+                    }
+                    pendingChars = [];
+                    resolveTypewriterIdle();
+                };
 
                 // Create the assistant bubble before the network round trip so token streaming is visible immediately.
+                typewriterStore.startChatStream(aiTimestamp);
                 set((state) => ({
                     history: [...state.history, newMessage, aiPlaceholder],
                     isChatOpen: true,
@@ -87,6 +271,7 @@ export const useGeminiStore = create<GeminiState>()(
                 }));
 
                 const controller = new AbortController();
+                controller.signal.addEventListener('abort', stopTypewriter, { once: true });
                 set({ abortController: controller } as any);
 
                 try {
@@ -145,29 +330,35 @@ export const useGeminiStore = create<GeminiState>()(
                         const chunk = decoder.decode(value, { stream: true });
                         if (!chunk) continue;
                         fullResponse += chunk;
-
-                        updateAIMessage(fullResponse);
+                        enqueueTypewriterText(chunk);
                     }
 
                     const tail = decoder.decode();
                     if (tail) {
                         fullResponse += tail;
-                        updateAIMessage(fullResponse);
+                        enqueueTypewriterText(tail);
                     }
 
+                    await waitForTypewriterIdle();
+                    commitAIMessage(fullResponse);
+
                 } catch (error: any) {
+                    stopTypewriter();
                     if (error.name === 'AbortError') {
                         console.log("Chat Generation aborted");
-                        if (!fullResponse) {
+                        if (!fullResponse && !visibleResponse) {
                             set((state) => ({
                                 history: state.history.filter((msg) => msg.timestamp !== aiTimestamp)
                             }));
+                        } else if (visibleResponse) {
+                            commitAIMessage(visibleResponse);
                         }
                     } else {
                         console.error("Gemini Chat Error:", error);
-                        updateAIMessage(`(error: ${error.message})`);
+                        commitAIMessage(`(error: ${error.message})`);
                     }
                 } finally {
+                    useChatTypewriterStore.getState().clearChatStream(aiTimestamp);
                     set({ isChatGenerating: false, abortController: null } as any);
                 }
             },
@@ -175,41 +366,34 @@ export const useGeminiStore = create<GeminiState>()(
             generateText: async (prompt, systemPrompt, onUpdate, options = { temperature: 0.85, top_p: 0.95 }) => {
                 const uniqueKey = options.cacheKey || 'unknown';
 
-                // Client-side cache check is deprecated. Backend handles cache via 'cacheKey'.
-                // if (options.cacheKey && !options.forceRefresh) ...
-
-                // 2. Concurrency Limit Check
-                // We allow max 2 concurrent generations as requested
-                if (get().streamedResults.size >= 2) {
-                    // Optionally notify user or just throw
-                    // throw new Error("同时进行的任务太多了，请稍后再试。");
-                    // But better to just return error so UI can handle it
-                    // Actually validation should happen before we start fetching
-                }
-
-                // If we are already generating THIS key, just return the existing stream/promise?
-                // But the store doesn't keep promises. 
-                // If it's in streamedResults, it's running.
                 if (get().streamedResults.has(uniqueKey)) {
-                    // It's already running. We generally shouldn't trigger it again.
-                    // Just return an indicator? 
-                    return { text: '', fromCache: false };
+                    return { text: get().streamedResults.get(uniqueKey) || '', fromCache: false };
                 }
 
                 if (get().streamedResults.size >= 2) {
                     throw new Error("同时进行的任务已达上限 (2个)，请耐心等待之前的解读完成后再试。");
                 }
 
-                // Initialize streaming content in Map
                 set((state) => {
                     const newMap = new Map(state.streamedResults);
-                    newMap.set(uniqueKey, ''); // Start empty
+                    newMap.set(uniqueKey, '');
                     return { streamedResults: newMap };
                 });
 
+                const setVisibleText = (text: string) => {
+                    set((state) => {
+                        const newMap = new Map(state.streamedResults);
+                        if (!newMap.has(uniqueKey)) return state;
+                        newMap.set(uniqueKey, text);
+                        return { streamedResults: newMap };
+                    });
+                    if (onUpdate) onUpdate(text);
+                };
+                const typewriter = createTypewriter(setVisibleText);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), EXPLANATION_FETCH_TIMEOUT_MS);
+
                 try {
-                    // Note: We deliberately do NOT use an AbortController here.
-                    // This allows the request to continue in the background even if the UI unmounts/switches.
                     const response = await fetch('/api/ai/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -220,7 +404,8 @@ export const useGeminiStore = create<GeminiState>()(
                             topP: options.top_p,
                             cacheKey: options.cacheKey,
                             forceRefresh: options.forceRefresh
-                        })
+                        }),
+                        signal: controller.signal,
                     });
 
                     if (response.status === 429) throw new Error('请求过于频繁，请稍后再试。');
@@ -230,75 +415,72 @@ export const useGeminiStore = create<GeminiState>()(
                     if (contentType?.includes('application/json')) {
                         const data = await response.json();
                         if (data.success && data.text) {
-                            // Update Map with final text
-                            set((state) => {
-                                const newMap = new Map(state.streamedResults);
-                                newMap.set(uniqueKey, data.text);
-                                return { streamedResults: newMap };
-                            });
-                            if (onUpdate) onUpdate(data.text);
+                            typewriter.enqueue(data.text);
+                            await typewriter.waitForIdle();
                             return { text: data.text, fromCache: !!data.fromCache };
                         }
+                        throw new Error(data.message || data.error || 'AI 服务返回了空结果。');
                     }
 
                     const reader = response.body?.getReader();
+                    if (!reader) {
+                        throw new Error('AI 服务没有返回可读取的流。');
+                    }
+
                     const decoder = new TextDecoder();
                     let fullResponse = "";
                     let buffer = "";
                     const forbiddenTerms = ["核心:", "核心：", "Core:", "用法:", "用法：", "Usage:", "避坑:", "避坑：", "Pitfalls:", "注意:", "注意：", "Note:", "总结:", "总结：", "人话解读", "人话解读：", "AI解读", "AI 详解"];
 
-                    if (reader) {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-                            const chunk = decoder.decode(value, { stream: true });
-                            buffer += chunk;
+                        const chunk = decoder.decode(value, { stream: true });
+                        buffer += chunk;
 
-                            // ... Token processing (simplified) ...
-                            let changed = true;
-                            while (changed) {
-                                changed = false;
-                                for (const term of forbiddenTerms) {
-                                    const idx = buffer.indexOf(term);
-                                    if (idx !== -1) {
-                                        buffer = buffer.slice(0, idx) + buffer.slice(idx + term.length);
-                                        changed = true;
-                                    }
+                        let changed = true;
+                        while (changed) {
+                            changed = false;
+                            for (const term of forbiddenTerms) {
+                                const idx = buffer.indexOf(term);
+                                if (idx !== -1) {
+                                    buffer = buffer.slice(0, idx) + buffer.slice(idx + term.length);
+                                    changed = true;
                                 }
                             }
+                        }
 
-                            // Update Store and Callback
+                        if (buffer) {
                             fullResponse += buffer;
-
-                            // CRITICAL: Update the persistent map with the accumulating response
-                            set((state) => {
-                                const newMap = new Map(state.streamedResults);
-                                newMap.set(uniqueKey, fullResponse); // Update progressive content
-                                return { streamedResults: newMap };
-                            });
-
-                            if (onUpdate) onUpdate(fullResponse);
+                            typewriter.enqueue(buffer);
                             buffer = "";
                         }
                     }
 
+                    const tail = decoder.decode();
+                    if (tail) {
+                        fullResponse += tail;
+                        typewriter.enqueue(tail);
+                    }
+
+                    if (!fullResponse.trim()) {
+                        throw new Error('AI 服务返回了空结果，请稍后重试。');
+                    }
+
+                    await typewriter.waitForIdle();
+
                     return { text: fullResponse, fromCache: false };
 
                 } catch (error: any) {
+                    typewriter.stop();
                     console.error("Gemini Generation Error:", error);
+                    if (error.name === 'AbortError') {
+                        throw new Error('AI 老师响应超时，请稍后重试。');
+                    }
                     throw error;
                 } finally {
-                    // Start a timer to remove the key from active generation map
-                    // effectively marking it as "done" but keeping the result for a bit?
-                    // No, invalidating it immediately means isGenerating becomes false.
-                    // But we want the text to persist? 
-                    // The text persists in the local component (since it receives the full text in the end).
-                    // The MAP entry is chiefly for "isGenerating" check AND "current stream content".
-                    // Once done, we remove it from the map.
-                    // The component should handle "done" state by seeing it's not in the map anymore,
-                    // BUT it should have already received the final content via onUpdate or polling.
-
+                    clearTimeout(timeoutId);
                     set((state) => {
                         const newMap = new Map(state.streamedResults);
                         newMap.delete(uniqueKey);

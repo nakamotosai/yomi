@@ -1,15 +1,53 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { useGeminiStore } from '@/store/useGeminiStore';
+import { useChatTypewriterStore, useGeminiStore, type ChatMessage } from '@/store/useGeminiStore';
 import { useAppStore } from '@/store/useAppStore';
 import { ChevronLeft, User, Bot, Send, Trash2, Square, Bookmark, BookMarked, MessageSquare } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
 import clsx from 'clsx';
 import { useI18n } from '@/lib/i18n';
+import { StreamingMarkdown } from './StreamingMarkdown';
+
+function StreamingDots() {
+    return (
+        <div className="flex items-center gap-1 py-1">
+            <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+    );
+}
+
+function ModelMessageContent({
+    msg,
+    isStreamingModel,
+    scrollRef,
+}: {
+    msg: ChatMessage;
+    isStreamingModel: boolean;
+    scrollRef: React.RefObject<HTMLDivElement | null>;
+}) {
+    const streamingText = useChatTypewriterStore((state) =>
+        isStreamingModel ? state.streamingText[String(msg.timestamp)] || '' : ''
+    );
+    const visibleContent = isStreamingModel ? (streamingText || msg.content) : msg.content;
+
+    useEffect(() => {
+        if (isStreamingModel && scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [isStreamingModel, scrollRef, visibleContent]);
+
+    if (isStreamingModel && !visibleContent) {
+        return <StreamingDots />;
+    }
+
+    return <StreamingMarkdown content={visibleContent} isStreaming={isStreamingModel} />;
+}
 
 export default function AIChatView({ hideHeader = false }: { hideHeader?: boolean }) {
     const { history, isChatGenerating, setChatOpen, resetChat, cancelGeneration, bookmarks, toggleBookmark } = useGeminiStore();
+    const activeChatMessageTimestamp = useChatTypewriterStore((state) => state.activeMessageTimestamp);
     const { settings, setCenterViewMode } = useAppStore();
     const { t } = useI18n();
     const [showBookmarks, setShowBookmarks] = React.useState(false);
@@ -20,7 +58,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [history, isChatGenerating]);
+    }, [history, isChatGenerating, activeChatMessageTimestamp]);
 
     const [input, setInput] = React.useState('');
     const [isFocused, setIsFocused] = React.useState(false);
@@ -61,7 +99,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
     };
 
     return (
-        <div className={`flex flex-col h-full rounded-2xl shadow-sm border border-[var(--border-default)] overflow-hidden ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'glass-panel'}`}>
+        <div className={`relative flex flex-col h-full rounded-2xl shadow-sm border border-[var(--border-default)] overflow-hidden ${settings.colorScheme === 'wafu' ? 'bg-transparent' : 'glass-panel'}`}>
             {/* Header */}
             {!hideHeader && (
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-muted)] bg-transparent backdrop-blur-md z-10">
@@ -117,7 +155,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
             {/* Chat Content */}
             <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-6 floating-scrollbar bg-transparent"
+                className="relative flex-1 overflow-y-auto p-4 space-y-6 floating-scrollbar bg-transparent"
             >
                 {history.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] gap-4">
@@ -128,7 +166,7 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                     </div>
                 ) : (
                     history.map((msg, idx) => {
-                        const isStreamingModel = isChatGenerating && idx === history.length - 1 && msg.role === 'model';
+                        const isStreamingModel = msg.role === 'model' && activeChatMessageTimestamp === msg.timestamp;
 
                         return (
                         <div
@@ -154,25 +192,8 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                             >
                                 {msg.role === 'user' ? (
                                     <p className="whitespace-pre-wrap">{msg.content}</p>
-                                ) : isStreamingModel ? (
-                                    <div className="whitespace-pre-wrap break-words">
-                                        {msg.content ? (
-                                            <>
-                                                {msg.content}
-                                                <span className="inline-block w-1.5 h-4 ml-0.5 align-text-bottom rounded-sm bg-[var(--accent-primary)] animate-pulse" />
-                                            </>
-                                        ) : (
-                                            <div className="flex items-center gap-1 py-1">
-                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                <span className="w-1.5 h-1.5 bg-[var(--accent-primary)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                            </div>
-                                        )}
-                                    </div>
                                 ) : (
-                                    <div className="markdown-body prose dark:prose-invert prose-sm max-w-none">
-                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                    </div>
+                                    <ModelMessageContent msg={msg} isStreamingModel={isStreamingModel} scrollRef={scrollRef} />
                                 )}
                                 {msg.role === 'model' && msg.content && !isStreamingModel && (
                                     <div className="mt-2 pt-1 border-t border-[var(--border-muted)] flex items-center justify-between">
@@ -200,40 +221,6 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                 )
                 }
 
-                {/* Bookmarks List Overlay */}
-                {showBookmarks && (
-                    <div className="absolute inset-0 z-50 bg-[var(--bg-base)] flex flex-col p-4 space-y-4 overflow-y-auto floating-scrollbar pb-24">
-                        {bookmarks.length === 0 ? (
-                            <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
-                                <BookMarked className="w-12 h-12 opacity-20" />
-                                <p>还没有收藏任何 AI 老师的回答</p>
-                            </div>
-                        ) : (
-                            bookmarks.map((msg, idx) => (
-                                <div key={idx} className="rainbow-highlight rounded-2xl p-5 shadow-md relative group">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-2 text-[var(--text-faint)] text-[10px]">
-                                            <Bot className="w-3 h-3" />
-                                            <span>AI 先生的精彩解读</span>
-                                            <span>•</span>
-                                            <span>{new Date(msg.timestamp).toLocaleDateString()}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => toggleBookmark(msg)}
-                                            className="text-yellow-500 hover:scale-110 active:scale-95 transition-all"
-                                        >
-                                            <Bookmark className="w-4 h-4 fill-current" />
-                                        </button>
-                                    </div>
-                                    <div className="markdown-body prose dark:prose-invert prose-sm max-w-none">
-                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
-
                 {/* Loading Indicator */}
                 {
                     isChatGenerating && history.length > 0 && history[history.length - 1].role !== 'model' && (
@@ -254,50 +241,113 @@ export default function AIChatView({ hideHeader = false }: { hideHeader?: boolea
                 }
             </div >
 
-            {/* Input Area */}
-            < div className="p-4 border-t border-[var(--border-muted)] bg-transparent" >
-                <div className={clsx(
-                    "flex items-center gap-2 rounded-xl px-4 py-2 transition-all min-h-[56px] relative overflow-visible z-20",
-                    isFocused ? "rainbow-highlight" : "bg-[var(--bg-muted)] border border-[var(--border-default)]"
-                )}
+            {/* Bookmarks List Overlay */}
+            {showBookmarks && (
+                <div
+                    className="absolute inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden"
                     style={{
-                        boxShadow: isFocused ? 'var(--rainbow-glow)' : 'none'
+                        background: 'var(--bg-base)',
+                        top: hideHeader ? 0 : 57,
                     }}
                 >
-                    <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        placeholder={t('ai.input_placeholder')}
-                        className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
-                        rows={1}
-                        style={{
-                            color: 'var(--accent-primary) !important',
-                            lineHeight: '1.5'
-                        } as any}
-                    />
-                    <button
-                        onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
-                        disabled={!input.trim() && !isChatGenerating}
-                        className={clsx(
-                            "p-2.5 rounded-xl transition-all shrink-0 active:scale-95 group",
-                            (input.trim() || isChatGenerating)
-                                ? "rainbow-highlight text-[var(--accent-primary)] shadow-sm cursor-pointer"
-                                : "text-[var(--text-muted)] opacity-30 cursor-default"
-                        )}
-                        title={isChatGenerating ? t('ai.stop_analysis') : t('ai.send')}
-                    >
-                        {isChatGenerating ? (
-                            <Square className="w-4 h-4 fill-current animate-pulse" />
+                    {hideHeader && (
+                        <div
+                            className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-muted)] backdrop-blur-md"
+                            style={{ background: 'var(--bg-base)' }}
+                        >
+                            <button
+                                onClick={() => setShowBookmarks(false)}
+                                className="flex items-center gap-2 p-2 -ml-2 rounded-xl transition-all bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:shadow-sm active:scale-95"
+                                title="返回对话"
+                                aria-label="返回对话"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                                <span className="text-xs font-bold">返回对话</span>
+                            </button>
+                            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+                                <BookMarked className="w-4 h-4" />
+                                <span>AI 先生收藏夹</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto floating-scrollbar p-4 space-y-4 pb-24">
+                        {bookmarks.length === 0 ? (
+                            <div className="min-h-full flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
+                                <BookMarked className="w-12 h-12 opacity-20" />
+                                <p>还没有收藏任何 AI 老师的回答</p>
+                            </div>
                         ) : (
-                            <Send className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                            bookmarks.map((msg, idx) => (
+                                <div key={idx} className="rainbow-highlight rounded-2xl p-5 shadow-md relative group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-2 text-[var(--text-faint)] text-[10px]">
+                                            <Bot className="w-3 h-3" />
+                                            <span>AI 先生的精彩解读</span>
+                                            <span>•</span>
+                                            <span>{new Date(msg.timestamp).toLocaleDateString()}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => toggleBookmark(msg)}
+                                            className="text-yellow-500 hover:scale-110 active:scale-95 transition-all"
+                                        >
+                                            <Bookmark className="w-4 h-4 fill-current" />
+                                        </button>
+                                    </div>
+                                        <StreamingMarkdown content={msg.content} />
+                                </div>
+                            ))
                         )}
-                    </button>
+                    </div>
                 </div>
-            </div >
+            )}
+
+            {/* Input Area */}
+            {!showBookmarks && (
+                < div className="p-4 border-t border-[var(--border-muted)] bg-transparent" >
+                    <div className={clsx(
+                        "flex items-center gap-2 rounded-xl px-4 py-2 transition-all min-h-[56px] relative overflow-visible z-20",
+                        isFocused ? "rainbow-highlight" : "bg-[var(--bg-muted)] border border-[var(--border-default)]"
+                    )}
+                        style={{
+                            boxShadow: isFocused ? 'var(--rainbow-glow)' : 'none'
+                        }}
+                    >
+                        <textarea
+                            ref={textareaRef}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setIsFocused(false)}
+                            placeholder={t('ai.input_placeholder')}
+                            className="flex-1 max-h-32 bg-transparent border-none focus:ring-0 focus:outline-none resize-none p-0 text-[16px] md:text-[18px] floating-scrollbar !outline-none !border-none !ring-0 !shadow-none focus:!outline-none focus:!border-none focus:!ring-0 focus-visible:!outline-none focus-visible:!border-none focus-visible:!ring-0"
+                            rows={1}
+                            style={{
+                                color: 'var(--accent-primary) !important',
+                                lineHeight: '1.5'
+                            } as any}
+                        />
+                        <button
+                            onClick={() => isChatGenerating ? cancelGeneration() : handleSend()}
+                            disabled={!input.trim() && !isChatGenerating}
+                            className={clsx(
+                                "p-2.5 rounded-xl transition-all shrink-0 active:scale-95 group",
+                                (input.trim() || isChatGenerating)
+                                    ? "rainbow-highlight text-[var(--accent-primary)] shadow-sm cursor-pointer"
+                                    : "text-[var(--text-muted)] opacity-30 cursor-default"
+                            )}
+                            title={isChatGenerating ? t('ai.stop_analysis') : t('ai.send')}
+                        >
+                            {isChatGenerating ? (
+                                <Square className="w-4 h-4 fill-current animate-pulse" />
+                            ) : (
+                                <Send className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                            )}
+                        </button>
+                    </div>
+                </div >
+            )}
         </div >
     );
 }

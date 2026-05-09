@@ -21,6 +21,7 @@ import clsx from 'clsx';
 
 import { useSearchParams } from 'next/navigation';
 import { useAppStore, DEFAULT_INPUT_TEXT } from '@/store/useAppStore';
+import { useDictionaryStore } from '@/store/useDictionaryStore';
 
 import { useVocabStore } from '@/store/useVocabStore';
 import { useGrammarStore } from '@/store/useGrammarStore';
@@ -28,7 +29,7 @@ import { ttsManager } from '@/lib/tts/manager';
 import { translateText } from '@/lib/translate'; // Import translation function
 import { useGeminiStore } from '@/store/useGeminiStore';
 import { yomitanLoader } from '@/lib/dictionary/yomitanLoader';
-import { prefetchGrammar } from '@/lib/grammar/grammarLoader';
+import { hasGrammarCache, prefetchGrammar } from '@/lib/grammar/grammarLoader';
 import { richGrammarLoader } from '@/lib/grammar/RichGrammarLoader';
 import LoadingProgress from '@/components/LoadingProgress';
 import AIChatView from '@/components/AIChatView';
@@ -399,7 +400,8 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    const timeout = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   // Sync settings modal state to global store
@@ -490,17 +492,86 @@ function HomeContent() {    // Optimized selectors to prevent re-renders
     }
   }, [searchParams, setInputText, setIsFromExtension, setAnalyzedText]);
 
-  // Background Dictionary Prefetching
+  // Background dictionary warm-up. First install shows progress; later visits stay silent.
   useEffect(() => {
-    // Delay background loading to prioritize initial UI render and static resources
-    const timer = setTimeout(() => {
-      console.log('[App] Starting background dictionary prefetching...');
-      yomitanLoader.prefetch();
-      prefetchGrammar();
-      richGrammarLoader.prefetch();
-    }, 2000); // 2 second delay
+    let cancelled = false;
 
-    return () => clearTimeout(timer);
+    const scheduleWarmup = (callback: () => void) => {
+      const idleWindow = window as Window & {
+        requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number;
+        cancelIdleCallback?: (id: number) => void;
+      };
+
+      if (typeof idleWindow.requestIdleCallback === 'function') {
+        const idleId = idleWindow.requestIdleCallback(callback, { timeout: 3000 });
+        return () => idleWindow.cancelIdleCallback?.(idleId);
+      }
+
+      const timer = window.setTimeout(callback, 2000);
+      return () => window.clearTimeout(timer);
+    };
+
+    const warmDictionaries = async () => {
+      const store = useDictionaryStore.getState();
+
+      try {
+        const [hasYomitan, hasGrammar, hasRichGrammar] = await Promise.all([
+          yomitanLoader.hasUsableCache(),
+          hasGrammarCache(),
+          richGrammarLoader.hasCachedDictionary(),
+        ]);
+
+        if (cancelled) return;
+
+        if (!hasYomitan) {
+          console.log('[App] First dictionary install detected. Showing progress.');
+          store.startFirstInstall(23);
+          void Promise.allSettled([
+            yomitanLoader.prefetch(),
+            prefetchGrammar(),
+            richGrammarLoader.prefetch(),
+          ]).then(results => {
+            const failed = results.some(result => result.status === 'rejected');
+            if (!cancelled && failed) store.markError();
+          });
+          return;
+        }
+
+        console.log('[App] Local dictionary cache detected. Warming silently...', {
+          hasGrammar,
+          hasRichGrammar,
+        });
+        store.startSilentWarm();
+
+        const results = await Promise.allSettled([
+          yomitanLoader.prefetch(),
+          prefetchGrammar(),
+          richGrammarLoader.prefetch(),
+        ]);
+
+        if (cancelled) return;
+
+        const failed = results.some(result => result.status === 'rejected');
+        if (failed) {
+          store.markError();
+          return;
+        }
+
+        store.markReady();
+      } catch (error) {
+        console.error('[App] Dictionary warm-up failed:', error);
+        if (!cancelled) store.markError();
+      }
+    };
+
+    const cancelScheduledWarmup = scheduleWarmup(() => {
+      void warmDictionaries();
+    });
+
+    return () => {
+      cancelled = true;
+      cancelScheduledWarmup?.();
+    };
   }, []);
 
   const handlePlayAll = () => {
