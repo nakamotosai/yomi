@@ -131,6 +131,10 @@ function getR2Bucket(request: NextRequest, env?: CloudflareEnv): R2Bucket | null
         return cloudflareEnv.AI_CACHE as R2Bucket;
     }
 
+    if (typeof process !== 'undefined' && process.env?.AI_CACHE) {
+        return process.env.AI_CACHE as unknown as R2Bucket;
+    }
+
     const globalBucket = (globalThis as unknown as { AI_CACHE?: R2Bucket }).AI_CACHE;
     if (globalBucket) return globalBucket;
 
