@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { isValidElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 const MARKDOWN_DELIMITERS = ['***', '___', '**', '__', '*', '_'];
@@ -257,6 +257,16 @@ function normalizeAIChatNumberedStructure(text: string) {
             continue;
         }
 
+        const hashHeadingMatch = rawLine.match(/^(\s*)#{1,6}\s+(.+?)\s*#*\s*$/);
+        if (hashHeadingMatch) {
+            const [, indent, title] = hashHeadingMatch;
+            const heading = splitAIChatHeading(title, true);
+            if (heading) {
+                pushAIChatHeading(indent, heading.heading, heading.rest);
+                continue;
+            }
+        }
+
         const strongLineMatch = rawLine.match(/^(\s*)(\*{2}|_{2})(.+?)\2([^\n]*)$/);
         if (strongLineMatch) {
             const [, indent, , strongText, rest = ''] = strongLineMatch;
@@ -316,6 +326,13 @@ function normalizeAIChatNumberedStructure(text: string) {
             continue;
         }
 
+        const standaloneHeading = splitAIChatHeading(trimmed, true);
+        if (standaloneHeading && standaloneHeading.rest === '') {
+            const indent = rawLine.match(/^\s*/)?.[0] || '';
+            pushAIChatHeading(indent, standaloneHeading.heading);
+            continue;
+        }
+
         output.push(rawLine);
     }
 
@@ -366,6 +383,10 @@ function childrenToText(children: ReactNode): string {
     }
     if (Array.isArray(children)) {
         return children.map(childrenToText).join('');
+    }
+    if (isValidElement(children)) {
+        const props = children.props as { children?: ReactNode };
+        return childrenToText(props.children);
     }
     return '';
 }
