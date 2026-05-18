@@ -46,11 +46,21 @@ c. 动作主体的统一性：前后动作通常由同一主体完成。
 与相似语法的区别
 **接续：** 动词ます形去掉ます + ながら`,
     },
+    {
+        name: 'cpa chinese letter labels with loose strong closing space',
+        content: `学习路径规划
+
+a. **夯实基础 **：首先必须彻底掌握五十音图。
+b. **建立语法框架 **：日语语序与中文不同。
+c. **词汇积累策略 **：利用汉字优势记忆名词和动词。`,
+        requiredStrongTexts: ['学习路径规划', '夯实基础', '建立语法框架', '词汇积累策略'],
+        forbiddenRawFragments: ['**夯实基础 **', '**建立语法框架 **', '**词汇积累策略 **'],
+    },
 ];
 
 const stripTags = (value: string) => value.replace(/<[^>]+>/g, '');
 
-const results = screenshotRegressionSamples.map(({ name, content }) => {
+const results = screenshotRegressionSamples.map(({ name, content, requiredStrongTexts: sampleRequiredStrongTexts, forbiddenRawFragments = [] }) => {
     const html = renderToStaticMarkup(
         React.createElement(StreamingMarkdown, {
             content,
@@ -61,7 +71,7 @@ const results = screenshotRegressionSamples.map(({ name, content }) => {
     const strongTexts = [...html.matchAll(/<strong[^>]*>(.*?)<\/strong>/g)].map((match) => stripTags(match[1]));
     const underlineTexts = [...html.matchAll(/<span class="[^"]*underline[^"]*"[^>]*>(.*?)<\/span>/g)].map((match) => stripTags(match[1]));
 
-    const requiredStrongTexts = [
+    const requiredStrongTexts = sampleRequiredStrongTexts || [
         'ながら的核心用法',
         '使用时的关键限制',
         '与相似语法的区别',
@@ -69,26 +79,20 @@ const results = screenshotRegressionSamples.map(({ name, content }) => {
     if (content.includes('**ながら** ます') || content.includes('+ ながら')) {
         requiredStrongTexts.push('ながら');
     }
-    const forbiddenStrongTexts = [
-        '接续：',
-        '动作的同时性',
-        '动作主体的统一性',
-    ];
-
     for (const text of requiredStrongTexts) {
         if (!strongTexts.includes(text)) {
             throw new Error(`[${name}] Expected strong text "${text}". Got: ${JSON.stringify(strongTexts)}`);
         }
     }
 
-    for (const text of forbiddenStrongTexts) {
-        if (strongTexts.includes(text)) {
-            throw new Error(`[${name}] Unexpected strong text "${text}". Got: ${JSON.stringify(strongTexts)}`);
+    for (const text of forbiddenRawFragments) {
+        if (html.includes(text)) {
+            throw new Error(`[${name}] Unexpected raw Markdown fragment "${text}". HTML: ${html}`);
         }
     }
 
-    if (content.includes('接续') && !underlineTexts.includes('接续：')) {
-        throw new Error(`[${name}] Expected non-heading model emphasis to remain underlined. Got: ${JSON.stringify(underlineTexts)}`);
+    if (html.includes('**')) {
+        throw new Error(`[${name}] Unexpected raw Markdown delimiter in HTML: ${html}`);
     }
 
     return {

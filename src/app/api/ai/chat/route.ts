@@ -77,6 +77,19 @@ interface OpenAIStreamChunk {
     };
 }
 
+interface OpenAIChatCompletionRequest {
+    model: string;
+    messages: ChatMessage[];
+    temperature: number;
+    top_p: number;
+    max_tokens: number;
+    stream: boolean;
+    stream_options: { include_usage: boolean };
+    chat_template_kwargs?: {
+        enable_thinking: boolean;
+    };
+}
+
 class UpstreamTimeoutError extends Error {
     constructor(message: string) {
         super(message);
@@ -187,6 +200,36 @@ function buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
     ];
+}
+
+function buildUpstreamChatRequest({
+    modelId,
+    prompt,
+    systemPrompt,
+    temperature,
+    topP,
+}: {
+    modelId: string;
+    prompt: string;
+    systemPrompt?: string;
+    temperature: number;
+    topP: number;
+}): OpenAIChatCompletionRequest {
+    const body: OpenAIChatCompletionRequest = {
+        model: modelId,
+        messages: buildMessages(prompt, systemPrompt),
+        temperature,
+        top_p: topP,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        stream: true,
+        stream_options: { include_usage: true },
+    };
+
+    if (modelId.startsWith('qwen/')) {
+        body.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    return body;
 }
 
 function extractStreamTexts(chunk: OpenAIStreamChunk): { contentText: string; reasoningText: string } {
@@ -385,15 +428,13 @@ async function openUpstreamWithFallback({
                     'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    model: modelId,
-                    messages: buildMessages(prompt, systemPrompt),
+                body: JSON.stringify(buildUpstreamChatRequest({
+                    modelId,
+                    prompt,
+                    systemPrompt,
                     temperature,
-                    top_p: topP,
-                    max_tokens: MAX_OUTPUT_TOKENS,
-                    stream: true,
-                    stream_options: { include_usage: true },
-                }),
+                    topP,
+                })),
             }, UPSTREAM_FETCH_TIMEOUT_MS);
         } catch (error) {
             const isTimeout = error instanceof UpstreamTimeoutError;

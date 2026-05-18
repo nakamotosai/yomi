@@ -34,6 +34,7 @@ function normalizeInlineEmphasisBoundaries(text: string) {
     const quoteWrapped = text.replace(/(\*{2,3})[「『“]([^*\n]+?)[」』”]\1/g, '$1$2$1');
 
     return quoteWrapped
+        .replace(/(\*{2,3}|_{2,3})\s*([^\s*_\n][^\n]*?\S)\s*\1/g, '$1$2$1')
         .replace(/([^\s*_`])(\*{2,3}[^*\n]+?\*{2,3})/g, '$1 $2');
 }
 
@@ -104,6 +105,12 @@ const AI_CHAT_HEADING_KEYWORDS = [
     '关键限制',
     '重点',
     '规则',
+    '路径',
+    '规划',
+    '资源',
+    '误区',
+    '事項',
+    '事项',
     'まとめ',
     '总结',
     '總結',
@@ -595,12 +602,12 @@ export function StreamingMarkdown({
                                 </strong>
                             );
                         }
-                        return isHighlightTermText(text, highlightTerms) ? (
+                        return (
                             <strong className="font-bold text-[var(--text-primary)]">
-                                {children}
+                                {isHighlightTermText(text, highlightTerms)
+                                    ? children
+                                    : renderPlainTextWithBoldTerms(stripAIChatHeadingMarker(text), highlightTerms)}
                             </strong>
-                        ) : (
-                            <>{renderUnderlinedEmphasis(stripAIChatHeadingMarker(text), highlightTerms)}</>
                         );
                     },
                     em: ({ children }) => (

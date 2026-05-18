@@ -200,6 +200,7 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://v
 - 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
 - 本轮完成：AI 解读上游从 Yomi 专用 `yomi-cliproxy` 链路迁移到统一 CPA v1；`/api/ai/chat` 前端契约、流式文本、R2/D1 缓存和模型 fallback 顺序不变。
 - 本轮完成：CPA/Qwen 流式响应若同时返回 `reasoning_content` 和最终 `content`，前端只显示最终内容；仅当上游完全没有 `content` 时才回退显示 `reasoning_content`，避免 AI 老师暴露内部推理文本。
+- 本轮完成：修复 CPA/Qwen 返回 `**标题 **：` 这类闭合星号前带空格的 Markdown 时前台残留 `**` 的问题；主 AI 老师聊天的 Markdown strong 现在按粗体显示，不再强行转成下划线。Qwen 请求会带 `chat_template_kwargs.enable_thinking=false`，减少先吐 reasoning 导致的首字等待。
 - 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/AIChatView.tsx`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`src/store/useAppStore.ts`、`wrangler.toml`。
 - 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
 - 风险：生产 AI 依赖 Cloudflare Pages secret `YOMI_CPA_API_KEY` 或 `CPA_API_KEY`；为平滑迁移，现有 `CLIPROXY_API_KEY` 仍作为兼容密钥名可用。生产还依赖 `AI_CACHE` R2 binding 和 `DB` D1 binding。不再依赖 `CLIPROXY_API_BASE_URL` 或 Yomi 专用反代。
@@ -214,9 +215,11 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://v
 - `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
 - `git diff --check`: passed.
 - CPA v1 direct probe: `https://vps.saaaai.com/cpa/v1/chat/completions` returned HTTP 200 with the current server-side key and primary model.
+- CPA/Qwen thinking-off probe: top-level `chat_template_kwargs.enable_thinking=false` returned first final content in about 2.9s for the same prompt shape; `extra_body` is rejected by CPA validation.
 - Cloudflare Pages secret `YOMI_CPA_API_KEY`: configured for project `yomi`; `CLIPROXY_API_BASE_URL` is no longer used by active code.
 - Cloudflare Pages deploy: passed via `wrangler pages deploy .vercel/output/static --project-name yomi --branch main`; custom production domain was verified after deploy.
 - Production AI API after deployment: POST `https://yomi.saaaai.com/api/ai/chat` with `请只回复 YOMI_CPA_OK。` returned `YOMI_CPA_OK` and HTTP 200 after the reasoning-content filter was deployed.
+- Production AI Markdown fix after CPA migration: deployed source `8bfb320`; POST `https://yomi.saaaai.com/api/ai/chat` with the screenshot-style `a. **标题 **：` prompt returned first body byte in about 3.6s and no loose raw `**标题 **` fragment. Browser DOM replay on the production page with the same persisted AI chat fixture showed no raw `**`; `strongTexts` included `学习路径规划`、`夯实基础`、`建立语法框架`、`词汇积累策略`.
 - AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
 - Production DOM probe on `https://yomi.saaaai.com/`: passed after deployment. Injected the screenshot-style AI chat sample with Markdown hash headings and nested emphasis (`## **ながら的核心用法**` / `## **使用时的关键限制**` / `## 与相似语法的区别`) into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; headings were not underlined and content subitems were not bold.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.
