@@ -105,6 +105,9 @@ const AI_CHAT_HEADING_KEYWORDS = [
     '关键限制',
     '重点',
     '规则',
+    '表达',
+    '禁忌',
+    '延伸',
     '路径',
     '规划',
     '资源',
@@ -215,6 +218,26 @@ function normalizeAIChatHeadingText(value: string) {
     return stripInlineMarkdownEmphasisSyntax(stripAIChatHeadingMarker(value))
         .replace(/([\u3040-\u30ff\u3400-\u9fff])\s+(?=[\u3040-\u30ff\u3400-\u9fff])/g, '$1')
         .trim();
+}
+
+function normalizeSecondLevelStrongLabel(body: string) {
+    const strongAtStart = body.match(/^(\*{2}|_{2})([\s\S]+?)\1([^\n]*)$/);
+    if (!strongAtStart) return body;
+
+    const [, delimiter, strongText, trailingText = ''] = strongAtStart;
+    const labelWithTrailingColon = strongText.match(/^(.{1,24}?)([：:])\s+([\s\S]+)$/);
+    if (labelWithTrailingColon) {
+        const [, label, colon, restInside] = labelWithTrailingColon;
+        return `${delimiter}${label.trim()}${colon}${delimiter} ${restInside.trim()}${trailingText}`;
+    }
+
+    const trailingColon = trailingText.match(/^([：:])\s*([\s\S]*)$/);
+    if (trailingColon && strongText.trim().length <= 24) {
+        const [, colon, restAfterColon] = trailingColon;
+        return `${delimiter}${strongText.trim()}${delimiter}${colon}${restAfterColon}`;
+    }
+
+    return body;
 }
 
 function getMarkedAIChatHeading(value: string) {
@@ -329,7 +352,7 @@ function normalizeAIChatNumberedStructure(text: string) {
             const letter = secondLevelLetters[secondLevelIndex] || secondLevelLetters[secondLevelLetters.length - 1];
             secondLevelIndex += 1;
             pushBlankBeforeHeading();
-            output.push(`${indent}${letter}. ${body.trim()}`);
+            output.push(`${indent}${letter}. ${normalizeSecondLevelStrongLabel(body.trim())}`);
             continue;
         }
 

@@ -56,11 +56,31 @@ c. **词汇积累策略 **：利用汉字优势记忆名词和动词。`,
         requiredStrongTexts: ['学习路径规划', '夯实基础', '建立语法框架', '词汇积累策略'],
         forbiddenRawFragments: ['**夯实基础 **', '**建立语法框架 **', '**词汇积累策略 **'],
     },
+    {
+        name: 'second-level label strong does not swallow body',
+        content: `直接对应表达
+
+a. 哈哈：最通用的说法是呵呵（わらわら / warawara）或者直接用笑（わらう / warau）的变体。
+b. **拟声词： 最常用的是ふふ **（fufu）表示轻笑，わはは（wahaha）表示开怀大笑。
+c. **语境差异： 中文的“哈哈”有时带有敷衍或尴尬的含义，日语中的ふふ（fufu）通常带有一种含蓄 **、得意或觉得有趣的微妙语气。
+
+使用场景与注意事项
+
+a. **书面与网络 **：在 LINE、Twitter 等社交软件上，ww 是绝对的主流。
+b. **口语表达： 面对面交流时，日本人通常直接发出笑声声音 **，或者用面白い代替“哈哈”。`,
+        requiredStrongTexts: ['直接对应表达', '使用场景与注意事项', '拟声词：', '语境差异：', '书面与网络', '口语表达：'],
+        forbiddenStrongTexts: [
+            '拟声词： 最常用的是ふふ',
+            '语境差异： 中文的“哈哈”有时带有敷衍或尴尬的含义，日语中的ふふ（fufu）通常带有一种含蓄',
+            '口语表达： 面对面交流时，日本人通常直接发出笑声声音',
+        ],
+        forbiddenRawFragments: ['**拟声词', '**语境差异', '**书面与网络', '**口语表达'],
+    },
 ];
 
 const stripTags = (value: string) => value.replace(/<[^>]+>/g, '');
 
-const results = screenshotRegressionSamples.map(({ name, content, requiredStrongTexts: sampleRequiredStrongTexts, forbiddenRawFragments = [] }) => {
+const results = screenshotRegressionSamples.map(({ name, content, requiredStrongTexts: sampleRequiredStrongTexts, forbiddenStrongTexts = [], forbiddenRawFragments = [] }) => {
     const html = renderToStaticMarkup(
         React.createElement(StreamingMarkdown, {
             content,
@@ -82,6 +102,12 @@ const results = screenshotRegressionSamples.map(({ name, content, requiredStrong
     for (const text of requiredStrongTexts) {
         if (!strongTexts.includes(text)) {
             throw new Error(`[${name}] Expected strong text "${text}". Got: ${JSON.stringify(strongTexts)}`);
+        }
+    }
+
+    for (const text of forbiddenStrongTexts) {
+        if (strongTexts.includes(text)) {
+            throw new Error(`[${name}] Unexpected over-broad strong text "${text}". Got: ${JSON.stringify(strongTexts)}`);
         }
     }
 

@@ -201,6 +201,7 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://v
 - 本轮完成：AI 解读上游从 Yomi 专用 `yomi-cliproxy` 链路迁移到统一 CPA v1；`/api/ai/chat` 前端契约、流式文本、R2/D1 缓存和模型 fallback 顺序不变。
 - 本轮完成：旧纯文本模式下，CPA/Qwen 流式响应若同时返回 `reasoning_content` 和最终 `content`，前端只显示最终内容；仅当上游完全没有 `content` 时才回退显示 `reasoning_content`，避免单词/语法详解入口暴露内部推理文本。
 - 本轮完成：修复 CPA/Qwen 返回 `**标题 **：` 这类闭合星号前带空格的 Markdown 时前台残留 `**` 的问题；主 AI 老师聊天的 Markdown strong 现在按粗体显示，不再强行转成下划线。
+- 本轮修复：二级条目开头的 malformed strong label 不再吞掉整句正文。模型若输出 `b. **拟声词： 最常用的是ふふ **...` 或 `c. **语境差异： 中文...含蓄 **...`，`StreamingMarkdown` 会归一化为只加粗 `拟声词：` / `语境差异：` 这类 label，后续解释正文保持普通字重。
 - 本轮完成：主 AI 老师聊天改为 `streamMode:"events"`；Qwen event-mode 不再写入 `chat_template_kwargs.enable_thinking=false`。后端把 `reasoning_content` 作为 `thinking_*` 事件发给前端临时显示，首个 `answer_start` 到达时前端立即删除 thinking DOM/state；聊天历史、收藏、R2/D1 缓存和重试来源只保存最终正文。若 CPA/Qwen thinking 段只返回 `reasoning_content` 而没有标准 `content`，后端会立即用同一 CPA v1 再开一次 thinking-off 正文流作为兜底。单词/语法 `AI老师在线解读` 仍走旧纯文本模式并继续关闭 Qwen thinking，避免详解入口行为漂移。
 - 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/AIChatView.tsx`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`src/store/useAppStore.ts`、`wrangler.toml`。
 - 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
@@ -211,7 +212,7 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://v
 
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with 87 existing warnings and 0 errors.
-- `npm run test:ai-chat-formatting`: passed. 覆盖 `1. **ながら的核心用法**`、`1. **ながら**的核心用法`、`2. 使用时的**关键限制**`、`1. **ながら** 的核心用法`、`## **ながら的核心用法**`、`## **使用时的关键限制**`、无编号独立标题行；`strongTexts` included `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、目标词 `ながら`; `underlineTexts` included `接续：`; 二级子项未进入 `strong`。
+- `npm run test:ai-chat-formatting`: passed. 覆盖 `1. **ながら的核心用法**`、`1. **ながら**的核心用法`、`2. 使用时的**关键限制**`、`1. **ながら** 的核心用法`、`## **ながら的核心用法**`、`## **使用时的关键限制**`、无编号独立标题行，以及截图同款 `b. **拟声词： 最常用的是ふふ **` / `c. **语境差异： 中文...含蓄 **`。`strongTexts` included `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、目标词 `ながら`、`拟声词：`、`语境差异：`; over-broad strong texts such as `拟声词： 最常用的是ふふ` are forbidden by the regression test。
 - `npm run test:ai-chat-thinking-stream`: passed. 覆盖主 AI 老师请求会发送 `streamMode:"events"`，transient thinking state 会先出现，`answer_start` 后会清空，最终 `history/bookmarks/localStorage` 不包含测试用 thinking marker。
 - `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
 - `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
