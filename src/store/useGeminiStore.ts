@@ -22,6 +22,8 @@ interface GeminiState {
     history: ChatMessage[];
     isChatOpen: boolean;
     abortController: AbortController | null;
+    chatThinkingText: Record<string, string>;
+    chatThinkingActive: Record<string, boolean>;
 
     // Actions
     sendMessage: (text: string, options?: { retryOfTimestamp?: number }) => Promise<void>;
@@ -83,6 +85,48 @@ export const useChatTypewriterStore = create<ChatTypewriterState>((set) => ({
     }),
     resetChatStream: () => set({ activeMessageTimestamp: null, streamingText: {} }),
 }));
+
+type ChatStreamEvent =
+    | { event: 'thinking_start'; data: { model?: string } }
+    | { event: 'thinking_delta'; data: { text?: string; raw?: boolean } }
+    | { event: 'answer_start'; data: Record<string, never> }
+    | { event: 'answer_delta'; data: { text?: string } }
+    | { event: 'done'; data: { model?: string; totalTokens?: number } }
+    | { event: 'error'; data: { message?: string } };
+
+function parseChatStreamEvent(block: string): ChatStreamEvent | null {
+    const lines = block.split(/\r?\n/);
+    let event = 'message';
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+        if (line.startsWith('event:')) {
+            event = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5).trim());
+        }
+    }
+
+    if (!dataLines.length) return null;
+
+    try {
+        const data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
+        if (
+            event === 'thinking_start' ||
+            event === 'thinking_delta' ||
+            event === 'answer_start' ||
+            event === 'answer_delta' ||
+            event === 'done' ||
+            event === 'error'
+        ) {
+            return { event, data } as ChatStreamEvent;
+        }
+    } catch (error) {
+        console.warn('Failed to parse AI chat stream event:', error);
+    }
+
+    return null;
+}
 
 function splitGraphemes(text: string): string[] {
     const Segmenter = (globalThis.Intl as (typeof Intl & { Segmenter?: SegmenterConstructor }) | undefined)?.Segmenter;
@@ -172,6 +216,8 @@ export const useGeminiStore = create<GeminiState>()(
             isChatOpen: false,
             // Controller for Chat ONLY. Analysis requests run in background.
             abortController: null,
+            chatThinkingText: {},
+            chatThinkingActive: {},
 
             setChatOpen: (isOpen) => set({ isChatOpen: isOpen }),
 
@@ -181,7 +227,7 @@ export const useGeminiStore = create<GeminiState>()(
                     currentController.abort();
                 }
                 useChatTypewriterStore.getState().resetChatStream();
-                set({ history: [], isChatGenerating: false, abortController: null } as any);
+                set({ history: [], isChatGenerating: false, abortController: null, chatThinkingText: {}, chatThinkingActive: {} } as any);
             },
 
             deleteMessage: (timestamp) => {
@@ -189,6 +235,8 @@ export const useGeminiStore = create<GeminiState>()(
                 set((state) => ({
                     history: state.history.filter((msg) => msg.timestamp !== timestamp),
                     bookmarks: state.bookmarks.filter((msg) => msg.timestamp !== timestamp),
+                    chatThinkingText: Object.fromEntries(Object.entries(state.chatThinkingText).filter(([key]) => key !== String(timestamp))),
+                    chatThinkingActive: Object.fromEntries(Object.entries(state.chatThinkingActive).filter(([key]) => key !== String(timestamp))),
                 }));
             },
 
@@ -200,6 +248,8 @@ export const useGeminiStore = create<GeminiState>()(
                 set((state) => ({
                     history: state.history.filter((msg) => !selected.has(msg.timestamp)),
                     bookmarks: state.bookmarks.filter((msg) => !selected.has(msg.timestamp)),
+                    chatThinkingText: Object.fromEntries(Object.entries(state.chatThinkingText).filter(([key]) => !selected.has(Number(key)))),
+                    chatThinkingActive: Object.fromEntries(Object.entries(state.chatThinkingActive).filter(([key]) => !selected.has(Number(key)))),
                 }));
             },
 
@@ -290,6 +340,33 @@ export const useGeminiStore = create<GeminiState>()(
                     scheduleTypewriter();
                 };
 
+                const setThinkingText = (text: string) => {
+                    const boundedText = text.length > 2400 ? text.slice(-2400) : text;
+                    set((state) => ({
+                        chatThinkingText: {
+                            ...state.chatThinkingText,
+                            [String(aiTimestamp)]: boundedText,
+                        },
+                        chatThinkingActive: {
+                            ...state.chatThinkingActive,
+                            [String(aiTimestamp)]: true,
+                        },
+                    }));
+                };
+
+                const clearThinking = () => {
+                    set((state) => {
+                        const nextThinkingText = { ...state.chatThinkingText };
+                        const nextThinkingActive = { ...state.chatThinkingActive };
+                        delete nextThinkingText[String(aiTimestamp)];
+                        delete nextThinkingActive[String(aiTimestamp)];
+                        return {
+                            chatThinkingText: nextThinkingText,
+                            chatThinkingActive: nextThinkingActive,
+                        };
+                    });
+                };
+
                 const waitForTypewriterIdle = async () => {
                     if (!typewriterTimer && pendingChars.length === 0) return;
                     await new Promise<void>((resolve) => {
@@ -355,7 +432,8 @@ export const useGeminiStore = create<GeminiState>()(
                         body: JSON.stringify({
                             prompt: text,
                             systemPrompt: systemPrompt + "\n\n" + contextStr,
-                            temperature: 0.7
+                            temperature: 0.7,
+                            streamMode: 'events'
                         }),
                         signal: controller.signal
                     });
@@ -375,6 +453,42 @@ export const useGeminiStore = create<GeminiState>()(
                     }
 
                     const decoder = new TextDecoder();
+                    let eventBuffer = "";
+                    let thinkingText = "";
+
+                    const handleChatEvent = (chatEvent: ChatStreamEvent) => {
+                        switch (chatEvent.event) {
+                            case 'thinking_start':
+                                thinkingText = "";
+                                setThinkingText("正在整理答案结构...");
+                                break;
+                            case 'thinking_delta': {
+                                const delta = typeof chatEvent.data.text === 'string' ? chatEvent.data.text : '';
+                                if (!delta) {
+                                    setThinkingText(thinkingText || "正在整理答案结构...");
+                                    break;
+                                }
+                                thinkingText += delta;
+                                setThinkingText(thinkingText);
+                                break;
+                            }
+                            case 'answer_start':
+                                thinkingText = "";
+                                clearThinking();
+                                break;
+                            case 'answer_delta': {
+                                const delta = typeof chatEvent.data.text === 'string' ? chatEvent.data.text : '';
+                                if (!delta) break;
+                                fullResponse += delta;
+                                enqueueTypewriterText(delta);
+                                break;
+                            }
+                            case 'error':
+                                throw new Error(chatEvent.data.message || 'AI 服务没有生成正文，请稍后重试。');
+                            case 'done':
+                                break;
+                        }
+                    };
 
                     while (true) {
                         const { done, value } = await reader.read();
@@ -382,14 +496,24 @@ export const useGeminiStore = create<GeminiState>()(
 
                         const chunk = decoder.decode(value, { stream: true });
                         if (!chunk) continue;
-                        fullResponse += chunk;
-                        enqueueTypewriterText(chunk);
+                        eventBuffer += chunk;
+
+                        const eventBlocks = eventBuffer.split(/\r?\n\r?\n/);
+                        eventBuffer = eventBlocks.pop() || "";
+
+                        for (const block of eventBlocks) {
+                            const chatEvent = parseChatStreamEvent(block);
+                            if (chatEvent) handleChatEvent(chatEvent);
+                        }
                     }
 
                     const tail = decoder.decode();
                     if (tail) {
-                        fullResponse += tail;
-                        enqueueTypewriterText(tail);
+                        eventBuffer += tail;
+                    }
+                    if (eventBuffer.trim()) {
+                        const chatEvent = parseChatStreamEvent(eventBuffer);
+                        if (chatEvent) handleChatEvent(chatEvent);
                     }
 
                     await waitForTypewriterIdle();
@@ -412,6 +536,7 @@ export const useGeminiStore = create<GeminiState>()(
                     }
                 } finally {
                     useChatTypewriterStore.getState().clearChatStream(aiTimestamp);
+                    clearThinking();
                     set({ isChatGenerating: false, abortController: null } as any);
                 }
             },
@@ -547,14 +672,26 @@ export const useGeminiStore = create<GeminiState>()(
                 if (state.abortController) {
                     state.abortController.abort();
                 }
+                const activeChatTimestamp = useChatTypewriterStore.getState().activeMessageTimestamp;
+                const clearActiveThinkingState = (baseState: GeminiState) => {
+                    if (!activeChatTimestamp) return {};
+                    const nextThinkingText = { ...baseState.chatThinkingText };
+                    const nextThinkingActive = { ...baseState.chatThinkingActive };
+                    delete nextThinkingText[String(activeChatTimestamp)];
+                    delete nextThinkingActive[String(activeChatTimestamp)];
+                    return {
+                        chatThinkingText: nextThinkingText,
+                        chatThinkingActive: nextThinkingActive,
+                    };
+                };
                 if (key) {
                     set((state) => {
                         const newMap = new Map(state.streamedResults);
                         newMap.delete(key);
-                        return { streamedResults: newMap, abortController: null };
+                        return { streamedResults: newMap, abortController: null, ...clearActiveThinkingState(state) };
                     });
                 } else {
-                    set({ streamedResults: new Map(), abortController: null });
+                    set((state) => ({ streamedResults: new Map(), abortController: null, ...clearActiveThinkingState(state) }));
                 }
             },
 

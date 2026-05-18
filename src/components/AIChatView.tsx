@@ -18,6 +18,20 @@ function StreamingDots() {
     );
 }
 
+function ThinkingPanel({ text }: { text: string }) {
+    return (
+        <div className="min-w-[220px] max-w-full rounded-xl border border-[var(--border-muted)] bg-[var(--bg-base)]/45 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--accent-primary)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse" />
+                <span>AI 老师正在思考</span>
+            </div>
+            <p className="mt-1.5 max-h-24 overflow-hidden whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[var(--text-secondary)]">
+                {text || '正在整理答案结构...'}
+            </p>
+        </div>
+    );
+}
+
 const PROMPT_TERM_STOP_WORDS = new Set([
     '怎么', '怎麼', '什么', '什麼', '意思', '用法', '区别', '差异', '請問', '请问', '解释', '講解', '讲解', '一下', '如何', '為什麼', '为什么'
 ]);
@@ -67,6 +81,12 @@ function ModelMessageContent({
     const streamingText = useChatTypewriterStore((state) =>
         isStreamingModel ? state.streamingText[String(msg.timestamp)] || '' : ''
     );
+    const thinkingActive = useGeminiStore((state) =>
+        isStreamingModel ? !!state.chatThinkingActive[String(msg.timestamp)] : false
+    );
+    const thinkingText = useGeminiStore((state) =>
+        isStreamingModel ? state.chatThinkingText[String(msg.timestamp)] || '' : ''
+    );
     const visibleContent = isStreamingModel ? (streamingText || msg.content) : msg.content;
 
     useEffect(() => {
@@ -76,6 +96,9 @@ function ModelMessageContent({
     }, [isStreamingModel, scrollRef, visibleContent]);
 
     if (isStreamingModel && !visibleContent) {
+        if (thinkingActive) {
+            return <ThinkingPanel text={thinkingText} />;
+        }
         return <StreamingDots />;
     }
 

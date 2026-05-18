@@ -29,6 +29,7 @@ interface AIRequestBody {
     topP?: number;
     cacheKey?: string;
     forceRefresh?: boolean;
+    streamMode?: 'text' | 'events';
 }
 
 interface RouteContext {
@@ -208,12 +209,14 @@ function buildUpstreamChatRequest({
     systemPrompt,
     temperature,
     topP,
+    streamMode,
 }: {
     modelId: string;
     prompt: string;
     systemPrompt?: string;
     temperature: number;
     topP: number;
+    streamMode: 'text' | 'events';
 }): OpenAIChatCompletionRequest {
     const body: OpenAIChatCompletionRequest = {
         model: modelId,
@@ -225,7 +228,7 @@ function buildUpstreamChatRequest({
         stream_options: { include_usage: true },
     };
 
-    if (modelId.startsWith('qwen/')) {
+    if (modelId.startsWith('qwen/') && streamMode !== 'events') {
         body.chat_template_kwargs = { enable_thinking: false };
     }
 
@@ -308,6 +311,10 @@ function parseSSELine(line: string): { contentText: string; reasoningText: strin
     }
 }
 
+function formatChatEvent(event: string, data: Record<string, unknown>): string {
+    return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 async function finalizeUsageAndCache(
     db: D1Database,
     r2: R2Bucket | null,
@@ -387,6 +394,7 @@ async function openUpstreamWithFallback({
     systemPrompt,
     temperature,
     topP,
+    streamMode,
 }: {
     db: D1Database;
     env?: CloudflareEnv;
@@ -396,6 +404,7 @@ async function openUpstreamWithFallback({
     systemPrompt?: string;
     temperature: number;
     topP: number;
+    streamMode: 'text' | 'events';
 }): Promise<UpstreamSelection | NextResponse> {
     const modelChain = getModelFallbackChain(env);
     const estInputTokens = Math.ceil((prompt.length + (systemPrompt?.length || 0)) * 1.5);
@@ -434,6 +443,7 @@ async function openUpstreamWithFallback({
                     systemPrompt,
                     temperature,
                     topP,
+                    streamMode,
                 })),
             }, UPSTREAM_FETCH_TIMEOUT_MS);
         } catch (error) {
@@ -546,15 +556,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             temperature = 0.85,
             topP = 0.95,
             cacheKey,
-            forceRefresh
+            forceRefresh,
+            streamMode = 'text'
         } = await req.json() as AIRequestBody;
+        const normalizedStreamMode: 'text' | 'events' = streamMode === 'events' ? 'events' : 'text';
+        const isEventStream = normalizedStreamMode === 'events';
 
 	        if (!prompt) {
 	            return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
 	        }
 
 	        const r2 = getR2Bucket(req, env);
-        if (cacheKey && !forceRefresh) {
+        if (!isEventStream && cacheKey && !forceRefresh) {
             const cachedR2 = await getR2AICache(r2, cacheKey);
             if (cachedR2) {
                 console.log(`[AI API] R2 Cache Hit: ${cacheKey}`);
@@ -577,7 +590,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                 } catch (error) {
                     console.warn('[AI API] Failed to delete old cache:', error);
                 }
-            } else {
+            } else if (!isEventStream) {
                 const cached = await db.prepare('SELECT value FROM ai_cache WHERE key = ?').bind(cacheKey).first<{ value: string }>();
                 if (cached) {
                     console.log(`[AI API] Backend Cache Hit: ${cacheKey}`);
@@ -602,6 +615,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             systemPrompt,
             temperature,
             topP,
+            streamMode: normalizedStreamMode,
         });
 
         if (upstreamSelection instanceof Response) {
@@ -618,9 +632,148 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
         let actualTotalTokens: number | undefined;
         let isStreamClosed = false;
         let clientCancelled = false;
+        let thinkingStarted = false;
+        let answerStarted = false;
+        let upstreamUsageFinalized = false;
+        let eventErrorEmitted = false;
 
         const responseStream = new ReadableStream({
             start(controller) {
+                const enqueueText = (text: string) => {
+                    if (!text || isStreamClosed) return;
+                    try {
+                        controller.enqueue(encoder.encode(text));
+                    } catch {
+                        console.warn('[AI API] Client disconnected, marking stream closed.');
+                        isStreamClosed = true;
+                    }
+                };
+
+                const emitEvent = (event: string, data: Record<string, unknown>) => {
+                    enqueueText(formatChatEvent(event, data));
+                };
+
+                const emitErrorEvent = (message: string) => {
+                    eventErrorEmitted = true;
+                    emitEvent('error', { message });
+                };
+
+                const handleParsedChunk = (parsed: { contentText: string; reasoningText: string; totalTokens?: number; done: boolean }) => {
+                    if (typeof parsed.totalTokens === 'number') {
+                        actualTotalTokens = parsed.totalTokens;
+                    }
+                    if (parsed.done) return;
+
+                    if (isEventStream) {
+                        if (parsed.reasoningText && !answerStarted) {
+                            if (!thinkingStarted) {
+                                thinkingStarted = true;
+                                emitEvent('thinking_start', { model: modelId });
+                            }
+                            pendingReasoningText += parsed.reasoningText;
+                            emitEvent('thinking_delta', { text: parsed.reasoningText, raw: true });
+                        }
+
+                        if (parsed.contentText) {
+                            pendingReasoningText = '';
+                            if (!answerStarted) {
+                                answerStarted = true;
+                                emitEvent('answer_start', {});
+                            }
+                            fullText += parsed.contentText;
+                            emitEvent('answer_delta', { text: parsed.contentText });
+                        }
+                        return;
+                    }
+
+                    if (!parsed.contentText) {
+                        if (!fullText && parsed.reasoningText) {
+                            pendingReasoningText += parsed.reasoningText;
+                        }
+                        return;
+                    }
+
+                    pendingReasoningText = '';
+                    fullText += parsed.contentText;
+                    enqueueText(parsed.contentText);
+                };
+
+                const streamAnswerFromSelection = async (selection: UpstreamSelection, finalCacheKey?: string) => {
+                    const answerReader = selection.response.body!.getReader();
+                    const answerDecoder = new TextDecoder();
+                    let answerBuffer = '';
+                    let answerText = '';
+                    let answerPendingReasoning = '';
+                    let answerActualTotalTokens: number | undefined;
+
+                    const handleAnswerParsedChunk = (parsed: { contentText: string; reasoningText: string; totalTokens?: number; done: boolean }) => {
+                        if (typeof parsed.totalTokens === 'number') {
+                            answerActualTotalTokens = parsed.totalTokens;
+                        }
+                        if (parsed.done) return;
+
+                        if (!parsed.contentText) {
+                            if (!answerText && parsed.reasoningText) {
+                                answerPendingReasoning += parsed.reasoningText;
+                            }
+                            return;
+                        }
+
+                        answerPendingReasoning = '';
+                        if (!answerStarted) {
+                            answerStarted = true;
+                            emitEvent('answer_start', {});
+                        }
+                        answerText += parsed.contentText;
+                        fullText += parsed.contentText;
+                        emitEvent('answer_delta', { text: parsed.contentText });
+                    };
+
+                    while (true) {
+                        const nextChunk = await readUpstreamChunkWithTimeout(answerReader, UPSTREAM_STREAM_IDLE_TIMEOUT_MS);
+                        const { done, value } = nextChunk;
+                        if (done) break;
+
+                        answerBuffer += answerDecoder.decode(value, { stream: true });
+                        const lines = answerBuffer.split(/\r?\n/);
+                        answerBuffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            const parsed = parseSSELine(line);
+                            if (!parsed) continue;
+                            handleAnswerParsedChunk(parsed);
+                        }
+                    }
+
+                    const answerTail = parseSSELine(answerBuffer);
+                    if (answerTail) {
+                        handleAnswerParsedChunk(answerTail);
+                    }
+
+                    if (!answerText && answerPendingReasoning) {
+                        if (!answerStarted) {
+                            answerStarted = true;
+                            emitEvent('answer_start', {});
+                        }
+                        answerText = answerPendingReasoning;
+                        fullText += answerText;
+                        emitEvent('answer_delta', { text: answerText });
+                    }
+
+                    await finalizeUsageAndCache(
+                        db,
+                        r2,
+                        selection.modelId,
+                        selection.minuteKey,
+                        selection.estInputTokens,
+                        answerActualTotalTokens,
+                        finalCacheKey,
+                        answerText
+                    );
+
+                    return answerText;
+                };
+
                 const processStream = async () => {
                     try {
                         while (true) {
@@ -635,44 +788,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                             for (const line of lines) {
                                 const parsed = parseSSELine(line);
                                 if (!parsed) continue;
-                                if (typeof parsed.totalTokens === 'number') {
-                                    actualTotalTokens = parsed.totalTokens;
-                                }
-                                if (parsed.done) continue;
-                                if (!parsed.contentText) {
-                                    if (!fullText && parsed.reasoningText) {
-                                        pendingReasoningText += parsed.reasoningText;
-                                    }
-                                    continue;
-                                }
-
-                                pendingReasoningText = '';
-                                fullText += parsed.contentText;
-                                if (!isStreamClosed) {
-                                    try {
-                                        controller.enqueue(encoder.encode(parsed.contentText));
-                                    } catch {
-                                        console.warn('[AI API] Client disconnected, marking stream closed.');
-                                        isStreamClosed = true;
-                                    }
-                                }
+                                handleParsedChunk(parsed);
                             }
                         }
 
                         const tail = parseSSELine(sseBuffer);
-                        if (tail?.totalTokens) {
-                            actualTotalTokens = tail.totalTokens;
+                        if (tail) {
+                            handleParsedChunk(tail);
                         }
-                        if (tail?.contentText) {
-                            pendingReasoningText = '';
-                            fullText += tail.contentText;
-                            if (!isStreamClosed) {
-                                controller.enqueue(encoder.encode(tail.contentText));
-                            }
-                        }
-                        if (!fullText && pendingReasoningText && !isStreamClosed) {
+                        if (!isEventStream && !fullText && pendingReasoningText && !isStreamClosed) {
                             fullText = pendingReasoningText;
-                            controller.enqueue(encoder.encode(pendingReasoningText));
+                            enqueueText(pendingReasoningText);
                         }
 
                         if (clientCancelled) {
@@ -680,7 +806,39 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                             return;
                         }
 
-                        await finalizeUsageAndCache(db, r2, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
+                        if (isEventStream && !fullText && thinkingStarted) {
+                            await finalizeUsageAndCache(db, r2, modelId, minuteKey, estInputTokens, actualTotalTokens, undefined, '');
+                            upstreamUsageFinalized = true;
+                            const finalSelection = await openUpstreamWithFallback({
+                                db,
+                                env,
+                                apiBaseUrl,
+                                apiKey,
+                                prompt,
+                                systemPrompt: `${systemPrompt || ''}\n\n请直接生成最终正文，不要输出思考过程。`,
+                                temperature,
+                                topP,
+                                streamMode: 'text',
+                            });
+
+                            if (finalSelection instanceof Response) {
+                                emitErrorEvent('AI 老师思考结束后没有成功生成正文，请稍后重试。');
+                            } else {
+                                await streamAnswerFromSelection(finalSelection, cacheKey);
+                            }
+                        }
+
+                        if (!upstreamUsageFinalized) {
+                            await finalizeUsageAndCache(db, r2, modelId, minuteKey, estInputTokens, actualTotalTokens, cacheKey, fullText);
+                        }
+
+                        if (isEventStream && !fullText && !eventErrorEmitted) {
+                            emitErrorEvent('AI 老师没有生成正文，请稍后重试。');
+                        }
+
+                        if (isEventStream && fullText) {
+                            emitEvent('done', { model: modelId, totalTokens: actualTotalTokens });
+                        }
 
                         if (!isStreamClosed) {
                             controller.close();
@@ -721,7 +879,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
 
         return new Response(responseStream, {
             headers: {
-                'Content-Type': 'text/plain; charset=utf-8',
+                'Content-Type': isEventStream ? 'text/event-stream; charset=utf-8' : 'text/plain; charset=utf-8',
                 'Cache-Control': 'no-cache, no-transform',
                 'Connection': 'keep-alive',
                 'X-Accel-Buffering': 'no',
