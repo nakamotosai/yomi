@@ -175,11 +175,11 @@ MIT License
 
 ## 当前状态
 
-Last updated: 2026-05-10 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
+Last updated: 2026-05-18 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前 AI app 运行时代码修复在 GitHub `main` 的 `4e2638a Fix AI chat markdown heading emphasis`。后续 README-only closeout commit 只更新交接文档，不改变运行时代码；因此 Cloudflare Pages Production/main 的 Active source 可能是后续文档提交，但 AI 聊天渲染代码仍包含 `4e2638a`。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+当前 AI app 运行时代码包含 2026-05-18 CPA v1 上游迁移和此前 AI 聊天 Markdown heading/emphasis 修复。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
-AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型链 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
+AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://vps.saaaai.com/cpa/v1` 的 OpenAI-compatible `/chat/completions`。模型链保持 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
 
 ## 接手提示
 
@@ -198,9 +198,11 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 - 本轮完成：主 AI 老师、单词 AI 解读、语法 AI 解读提示词均要求尽量控制在 800 字以内。
 - 本轮完成：单词/语法 `AI老师在线解读` 已恢复专用结构 renderer，保留 accent 标题、同色 inline labels、日文/中文例句卡、喇叭按钮、`UnifiedHighlighter` 高亮和流式显示。
 - 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
+- 本轮完成：AI 解读上游从 Yomi 专用 `yomi-cliproxy` 链路迁移到统一 CPA v1；`/api/ai/chat` 前端契约、流式文本、R2/D1 缓存和模型 fallback 顺序不变。
+- 本轮完成：CPA/Qwen 流式响应若同时返回 `reasoning_content` 和最终 `content`，前端只显示最终内容；仅当上游完全没有 `content` 时才回退显示 `reasoning_content`，避免 AI 老师暴露内部推理文本。
 - 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/AIChatView.tsx`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`src/store/useAppStore.ts`、`wrangler.toml`。
 - 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
-- 风险：生产 AI 依赖 Cloudflare Pages secrets `CLIPROXY_API_KEY` / `CLIPROXY_API_BASE_URL`、`AI_CACHE` R2 binding、`DB` D1 binding，以及 `https://vps.saaaai.com/yomi-cliproxy/v1` 到 live cliproxyapi 的反代。
+- 风险：生产 AI 依赖 Cloudflare Pages secret `YOMI_CPA_API_KEY` 或 `CPA_API_KEY`；为平滑迁移，现有 `CLIPROXY_API_KEY` 仍作为兼容密钥名可用。生产还依赖 `AI_CACHE` R2 binding 和 `DB` D1 binding。不再依赖 `CLIPROXY_API_BASE_URL` 或 Yomi 专用反代。
 - 下一步：无主动开发任务；仅在用户发现新回归或要求继续迭代时恢复。
 
 ## 本轮收口验证
@@ -211,6 +213,10 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端使用 cliproxyapi 模型�
 - `npm run build`: passed; existing warnings remain for production `JWT_SECRET` and edge runtime static generation.
 - `npm run pages:build`: passed; Cloudflare Next-on-Pages output generated successfully.
 - `git diff --check`: passed.
+- CPA v1 direct probe: `https://vps.saaaai.com/cpa/v1/chat/completions` returned HTTP 200 with the current server-side key and primary model.
+- Cloudflare Pages secret `YOMI_CPA_API_KEY`: configured for project `yomi`; `CLIPROXY_API_BASE_URL` is no longer used by active code.
+- Cloudflare Pages deploy: passed via `wrangler pages deploy .vercel/output/static --project-name yomi --branch main`; custom production domain was verified after deploy.
+- Production AI API after deployment: POST `https://yomi.saaaai.com/api/ai/chat` with `请只回复 YOMI_CPA_OK。` returned `YOMI_CPA_OK` and HTTP 200 after the reasoning-content filter was deployed.
 - AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
 - Production DOM probe on `https://yomi.saaaai.com/`: passed after deployment. Injected the screenshot-style AI chat sample with Markdown hash headings and nested emphasis (`## **ながら的核心用法**` / `## **使用时的关键限制**` / `## 与相似语法的区别`) into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; headings were not underlined and content subitems were not bold.
 - `python3 /home/ubuntu/codex/scripts/design_truth_guard.py /home/ubuntu/codex/specs/yomi-clix-qwen-ai-teacher-20260509`: passed.

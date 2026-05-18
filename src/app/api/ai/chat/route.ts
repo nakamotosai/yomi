@@ -7,7 +7,7 @@ export const runtime = 'edge';
 
 const DEFAULT_MODEL_ID = 'qwen/qwen3.5-122b-a10b';
 const DEFAULT_FALLBACK_MODEL_IDS = ['openai/gpt-oss-120b', 'google/gemma-4-31b-it'];
-const DEFAULT_CLIPROXY_BASE_URL = 'http://127.0.0.1:8317/v1';
+const CPA_API_BASE_URL = 'https://vps.saaaai.com/cpa/v1';
 const RPM_LIMIT = 25;
 const TPM_LIMIT = 12000;
 const MAX_OUTPUT_TOKENS = 2000;
@@ -61,11 +61,13 @@ interface UpstreamSelection {
     attempts: FallbackAttempt[];
 }
 
+interface OpenAIStreamDelta {
+    content?: string;
+    reasoning_content?: string;
+}
+
 interface OpenAIStreamChoice {
-    delta?: {
-        content?: string;
-        reasoning_content?: string;
-    };
+    delta?: OpenAIStreamDelta;
 }
 
 interface OpenAIStreamChunk {
@@ -142,10 +144,6 @@ function getR2Bucket(request: NextRequest, env?: CloudflareEnv): R2Bucket | null
     return requestEnv?.AI_CACHE || null;
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-    return baseUrl.replace(/\/+$/, '');
-}
-
 function parseModelList(value: string): string[] {
     return value
         .split(',')
@@ -167,8 +165,8 @@ function uniqueModelChain(primaryModel: string, fallbackModels: string[]): strin
 }
 
 function getModelFallbackChain(env?: CloudflareEnv): string[] {
-    const primaryModel = getEnvValue(env, 'CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
-    const fallbackOverride = getEnvValue(env, 'CLIPROXY_FALLBACK_MODELS');
+    const primaryModel = getEnvValue(env, 'YOMI_CPA_MODEL', 'CPA_MODEL', 'CLIPROXY_MODEL') || DEFAULT_MODEL_ID;
+    const fallbackOverride = getEnvValue(env, 'YOMI_CPA_FALLBACK_MODELS', 'CPA_FALLBACK_MODELS', 'CLIPROXY_FALLBACK_MODELS');
     const fallbackModels = fallbackOverride ? parseModelList(fallbackOverride) : DEFAULT_FALLBACK_MODEL_IDS;
     return uniqueModelChain(primaryModel, fallbackModels);
 }
@@ -191,10 +189,15 @@ function buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
     ];
 }
 
-function extractStreamText(chunk: OpenAIStreamChunk): string {
-    return (chunk.choices || [])
-        .map((choice) => `${choice.delta?.content || ''}${choice.delta?.reasoning_content || ''}`)
-        .join('');
+function extractStreamTexts(chunk: OpenAIStreamChunk): { contentText: string; reasoningText: string } {
+    return (chunk.choices || []).reduce(
+        (result, choice) => {
+            result.contentText += choice.delta?.content || '';
+            result.reasoningText += choice.delta?.reasoning_content || '';
+            return result;
+        },
+        { contentText: '', reasoningText: '' }
+    );
 }
 
 async function getAICacheObjectKey(cacheKey: string): Promise<string> {
@@ -243,18 +246,19 @@ async function deleteR2AICache(r2: R2Bucket | null, cacheKey: string): Promise<v
     }
 }
 
-function parseSSELine(line: string): { text: string; totalTokens?: number; done: boolean } | null {
+function parseSSELine(line: string): { contentText: string; reasoningText: string; totalTokens?: number; done: boolean } | null {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return null;
 
     const payload = trimmed.slice(5).trim();
     if (!payload) return null;
-    if (payload === '[DONE]') return { text: '', done: true };
+    if (payload === '[DONE]') return { contentText: '', reasoningText: '', done: true };
 
     try {
         const chunk = JSON.parse(payload) as OpenAIStreamChunk;
         const totalTokens = typeof chunk.usage?.total_tokens === 'number' ? chunk.usage.total_tokens : undefined;
-        return { text: extractStreamText(chunk), totalTokens, done: false };
+        const { contentText, reasoningText } = extractStreamTexts(chunk);
+        return { contentText, reasoningText, totalTokens, done: false };
     } catch (error) {
         console.warn('[AI API] Failed to parse upstream SSE chunk:', error);
         return null;
@@ -405,7 +409,7 @@ async function openUpstreamWithFallback({
         if (!upstreamResponse.ok) {
             const upstreamError = await upstreamResponse.text();
             const detail = upstreamError.slice(0, 200);
-            console.error('[AI API] Upstream cliproxyapi error:', modelId, upstreamResponse.status, detail);
+            console.error('[AI API] Upstream CPA v1 error:', modelId, upstreamResponse.status, detail);
             attempts.push({
                 model: modelId,
                 status: upstreamResponse.status,
@@ -541,11 +545,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
             }
         }
 
-        const apiKey = getEnvValue(env, 'CLIPROXY_API_KEY', 'CODEX_CLIPROXYAPI_8317_API_KEY');
-        const apiBaseUrl = normalizeBaseUrl(getEnvValue(env, 'CLIPROXY_API_BASE_URL') || DEFAULT_CLIPROXY_BASE_URL);
+        const apiKey = getEnvValue(env, 'YOMI_CPA_API_KEY', 'CPA_API_KEY', 'CLIPROXY_API_KEY');
+        const apiBaseUrl = CPA_API_BASE_URL;
 
         if (!apiKey) {
-            return NextResponse.json({ error: 'CLIPROXY_API_KEY is missing' }, { status: 500 });
+            return NextResponse.json({ error: 'CPA API key is missing' }, { status: 500 });
         }
 
         const upstreamSelection = await openUpstreamWithFallback({
@@ -568,6 +572,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
         const { modelId, minuteKey, estInputTokens, response: upstreamResponse } = upstreamSelection;
         const reader = upstreamResponse.body!.getReader();
         let fullText = '';
+        let pendingReasoningText = '';
         let sseBuffer = '';
         let actualTotalTokens: number | undefined;
         let isStreamClosed = false;
@@ -593,12 +598,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                                     actualTotalTokens = parsed.totalTokens;
                                 }
                                 if (parsed.done) continue;
-                                if (!parsed.text) continue;
+                                if (!parsed.contentText) {
+                                    if (!fullText && parsed.reasoningText) {
+                                        pendingReasoningText += parsed.reasoningText;
+                                    }
+                                    continue;
+                                }
 
-                                fullText += parsed.text;
+                                pendingReasoningText = '';
+                                fullText += parsed.contentText;
                                 if (!isStreamClosed) {
                                     try {
-                                        controller.enqueue(encoder.encode(parsed.text));
+                                        controller.enqueue(encoder.encode(parsed.contentText));
                                     } catch {
                                         console.warn('[AI API] Client disconnected, marking stream closed.');
                                         isStreamClosed = true;
@@ -611,11 +622,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                         if (tail?.totalTokens) {
                             actualTotalTokens = tail.totalTokens;
                         }
-                        if (tail?.text) {
-                            fullText += tail.text;
+                        if (tail?.contentText) {
+                            pendingReasoningText = '';
+                            fullText += tail.contentText;
                             if (!isStreamClosed) {
-                                controller.enqueue(encoder.encode(tail.text));
+                                controller.enqueue(encoder.encode(tail.contentText));
                             }
+                        }
+                        if (!fullText && pendingReasoningText && !isStreamClosed) {
+                            fullText = pendingReasoningText;
+                            controller.enqueue(encoder.encode(pendingReasoningText));
                         }
 
                         if (clientCancelled) {
