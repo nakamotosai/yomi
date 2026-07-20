@@ -5,9 +5,16 @@ import { RemoteD1Client } from '@/lib/remoteD1';
 
 export const runtime = 'edge';
 
-const DEFAULT_MODEL_ID = 'qwen/qwen3.5-122b-a10b';
-const DEFAULT_FALLBACK_MODEL_IDS = ['openai/gpt-oss-120b', 'google/gemma-4-31b-it'];
-const CPA_API_BASE_URL = 'https://vps.saaaai.com/cpa/v1';
+// 2026-07-21: dead chain was vps.saaaai.com/cpa + qwen3.5-122b EOL(410).
+// Public cliproxy on vps-jp: https://api.saaaai.com/v1 (OpenAI-compatible).
+// Default chain ordered by stream bench (speed + non-empty content): pro → nano → flash → super.
+const DEFAULT_MODEL_ID = 'deepseek-ai/deepseek-v4-pro';
+const DEFAULT_FALLBACK_MODEL_IDS = [
+    'nvidia/nemotron-3-nano-30b-a3b',
+    'deepseek-ai/deepseek-v4-flash',
+    'nvidia/nemotron-3-super-120b-a12b',
+];
+const DEFAULT_CPA_API_BASE_URL = 'https://api.saaaai.com/v1';
 const RPM_LIMIT = 25;
 const TPM_LIMIT = 12000;
 const MAX_OUTPUT_TOKENS = 2000;
@@ -185,6 +192,21 @@ function getModelFallbackChain(env?: CloudflareEnv): string[] {
     return uniqueModelChain(primaryModel, fallbackModels);
 }
 
+function getApiBaseUrl(env?: CloudflareEnv): string {
+    const override = getEnvValue(
+        env,
+        'YOMI_CPA_API_BASE_URL',
+        'CPA_API_BASE_URL',
+        'CLIPROXY_API_BASE_URL',
+    );
+    if (!override) return DEFAULT_CPA_API_BASE_URL;
+
+    // Accept either ".../v1" or bare origin; always end with /v1 for OpenAI-compatible paths.
+    const trimmed = override.replace(/\/+$/, '');
+    if (/\/v1$/i.test(trimmed)) return trimmed;
+    return `${trimmed}/v1`;
+}
+
 function safeErrorDetail(error: unknown): string {
     if (error instanceof Error) {
         return error.message.slice(0, 200);
@@ -228,8 +250,17 @@ function buildUpstreamChatRequest({
         stream_options: { include_usage: true },
     };
 
-    if (modelId.startsWith('qwen/') && streamMode !== 'events') {
-        body.chat_template_kwargs = { enable_thinking: false };
+    // Disable vendor-specific "thinking" leaks for pure text explanation streams.
+    // Qwen uses chat_template_kwargs; DeepSeek/Nemotron-class models often honor the same flag.
+    if (streamMode !== 'events') {
+        const lower = modelId.toLowerCase();
+        if (
+            lower.startsWith('qwen/')
+            || lower.includes('deepseek')
+            || lower.includes('nemotron')
+        ) {
+            body.chat_template_kwargs = { enable_thinking: false };
+        }
     }
 
     return body;
@@ -600,7 +631,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
         }
 
         const apiKey = getEnvValue(env, 'YOMI_CPA_API_KEY', 'CPA_API_KEY', 'CLIPROXY_API_KEY');
-        const apiBaseUrl = CPA_API_BASE_URL;
+        const apiBaseUrl = getApiBaseUrl(env);
 
         if (!apiKey) {
             return NextResponse.json({ error: 'CPA API key is missing' }, { status: 500 });

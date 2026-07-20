@@ -175,11 +175,11 @@ MIT License
 
 ## 当前状态
 
-Last updated: 2026-05-18 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
+Last updated: 2026-07-21 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一当前进度标准。当前版本 `0.1.0`，生产站是 `https://yomi.saaaai.com/`。
 
-当前 AI app 运行时代码包含 2026-05-18 CPA v1 上游迁移、AI 聊天 Markdown heading/emphasis 修复，以及主 AI 老师聊天的 transient thinking event stream。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
+当前 AI app 运行时代码包含 2026-05-18 CPA v1 上游迁移、AI 聊天 Markdown/thinking 修复，以及 **2026-07-21 公网 cliproxy 切流**（旧 `vps.saaaai.com/cpa` SSL 死链 + `qwen/qwen3.5-122b-a10b` EOL 410）。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
-AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://vps.saaaai.com/cpa/v1` 的 OpenAI-compatible `/chat/completions`。模型链保持 `qwen/qwen3.5-122b-a10b -> openai/gpt-oss-120b -> google/gemma-4-31b-it`。不要在未获用户明确批准时改 provider/model/fallback 顺序。
+AI 老师相关入口统一走 `/api/ai/chat`，默认上游为 **`https://api.saaaai.com/v1`**（vps-jp cliproxyapi 公网，OpenAI-compatible `/chat/completions`）。可用 env 覆盖：`YOMI_CPA_API_BASE_URL` / `CPA_API_BASE_URL` / `CLIPROXY_API_BASE_URL`。默认模型链（2026-07-21 公网流式测速排序，速度+正文非空）：`deepseek-ai/deepseek-v4-pro` → `nvidia/nemotron-3-nano-30b-a3b` → `deepseek-ai/deepseek-v4-flash` → `nvidia/nemotron-3-super-120b-a12b`。模型可用 `YOMI_CPA_MODEL` / `CLIPROXY_MODEL` 与 `*_FALLBACK_MODELS` 覆盖。
 
 ## 接手提示
 
@@ -199,13 +199,14 @@ AI 老师相关入口统一走 `/api/ai/chat`，后端固定上游为 `https://v
 - 本轮完成：单词/语法 `AI老师在线解读` 已恢复专用结构 renderer，保留 accent 标题、同色 inline labels、日文/中文例句卡、喇叭按钮、`UnifiedHighlighter` 高亮和流式显示。
 - 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
 - 本轮完成：AI 解读上游从 Yomi 专用 `yomi-cliproxy` 链路迁移到统一 CPA v1；`/api/ai/chat` 前端契约、流式文本、R2/D1 缓存和模型 fallback 顺序不变。
+- **2026-07-21 修复**：死链 `https://vps.saaaai.com/cpa/v1`（SSL 失败）+ 默认模型 `qwen/qwen3.5-122b-a10b`（NVIDIA EOL 410）导致「AI老师在线解读」全挂。已切 **`https://api.saaaai.com/v1`**（vps-jp cliproxy 公网），默认链换 deepseek-v4-pro + nemotron nano/super + deepseek-v4-flash；base URL 支持 env 覆盖。
 - 本轮完成：旧纯文本模式下，CPA/Qwen 流式响应若同时返回 `reasoning_content` 和最终 `content`，前端只显示最终内容；仅当上游完全没有 `content` 时才回退显示 `reasoning_content`，避免单词/语法详解入口暴露内部推理文本。
 - 本轮完成：修复 CPA/Qwen 返回 `**标题 **：` 这类闭合星号前带空格的 Markdown 时前台残留 `**` 的问题；主 AI 老师聊天的 Markdown strong 现在按粗体显示，不再强行转成下划线。
 - 本轮修复：二级条目开头的 malformed strong label 不再吞掉整句正文。模型若输出 `b. **拟声词： 最常用的是ふふ **...` 或 `c. **语境差异： 中文...含蓄 **...`，`StreamingMarkdown` 会归一化为只加粗 `拟声词：` / `语境差异：` 这类 label，后续解释正文保持普通字重。
 - 本轮完成：主 AI 老师聊天改为 `streamMode:"events"`；Qwen event-mode 不再写入 `chat_template_kwargs.enable_thinking=false`。后端把 `reasoning_content` 作为 `thinking_*` 事件发给前端临时显示，首个 `answer_start` 到达时前端立即删除 thinking DOM/state；聊天历史、收藏、R2/D1 缓存和重试来源只保存最终正文。若 CPA/Qwen thinking 段只返回 `reasoning_content` 而没有标准 `content`，后端会立即用同一 CPA v1 再开一次 thinking-off 正文流作为兜底。单词/语法 `AI老师在线解读` 仍走旧纯文本模式并继续关闭 Qwen thinking，避免详解入口行为漂移。
 - 关键文件：`src/app/api/ai/chat/route.ts`、`src/store/useGeminiStore.ts`、`src/components/AIChatView.tsx`、`src/components/StreamingMarkdown.tsx`、`src/components/InfoPanel.tsx`、`src/store/useAppStore.ts`、`wrangler.toml`。
 - 入口：生产站 `https://yomi.saaaai.com/`，AI API `https://yomi.saaaai.com/api/ai/chat`。
-- 风险：生产 AI 依赖 Cloudflare Pages secret `YOMI_CPA_API_KEY` 或 `CPA_API_KEY`；为平滑迁移，现有 `CLIPROXY_API_KEY` 仍作为兼容密钥名可用。生产还依赖 `AI_CACHE` R2 binding 和 `DB` D1 binding。不再依赖 `CLIPROXY_API_BASE_URL` 或 Yomi 专用反代。
+- 风险：生产 AI 依赖 Cloudflare Pages secret `YOMI_CPA_API_KEY` 或 `CPA_API_KEY`；为平滑迁移，现有 `CLIPROXY_API_KEY` 仍作为兼容密钥名可用。生产还依赖 `AI_CACHE` R2 binding 和 `DB` D1 binding。上游默认 `api.saaaai.com`；可用 `CLIPROXY_API_BASE_URL` / `YOMI_CPA_API_BASE_URL` 覆盖（本地已指向公网）。**不要**再写回 `vps.saaaai.com/cpa` 或 EOL 的 `qwen/qwen3.5-122b-a10b`。
 - 下一步：无主动开发任务；仅在用户发现新回归或要求继续迭代时恢复。
 
 ## 本轮收口验证
