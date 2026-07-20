@@ -220,11 +220,11 @@ AI 老师相关入口统一走 `/api/ai/chat`，默认上游为 **`https://api.s
 - `git diff --check`: passed.
 - Production transient thinking API probe after deployment: POST `https://yomi.saaaai.com/api/ai/chat` with `streamMode:"events"` returned `text/event-stream` and event order containing `thinking_start -> thinking_delta -> answer_start -> answer_delta -> done`; `thinkingAfterAnswer=false`; final answer included the unique probe marker.
 - Production Chromium DOM probe after deployment: opened `https://yomi.saaaai.com/`, switched to `AI 聊天`, sent a real question through the visible chat input, observed `AI 老师正在思考`, then verified the final answer marker appeared and the thinking panel text was no longer present in `document.body.innerText`.
-- CPA v1 direct probe: `https://vps.saaaai.com/cpa/v1/chat/completions` returned HTTP 200 with the current server-side key and primary model.
-- CPA/Qwen thinking-off probe: top-level `chat_template_kwargs.enable_thinking=false` returned first final content in about 2.9s for the same prompt shape; `extra_body` is rejected by CPA validation.
-- Cloudflare Pages secret `YOMI_CPA_API_KEY`: configured for project `yomi`; `CLIPROXY_API_BASE_URL` is no longer used by active code.
-- Cloudflare Pages deploy: passed via `wrangler pages deploy .vercel/output/static --project-name yomi --branch main`; custom production domain was verified after deploy.
-- Production AI API after deployment: POST `https://yomi.saaaai.com/api/ai/chat` with `请只回复 YOMI_CPA_OK。` returned `YOMI_CPA_OK` and HTTP 200 after the reasoning-content filter was deployed.
+- ~~CPA v1 direct probe: `https://vps.saaaai.com/cpa/v1/...`~~（**历史 2026-05**；2026-07-21 该 host SSL 已死，现行上游 `https://api.saaaai.com/v1`）。
+- CPA/Qwen thinking-off probe（历史）：`chat_template_kwargs.enable_thinking=false` 曾用于关 thinking。
+- Cloudflare Pages secrets（**2026-07-21**）：`YOMI_CPA_API_KEY` / `CLIPROXY_API_KEY`；**`CLIPROXY_API_BASE_URL` 现仍被 active code 读取**（`getApiBaseUrl`），生产值应为 `https://api.saaaai.com/v1`；另有 `CLIPROXY_MODEL` / `CLIPROXY_FALLBACK_MODELS`。
+- Cloudflare Pages deploy: `wrangler pages deploy .vercel/output/static --project-name yomi --branch main`（Windows shellac 不稳时可在 vps-jp 远程 build）。
+- **2026-07-21 生产冒烟**：POST `https://yomi.saaaai.com/api/ai/chat` forceRefresh 解读样例 HTTP 200 + 中文正文（约 3–5s）；events 聊天路径同样 200 且有 `answer_*` 事件。
 - Production AI Markdown fix after CPA migration: deployed source `8bfb320`; POST `https://yomi.saaaai.com/api/ai/chat` with the screenshot-style `a. **标题 **：` prompt returned first body byte in about 3.6s and no loose raw `**标题 **` fragment. Browser DOM replay on the production page with the same persisted AI chat fixture showed no raw `**`; `strongTexts` included `学习路径规划`、`夯实基础`、`建立语法框架`、`词汇积累策略`.
 - AI 老师 Markdown server-render smoke test: passed. `strong` only included true headings and target term `ながら`; `接续 / 正しい形 / ます形 / 正确` rendered as underline/non-bold; heading number/bullet did not leak.
 - Production DOM probe on `https://yomi.saaaai.com/`: passed after deployment. Injected the screenshot-style AI chat sample with Markdown hash headings and nested emphasis (`## **ながら的核心用法**` / `## **使用时的关键限制**` / `## 与相似语法的区别`) into the real production page; DOM `strong` contained `ながら的核心用法`、`使用时的关键限制`、`与相似语法的区别`、`ながら`; `.underline` contained `接续：`; headings were not underlined and content subitems were not bold.
