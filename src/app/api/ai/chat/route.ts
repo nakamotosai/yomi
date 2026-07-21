@@ -19,7 +19,9 @@ const DEFAULT_FALLBACK_MODEL_IDS = [
 const DEFAULT_CPA_API_BASE_URL = 'https://api.saaaai.com/v1';
 const RPM_LIMIT = 25;
 const TPM_LIMIT = 12000;
-const MAX_OUTPUT_TOKENS = 2000;
+// Text 解读不需要长文；events/思考链可稍长。过大 max_tokens 在部分上游会拖慢收尾。
+const MAX_OUTPUT_TOKENS_TEXT = 512;
+const MAX_OUTPUT_TOKENS_EVENTS = 1500;
 const UPSTREAM_FETCH_TIMEOUT_MS = 45000;
 const UPSTREAM_STREAM_IDLE_TIMEOUT_MS = 60000;
 
@@ -247,7 +249,7 @@ function buildUpstreamChatRequest({
         messages: buildMessages(prompt, systemPrompt),
         temperature,
         top_p: topP,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: streamMode === 'events' ? MAX_OUTPUT_TOKENS_EVENTS : MAX_OUTPUT_TOKENS_TEXT,
         stream: true,
         stream_options: { include_usage: true },
     };
@@ -916,6 +918,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<Record<strin
                 'Cache-Control': 'no-cache, no-transform',
                 'Connection': 'keep-alive',
                 'X-Accel-Buffering': 'no',
+                'X-Yomi-Model': modelId,
             },
         });
 
