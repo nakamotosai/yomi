@@ -7,12 +7,14 @@ export const runtime = 'edge';
 
 // 2026-07-21: dead chain was vps.saaaai.com/cpa + qwen3.5-122b EOL(410).
 // Public cliproxy on vps-jp: https://api.saaaai.com/v1 (OpenAI-compatible).
-// Default chain ordered by stream bench (speed + non-empty content): pro → nano → flash → super.
-const DEFAULT_MODEL_ID = 'deepseek-ai/deepseek-v4-pro';
+// Rebench 2026-07-21#2 (stream explain, enable_thinking=false):
+//   super ~1.9s ttfb163 | flash ~4.0s ttfb342 | nano ~4.0s ttfb2.0s
+//   gpt-oss-20b ~2.9s | pro ~28s (too slow) | minimax-m3 timeout 60s+
+const DEFAULT_MODEL_ID = 'nvidia/nemotron-3-super-120b-a12b';
 const DEFAULT_FALLBACK_MODEL_IDS = [
-    'nvidia/nemotron-3-nano-30b-a3b',
     'deepseek-ai/deepseek-v4-flash',
-    'nvidia/nemotron-3-super-120b-a12b',
+    'nvidia/nemotron-3-nano-30b-a3b',
+    'openai/gpt-oss-20b',
 ];
 const DEFAULT_CPA_API_BASE_URL = 'https://api.saaaai.com/v1';
 const RPM_LIMIT = 25;
