@@ -179,7 +179,7 @@ Last updated: 2026-07-21 (Asia/Tokyo). README.md 是 YOMI 当前进度的唯一�
 
 当前 AI app 运行时代码包含 2026-05-18 CPA v1 上游迁移、AI 聊天 Markdown/thinking 修复，以及 **2026-07-21 公网 cliproxy 切流**（旧 `vps.saaaai.com/cpa` SSL 死链 + `qwen/qwen3.5-122b-a10b` EOL 410）。自定义域名 `https://yomi.saaaai.com/` 返回 HTTP 200。
 
-AI 老师相关入口统一走 `/api/ai/chat`，默认上游为 **`https://api.saaaai.com/v1`**（vps-jp cliproxyapi 公网，OpenAI-compatible `/chat/completions`）。可用 env 覆盖：`YOMI_CPA_API_BASE_URL` / `CPA_API_BASE_URL` / `CLIPROXY_API_BASE_URL`。默认模型链（**2026-07-21 第二轮流式重测**，按首字延迟+总耗时）：`nvidia/nemotron-3-super-120b-a12b` → `deepseek-ai/deepseek-v4-flash` → `nvidia/nemotron-3-nano-30b-a3b` → `openai/gpt-oss-20b`。`deepseek-v4-pro` 约 28s 过慢已移出默认；`minimaxai/minimax-m3` 本轮 45–70s 超时不进链。模型可用 `YOMI_CPA_MODEL` / `CLIPROXY_MODEL` 与 `*_FALLBACK_MODELS` 覆盖。
+AI 老师相关入口统一走 `/api/ai/chat`，默认上游为 **`https://api.saaaai.com/v1`**（vps-jp cliproxyapi 公网，OpenAI-compatible `/chat/completions`）。可用 env 覆盖：`YOMI_CPA_API_BASE_URL` / `CPA_API_BASE_URL` / `CLIPROXY_API_BASE_URL`。默认模型链（**2026-07-21#3 用户指定**）：`deepseek-ai/deepseek-v4-flash` → `nvidia/nemotron-3-super-120b-a12b` → `nvidia/nemotron-3-nano-30b-a3b` → `openai/gpt-oss-20b`。`deepseek-v4-pro` 过慢已移出；`minimax-m3` 超时不进链。模型可用 `YOMI_CPA_MODEL` / `CLIPROXY_MODEL` 与 `*_FALLBACK_MODELS` 覆盖。
 
 ## 接手提示
 
@@ -200,7 +200,8 @@ AI 老师相关入口统一走 `/api/ai/chat`，默认上游为 **`https://api.s
 - 本轮完成：带 `cacheKey` 的成功生成先写 Cloudflare R2 bucket `yomi-ai-cache` 的 `AI_CACHE` binding，D1 `ai_cache` 保留为 fallback；下次同 key 请求会优先返回 R2 缓存。
 - 本轮完成：AI 解读上游从 Yomi 专用 `yomi-cliproxy` 链路迁移到统一 CPA v1；`/api/ai/chat` 前端契约、流式文本、R2/D1 缓存和模型 fallback 顺序不变。
 - **2026-07-21 修复**：死链 `https://vps.saaaai.com/cpa/v1`（SSL 失败）+ 默认模型 `qwen/qwen3.5-122b-a10b`（NVIDIA EOL 410）导致「AI老师在线解读」全挂。已切 **`https://api.saaaai.com/v1`**（vps-jp cliproxy 公网）；base URL 支持 env 覆盖。
-- **2026-07-21 第二轮重测**：`deepseek-v4-pro` 流式约 28s 过卡已移出默认；新默认 `nemotron-3-super-120b`（~1.9s）→ flash → nano → gpt-oss-20b。`minimax-m3` 超时不进链。
+- **2026-07-21 第二轮重测**：`deepseek-v4-pro` 过卡移出；曾默认 super→flash→nano→gpt-oss。
+- **2026-07-21#3**：用户指定默认 **`deepseek-v4-flash`**，fallback = super → nano → gpt-oss-20b。
 - 本轮完成：旧纯文本模式下，CPA/Qwen 流式响应若同时返回 `reasoning_content` 和最终 `content`，前端只显示最终内容；仅当上游完全没有 `content` 时才回退显示 `reasoning_content`，避免单词/语法详解入口暴露内部推理文本。
 - 本轮完成：修复 CPA/Qwen 返回 `**标题 **：` 这类闭合星号前带空格的 Markdown 时前台残留 `**` 的问题；主 AI 老师聊天的 Markdown strong 现在按粗体显示，不再强行转成下划线。
 - 本轮修复：二级条目开头的 malformed strong label 不再吞掉整句正文。模型若输出 `b. **拟声词： 最常用的是ふふ **...` 或 `c. **语境差异： 中文...含蓄 **...`，`StreamingMarkdown` 会归一化为只加粗 `拟声词：` / `语境差异：` 这类 label，后续解释正文保持普通字重。

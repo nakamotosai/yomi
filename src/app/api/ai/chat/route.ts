@@ -7,12 +7,12 @@ export const runtime = 'edge';
 
 // 2026-07-21: dead chain was vps.saaaai.com/cpa + qwen3.5-122b EOL(410).
 // Public cliproxy on vps-jp: https://api.saaaai.com/v1 (OpenAI-compatible).
-// Rebench 2026-07-21#2 (stream explain, enable_thinking=false):
-//   super ~1.9s ttfb163 | flash ~4.0s ttfb342 | nano ~4.0s ttfb2.0s
-//   gpt-oss-20b ~2.9s | pro ~28s (too slow) | minimax-m3 timeout 60s+
-const DEFAULT_MODEL_ID = 'nvidia/nemotron-3-super-120b-a12b';
+// 2026-07-21#3: user pick flash primary; others keep rebench fallback order.
+//   flash primary | super → nano → gpt-oss-20b
+//   pro ~28s too slow | minimax-m3 timeout 60s+
+const DEFAULT_MODEL_ID = 'deepseek-ai/deepseek-v4-flash';
 const DEFAULT_FALLBACK_MODEL_IDS = [
-    'deepseek-ai/deepseek-v4-flash',
+    'nvidia/nemotron-3-super-120b-a12b',
     'nvidia/nemotron-3-nano-30b-a3b',
     'openai/gpt-oss-20b',
 ];
